@@ -1,0 +1,151 @@
+<!-- templates/report_notes.html -->
+{% extends "base.html" %}
+
+{% block title %}Report Notes - NexLab{% endblock %}
+{% block page_title %}Report Notes{% endblock %}
+
+{% block content %}
+<!-- Quill.js Rich Text Editor CSS -->
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+        <div>
+            <h3 class="text-lg font-semibold text-slate-800">Report Note Definition</h3>
+            <p class="text-sm text-slate-500">Define rich text notes for laboratory reports</p>
+        </div>
+        <button onclick="toggleForm('addReportNoteForm')" 
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200">
+            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Add Report Note
+        </button>
+    </div>
+
+    <!-- Add/Edit Report Note Form -->
+    <div id="addReportNoteForm" style="display: none;" class="p-6 bg-slate-50 border-b border-slate-200">
+        <h4 class="text-md font-semibold text-slate-700 mb-4" id="formTitle">New Report Note Details</h4>
+        <form method="POST" id="reportNoteForm" action="/report-notes/create">
+            <input type="hidden" id="note_id" name="note_id" value="">
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-700 mb-1">Note Name *</label>
+                <input type="text" id="note_name" name="note_name" required placeholder="e.g., Normal Range Disclaimer" 
+                       class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-700 mb-1">Note Content (Rich Text) *</label>
+                <!-- Quill Editor Container -->
+                <div id="quillEditor" class="bg-white" style="height: 300px;"></div>
+                <!-- Hidden textarea to store HTML content for form submission -->
+                <textarea id="note_content" name="note_content" class="hidden"></textarea>
+            </div>
+            
+            <div class="flex gap-2">
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                    <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    Save Report Note
+                </button>
+                <button type="button" onclick="toggleForm('addReportNoteForm')" 
+                        class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Report Notes Table -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-slate-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Note Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Preview</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Created</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-slate-200">
+                {% for note in report_notes %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">#{{ note.id }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{{ note.note_name }}</td>
+                    <td class="px-6 py-4 text-sm text-slate-500 max-w-md">
+                        <div class="truncate" style="max-width: 300px;">{{ note.note_content[:100] | striptags }}...</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ note.created_at.strftime('%Y-%m-%d') }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div class="flex items-center space-x-3">
+                            <button onclick='editReportNote({{ report_notes_json[loop.index0] | tojson }})' 
+                                    class="text-blue-600 hover:text-blue-900" title="Edit">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </button>
+                            <a href="javascript:void(0)" 
+                               onclick="confirmDelete('/report-notes/delete/{{ note.id }}')"
+                               class="text-red-600 hover:text-red-900" title="Delete">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    {% if not report_notes %}
+    <div class="text-center py-12">
+        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-slate-900">No report notes</h3>
+        <p class="mt-1 text-sm text-slate-500">Get started by adding a new report note.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Quill.js Rich Text Editor JS -->
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+<script>
+// Initialize Quill Editor
+var quill = new Quill('#quillEditor', {
+    theme: 'snow',
+    modules: {
+        toolbar: [
+            [{ 'header': [1, 2, 3, false] }],
+            ['bold', 'italic', 'underline', 'strike'],
+            [{ 'color': [] }, { 'background': [] }],
+            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+            [{ 'align': [] }],
+            ['clean']
+        ]
+    }
+});
+
+// Sync Quill content to hidden textarea before form submit
+document.getElementById('reportNoteForm').addEventListener('submit', function() {
+    document.getElementById('note_content').value = quill.root.innerHTML;
+});
+
+function toggleForm(formId) {
+    const form = document.getElementById(formId);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'none') {
+        document.getElementById('reportNoteForm').reset();
+        document.getElementById('note_id').value = '';
+        document.getElementById('formTitle').textContent = 'New Report Note Details';
+        quill.root.innerHTML = '';
+    }
+}
+
+function editReportNote(note) {
+    document.getElementById('note_id').value = note.id;
+    document.getElementById('note_name').value = note.note_name;
+    quill.root.innerHTML = note.note_content || '';
+    document.getElementById('formTitle').textContent = 'Edit Report Note Details';
+    document.getElementById('addReportNoteForm').style.display = 'block';
+    document.getElementById('reportNoteForm').action = '/report-notes/update/' + note.id;
+}
+</script>
+{% endblock %}

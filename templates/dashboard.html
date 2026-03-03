@@ -1,0 +1,81 @@
+<!-- templates/dashboard.html -->
+{% extends "base.html" %}
+
+{% block title %}Dashboard - NexLab{% endblock %}
+{% block page_title %}Patient Dashboard{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+        <div>
+            <h3 class="text-lg font-semibold text-slate-800">Registered Patients</h3>
+            <p class="text-sm text-slate-500">Manage and view all patient records</p>
+        </div>
+        <a href="/register" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            New Patient
+        </a>
+    </div>
+    
+    <div class="p-6">
+        <div class="mb-4">
+            <input type="text" id="search" placeholder="Search by name or ID..." 
+                   class="w-full md:w-1/3 border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200">
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Patient ID</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Age</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Gender</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Phone</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Registered</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-slate-200" id="patientTable">
+                    {% for patient in patients %}
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600">{{ patient.patient_id }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-700 font-medium">{{ patient.full_name }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ calculate_age(patient.date_of_birth) }} yrs</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {% if patient.gender == 'Male' %}bg-blue-100 text-blue-800{% elif patient.gender == 'Female' %}bg-pink-100 text-pink-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ patient.gender }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ patient.phone }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ patient.created_at.strftime('%Y-%m-%d') }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <a href="/patients/{{ patient.id }}" class="text-indigo-600 hover:text-indigo-900">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        {% if not patients %}
+        <div class="text-center py-12">
+            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+            <h3 class="mt-2 text-sm font-medium text-slate-900">No patients</h3>
+            <p class="mt-1 text-sm text-slate-500">Get started by creating a new patient record.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.getElementById('search').addEventListener('keyup', function(e) {
+    const term = e.target.value.toLowerCase();
+    const rows = document.querySelectorAll('#patientTable tr');
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(term) ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}

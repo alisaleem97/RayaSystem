@@ -1,0 +1,301 @@
+<!-- templates/tests.html -->
+{% extends "base.html" %}
+
+{% block title %}Test Definition - NexLab{% endblock %}
+{% block page_title %}Test Definition{% endblock %}
+
+{% block content %}
+<!-- Tom Select CSS -->
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+        <div>
+            <h3 class="text-lg font-semibold text-slate-800">Test Definition</h3>
+            <p class="text-sm text-slate-500">Define laboratory tests with parameters and devices</p>
+        </div>
+        <button onclick="toggleForm('addTestForm')" 
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200">
+            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Add Test
+        </button>
+    </div>
+
+    <!-- Add/Edit Test Form -->
+    <div id="addTestForm" style="display: none;" class="p-6 bg-slate-50 border-b border-slate-200">
+        <h4 class="text-md font-semibold text-slate-700 mb-4" id="formTitle">New Test Details</h4>
+        <form method="POST" id="testForm" action="/tests/create">
+            <input type="hidden" id="test_id" name="test_id" value="">
+            
+            <!-- Basic Info -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Test Name *</label>
+                    <input type="text" id="test_name" name="test_name" required placeholder="e.g., Complete Blood Count" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Short Name *</label>
+                    <input type="text" id="test_short_name" name="test_short_name" required placeholder="e.g., CBC" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Department *</label>
+                    <select id="department_id" name="department_id" required 
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="">Select Department...</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept.id }}">{{ dept.department_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Sample Type *</label>
+                    <select id="sample_type_id" name="sample_type_id" required 
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="">Select Sample Type...</option>
+                        {% for st in sample_types %}
+                        <option value="{{ st.id }}">{{ st.sample_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Price *</label>
+                    <input type="number" id="price" name="price" step="0.01" required placeholder="0.00" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Report Note</label>
+                    <select id="report_note_id" name="report_note_id" 
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="">None</option>
+                        {% for rn in report_notes %}
+                        <option value="{{ rn.id }}">{{ rn.note_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Multi-select Fields (Hidden inputs for form submission) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Devices (Select multiple)</label>
+                    <select id="device_ids_select" multiple 
+                            class="w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        {% for device in devices %}
+                        <option value="{{ device.id }}">{{ device.device_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <!-- Hidden input to store comma-separated values for form submission -->
+                    <input type="hidden" id="device_ids" name="device_ids" value="">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Parameters (Select multiple)</label>
+                    <select id="parameter_ids_select" multiple 
+                            class="w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        {% for param in parameters %}
+                        <option value="{{ param.id }}">{{ param.parameter_name }} ({{ param.parameter_short_name }})</option>
+                        {% endfor %}
+                    </select>
+                    <!-- Hidden input to store comma-separated values for form submission -->
+                    <input type="hidden" id="parameter_ids" name="parameter_ids" value="">
+                </div>
+            </div>
+            
+            <!-- Notes and Conditions -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-700 mb-1">Test Note</label>
+                <textarea id="test_note" name="test_note" rows="2" placeholder="Additional notes about this test..." 
+                          class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-700 mb-1">Test Condition</label>
+                <input type="text" id="test_condition" name="test_condition" placeholder="e.g., Fasting required, Morning sample" 
+                       class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+            
+            <!-- Availability -->
+            <div class="mb-4">
+                <label class="flex items-center">
+                    <input type="checkbox" id="is_available" name="is_available" checked class="rounded text-indigo-600 focus:ring-indigo-500">
+                    <span class="ml-2 text-sm text-slate-700">Is Available? (Uncheck to hide from ordering)</span>
+                </label>
+            </div>
+            
+            <div class="flex gap-2">
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                    <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    Save Test
+                </button>
+                <button type="button" onclick="toggleForm('addTestForm')" 
+                        class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Tests Table -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-slate-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Test Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Short</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Department</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Report Note</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Price</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Available</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-slate-200">
+                {% for test in tests %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">#{{ test.id }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{{ test.test_name }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">{{ test.test_short_name }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ test.department.department_name }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                        {% if test.report_note %}
+                            {{ test.report_note.note_name }}
+                        {% else %}
+                            <span class="text-gray-400 italic">None</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${{ "%.2f"|format(test.price) }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        {% if test.is_available %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Yes</span>
+                        {% else %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">No</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div class="flex items-center space-x-3">
+                            <button onclick='editTest({{ tests_json[loop.index0] | tojson }})' 
+                                    class="text-blue-600 hover:text-blue-900" title="Edit">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </button>
+                            <a href="javascript:void(0)" 
+                               onclick="confirmDelete('/tests/delete/{{ test.id }}')"
+                               class="text-red-600 hover:text-red-900" title="Delete">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    {% if not tests %}
+    <div class="text-center py-12">
+        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-slate-900">No tests defined</h3>
+        <p class="mt-1 text-sm text-slate-500">Get started by adding a new test definition.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Tom Select JS -->
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<script>
+let deviceSelect, parameterSelect;
+
+function initTomSelect() {
+    // Initialize device multi-select
+    deviceSelect = new TomSelect('#device_ids_select', {
+        plugins: ['remove_button'],
+        placeholder: 'Select devices...',
+        maxItems: null,
+        onChange: function(value) {
+            // Update hidden input with comma-separated values
+            document.getElementById('device_ids').value = Array.isArray(value) ? value.join(',') : value;
+        }
+    });
+    
+    // Initialize parameter multi-select
+    parameterSelect = new TomSelect('#parameter_ids_select', {
+        plugins: ['remove_button'],
+        placeholder: 'Select parameters...',
+        maxItems: null,
+        onChange: function(value) {
+            // Update hidden input with comma-separated values
+            document.getElementById('parameter_ids').value = Array.isArray(value) ? value.join(',') : value;
+        }
+    });
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', initTomSelect);
+
+function toggleForm(formId) {
+    const form = document.getElementById(formId);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'none') {
+        document.getElementById('testForm').reset();
+        document.getElementById('test_id').value = '';
+        document.getElementById('formTitle').textContent = 'New Test Details';
+        document.getElementById('device_ids').value = '';
+        document.getElementById('parameter_ids').value = '';
+        if (deviceSelect) deviceSelect.clear();
+        if (parameterSelect) parameterSelect.clear();
+    }
+}
+
+function editTest(test) {
+    document.getElementById('test_id').value = test.id;
+    document.getElementById('test_name').value = test.test_name;
+    document.getElementById('test_short_name').value = test.test_short_name;
+    document.getElementById('department_id').value = test.department_id;
+    document.getElementById('sample_type_id').value = test.sample_type_id;
+    document.getElementById('price').value = test.price;
+    document.getElementById('report_note_id').value = test.report_note_id || '';
+    document.getElementById('test_note').value = test.test_note || '';
+    document.getElementById('test_condition').value = test.test_condition || '';
+    document.getElementById('is_available').checked = test.is_available;
+    
+    // Set multi-select values
+    if (deviceSelect) {
+        deviceSelect.clear();
+        if (test.device_ids && test.device_ids.length > 0) {
+            deviceSelect.setValue(test.device_ids.map(String));
+            document.getElementById('device_ids').value = test.device_ids.join(',');
+        }
+    }
+    if (parameterSelect) {
+        parameterSelect.clear();
+        if (test.parameter_ids && test.parameter_ids.length > 0) {
+            parameterSelect.setValue(test.parameter_ids.map(String));
+            document.getElementById('parameter_ids').value = test.parameter_ids.join(',');
+        }
+    }
+    
+    document.getElementById('formTitle').textContent = 'Edit Test Details';
+    document.getElementById('addTestForm').style.display = 'block';
+    document.getElementById('testForm').action = '/tests/update/' + test.id;
+}
+
+// Auto-uppercase short name
+document.getElementById('test_short_name').addEventListener('input', function(e) {
+    this.value = this.value.toUpperCase();
+});
+
+// Ensure hidden inputs are updated on form submit
+document.getElementById('testForm').addEventListener('submit', function() {
+    if (deviceSelect) {
+        const deviceValue = deviceSelect.getValue();
+        document.getElementById('device_ids').value = Array.isArray(deviceValue) ? deviceValue.join(',') : deviceValue;
+    }
+    if (parameterSelect) {
+        const paramValue = parameterSelect.getValue();
+        document.getElementById('parameter_ids').value = Array.isArray(paramValue) ? paramValue.join(',') : paramValue;
+    }
+});
+</script>
+{% endblock %}
