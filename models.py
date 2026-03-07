@@ -148,7 +148,7 @@ class ReportNote(SQLModel, table=True):
     deleted_at: Optional[datetime] = None
 
 # ===========================
-# 8. TEST DEFINITION (FIXED - No Unique on report_note_id)
+# 8. TEST DEFINITION
 # ===========================
 class TestDefinition(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -156,11 +156,7 @@ class TestDefinition(SQLModel, table=True):
     test_short_name: str
     department_id: int = Field(foreign_key="department.id")
     sample_type_id: int = Field(foreign_key="sampletype.id")
-    
-    # ✅ FIX: Changed from optional unique to regular foreign key
-    # This allows MULTIPLE tests to use the SAME report note
     report_note_id: Optional[int] = Field(default=None, foreign_key="reportnote.id")
-    
     price: float
     test_note: Optional[str] = None
     test_condition: Optional[str] = None
@@ -203,7 +199,47 @@ class TestParameter(SQLModel, table=True):
     parameter: Parameter = Relationship()
 
 # ===========================
-# 11. TEST CATALOG (Legacy - keep for compatibility)
+# 11. FORMULA (FIXED - Added items relationship)
+# ===========================
+class Formula(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    formula_name: str
+    main_test_id: int = Field(foreign_key="testdefinition.id")
+    main_parameter_id: Optional[int] = Field(default=None, foreign_key="parameter.id")
+    gender_type: str = Field(default="both")
+    formula_expression: str = Field(default="")
+    formula_description: Optional[str] = None
+    is_active: bool = Field(default=True)
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+    deleted_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    deleted_at: Optional[datetime] = None
+    
+    # ✅ FIX: Added this relationship
+    main_test: TestDefinition = Relationship()
+    main_parameter: Optional[Parameter] = Relationship()
+    items: List["FormulaItem"] = Relationship(back_populates="formula")
+
+# ===========================
+# 12. FORMULA ITEM
+# ===========================
+class FormulaItem(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    formula_id: int = Field(foreign_key="formula.id")
+    operation: str = Field(default="+")
+    source_type: str = Field(default="parameter")
+    source_test_id: Optional[int] = Field(default=None, foreign_key="testdefinition.id")
+    source_parameter_id: Optional[int] = Field(default=None, foreign_key="parameter.id")
+    weight_value: float = Field(default=1.0)
+    order_index: int = Field(default=0)
+    
+    formula: Formula = Relationship(back_populates="items")
+
+# ===========================
+# 13. TEST CATALOG (Legacy - keep for compatibility)
 # ===========================
 class TestCatalog(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -217,7 +253,7 @@ class TestCatalog(SQLModel, table=True):
     is_active: bool = Field(default=True)
 
 # ===========================
-# 12. ORDER
+# 14. ORDER
 # ===========================
 class Order(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -236,7 +272,7 @@ class Order(SQLModel, table=True):
     result: Optional["Result"] = Relationship(back_populates="order")
 
 # ===========================
-# 13. RESULT
+# 15. RESULT
 # ===========================
 class Result(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

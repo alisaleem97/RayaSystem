@@ -5,11 +5,12 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Any
 import json
+import ast
 
 from database import create_db_and_tables, get_session, engine
-from models import User, Patient, TestCatalog, Order, Result, Parameter, Department, Device, SampleType, ReportNote, TestDefinition, TestDevice, TestParameter, AuditLog
+from models import User, Patient, TestCatalog, Order, Result, Parameter, Department, Device, SampleType, ReportNote, TestDefinition, TestDevice, TestParameter, AuditLog, Formula, FormulaItem
 
 # Setup templates
 templates = Jinja2Templates(directory="templates")
@@ -507,12 +508,11 @@ def delete_report_note(note_id: int, request: Request, session: Session = Depend
                               status_code=status.HTTP_303_SEE_OTHER)
 
 # ===========================
-# TEST DEFINITION ROUTES (COMPLETELY FIXED)
+# TEST DEFINITION ROUTES
 # ===========================
 
 @app.get("/tests", response_class=HTMLResponse)
 def tests_page(request: Request, session: Session = Depends(get_session)):
-    # Get ALL tests - no filtering
     tests = session.exec(select(TestDefinition).order_by(TestDefinition.id.asc())).all()
     
     # Prepare JSON data with related IDs for multi-select
@@ -713,6 +713,143 @@ def delete_test(test_id: int, request: Request, session: Session = Depends(get_s
                               status_code=status.HTTP_303_SEE_OTHER)
 
 # ===========================
+# FORMULA ROUTES
+# ===========================
+
+@app.get("/api/get-formula-test/{formula_id}")
+def get_formula_for_testing(formula_id: int, session: Session = Depends(get_session)):
+    """Fetch formula data specifically for testing"""
+    try:
+        formula = session.get(Formula, formula_id)
+        if not formula:
+            return {"error": "Formula not found"}
+        
+        return {
+            "formula_id": formula.id,
+            "formula_name": formula.formula_name,
+            "formula_expression": formula.formula_expression
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/formulas", response_class=HTMLResponse)
+def formulas_page(request: Request, session: Session = Depends(get_session)):
+    formulas = session.exec(select(Formula).order_by(Formula.id.asc())).all()
+    
+    formulas_json = []
+    for formula in formulas:
+        formula_dict = model_to_dict(formula)
+        formulas_json.append(formula_dict)
+    
+    tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
+    parameters = session.exec(select(Parameter)).all()
+    
+    success = request.query_params.get("success")
+    error = request.query_params.get("error")
+    
+    return templates.TemplateResponse("formulas.html", {
+        "request": request,
+        "formulas": formulas,
+        "formulas_json": formulas_json,
+        "tests": tests,
+        "parameters": parameters,
+        "message_success": success,
+        "message_error": error
+    })
+
+@app.post("/formulas/create")
+def create_formula(
+    formula_name: str = Form(...),
+    main_test_id: int = Form(...),
+    main_parameter_id: Optional[int] = Form(None),
+    gender_type: str = Form(...),
+    formula_expression: str = Form(""),
+    formula_description: Optional[str] = Form(None),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        
+        new_formula = Formula(
+            formula_name=formula_name,
+            main_test_id=main_test_id,
+            main_parameter_id=main_parameter_id if main_parameter_id else None,
+            gender_type=gender_type,
+            formula_expression=formula_expression,
+            formula_description=formula_description,
+            is_active=True,
+            created_by=current_user.id if current_user else None
+        )
+        session.add(new_formula)
+        session.commit()
+        session.refresh(new_formula)
+        create_audit_log(session, "formula", new_formula.id, "create", current_user, new_values=model_to_dict(new_formula))
+        
+        return RedirectResponse(url="/formulas?success=Formula saved successfully!", status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        return RedirectResponse(url=f"/formulas?error={str(e).replace(' ', '%20')}", status_code=status.HTTP_303_SEE_OTHER)
+
+@app.post("/formulas/update/{formula_id}")
+def update_formula(
+    formula_id: int,
+    formula_name: str = Form(...),
+    main_test_id: int = Form(...),
+    main_parameter_id: Optional[int] = Form(None),
+    gender_type: str = Form(...),
+    formula_expression: str = Form(""),
+    formula_description: Optional[str] = Form(None),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        formula = session.get(Formula, formula_id)
+        
+        if formula:
+            old_values = model_to_dict(formula)
+            
+            formula.formula_name = formula_name
+            formula.main_test_id = main_test_id
+            formula.main_parameter_id = main_parameter_id if main_parameter_id else None
+            formula.gender_type = gender_type
+            formula.formula_expression = formula_expression
+            formula.formula_description = formula_description
+            formula.edited_by = current_user.id if current_user else None
+            formula.edited_at = datetime.utcnow()
+            
+            session.add(formula)
+            session.commit()
+            session.refresh(formula)
+            create_audit_log(session, "formula", formula.id, "update", current_user, old_values=old_values, new_values=model_to_dict(formula))
+            
+            return RedirectResponse(url="/formulas?success=Formula updated successfully!", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/formulas?error=Formula not found", status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        return RedirectResponse(url=f"/formulas?error={str(e).replace(' ', '%20')}", status_code=status.HTTP_303_SEE_OTHER)
+
+@app.get("/formulas/delete/{formula_id}")
+def delete_formula(formula_id: int, request: Request, session: Session = Depends(get_session)):
+    try:
+        current_user = get_current_user(request, session)
+        formula = session.get(Formula, formula_id)
+        
+        if formula:
+            old_values = model_to_dict(formula)
+            
+            session.delete(formula)
+            session.commit()
+            create_audit_log(session, "formula", formula.id, "delete", current_user, old_values=old_values)
+            
+            return RedirectResponse(url="/formulas?success=Formula deleted successfully!", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/formulas?error=Formula not found", status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        return RedirectResponse(url=f"/formulas?error={str(e).replace(' ', '%20')}", status_code=status.HTTP_303_SEE_OTHER)
+
+# ===========================
 # API ENDPOINTS
 # ===========================
 
@@ -743,6 +880,10 @@ def list_report_notes_api(session: Session = Depends(get_session)):
 @app.get("/api/tests")
 def list_tests_api(session: Session = Depends(get_session)):
     return session.exec(select(TestDefinition)).all()
+
+@app.get("/api/formulas")
+def list_formulas_api(session: Session = Depends(get_session)):
+    return session.exec(select(Formula)).all()
 
 @app.get("/api/audit-logs")
 def list_audit_logs_api(session: Session = Depends(get_session)):

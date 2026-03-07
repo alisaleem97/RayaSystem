@@ -1,0 +1,522 @@
+<!-- templates/formulas.html -->
+{% extends "base.html" %}
+
+{% block title %}Formulas - NexLab{% endblock %}
+{% block page_title %}Formula Definition{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+        <div>
+            <h3 class="text-lg font-semibold text-slate-800">Formula Definition</h3>
+            <p class="text-sm text-slate-500">Define calculation formulas for derived test results</p>
+        </div>
+        <button onclick="toggleForm('addFormulaForm')" 
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200">
+            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Add Formula
+        </button>
+        <!-- NEW TEST BUTTON -->
+        <button onclick="showTestModal()" 
+                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200 hidden" id="testBtn">
+            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 012 2h2a2 2 0 012-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+            Test Formula
+        </button>
+    </div>
+
+    <!-- Add/Edit Formula Form -->
+    <div id="addFormulaForm" style="display: none;" class="p-6 bg-slate-50 border-b border-slate-200">
+        <h4 class="text-md font-semibold text-slate-700 mb-4" id="formTitle">New Formula Details</h4>
+        <form method="POST" id="formulaForm" action="/formulas/create">
+            <input type="hidden" id="formula_id" name="formula_id" value="">
+            
+            <!-- Top Section: Formula Name, Main Test, Gender -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Formula Name *</label>
+                    <input type="text" id="formula_name" name="formula_name" required placeholder="e.g., eGFR CKD-EPI" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Main Test</label>
+                    <select id="main_test_id" name="main_test_id" required onchange="updateParameterDropdown()" 
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="">---</option>
+                        {% for test in tests %}
+                        <option value="{{ test.id }}" data-has-params="{{ 'yes' if test.test_parameters else 'no' }}">{{ test.test_name }} ({{ test.test_short_name }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Gender</label>
+                    <select id="gender_type" name="gender_type" required 
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="">---</option>
+                        <option value="male">Male Only</option>
+                        <option value="female">Female Only</option>
+                        <option value="both">Both</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Main Parameter Row -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-700 mb-1">Main Parameter</label>
+                <select id="main_parameter_id" name="main_parameter_id" required disabled
+                        class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-100">
+                    <option value="">---</option>
+                    {% for param in parameters %}
+                    <option value="{{ param.id }}">{{ param.parameter_name }}</option>
+                    {% endfor %}
+                </select>
+                <p class="text-xs text-slate-500 mt-1 hidden" id="no_params_message">This test has no parameters.</p>
+            </div>
+            
+            <!-- The Formula Display Box (Read-only, auto-updates) -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-700 mb-1">The Formula</label>
+                <textarea id="formula_expression" name="formula_expression" readonly rows="3"
+                          placeholder="{Test_Name}+{Param_Name}..."
+                          class="w-full border-2 border-indigo-300 rounded-lg px-4 py-3 font-mono text-base bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none"></textarea>
+                <p class="text-xs text-slate-500 mt-1">Select tests/parameters from below to build your formula</p>
+            </div>
+            
+            <!-- Operations Input Section -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                <!-- Left Side: Tests and Parameters (Auto-add to formula) -->
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Tests (Select to add to formula)</label>
+                        <select id="test_source" onchange="addToFormula('test', this)" 
+                                class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="">Select Test...</option>
+                            {% for test in tests %}
+                                <option value="{{ test.id }}" data-type="test">{{ test.test_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Parameters (Select to add to formula)</label>
+                        <select id="param_source" onchange="addToFormula('parameter', this)" 
+                                class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="">Select Parameter...</option>
+                            {% for param in parameters %}
+                                <option value="{{ param.id }}" data-type="parameter">{{ param.parameter_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Right Side: Math Keypad -->
+                <div class="flex flex-col gap-2">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Operations</label>
+                    
+                    <div class="grid grid-cols-4 gap-2">
+                        <!-- Row 1 -->
+                        <button type="button" onclick="addOperator('1')" class="math-btn bg-white border border-slate-300 rounded p-2 hover:bg-slate-100">1</button>
+                        <button type="button" onclick="addOperator('2')" class="math-btn bg-white border border-slate-300 rounded p-2 hover:bg-slate-100">2</button>
+                        <button type="button" onclick="addOperator('3')" class="math-btn bg-white border border-slate-300 rounded p-2 hover:bg-slate-100">3</button>
+                        <button type="button" onclick="addOperator('+')" class="math-btn bg-indigo-100 border border-indigo-300 rounded p-2 hover:bg-indigo-200">+</button>
+                        
+                        <!-- Row 2 -->
+                        <button type="button" onclick="addOperator('4')" class="math-btn bg-white border border-slate-300 rounded p-2 hover:bg-slate-100">4</button>
+                        <button type="button" onclick="addOperator('5')" class="math-btn bg-white border border-slate-300 rounded p-2 hover:bg-slate-100">5</button>
+                        <button type="button" onclick="addOperator('6')" class="math-btn bg-white border border-slate-300 rounded p-2 hover:bg-slate-100">6</button>
+                        <button type="button" onclick="addOperator('-')" class="math-btn bg-indigo-100 border border-indigo-300 rounded p-2 hover:bg-indigo-200">-</button>
+                        
+                        <!-- Row 3 -->
+                        <button type="button" onclick="addOperator('7')" class="math-btn bg-white border border-slate-300 rounded p-2 hover:bg-slate-100">7</button>
+                        <button type="button" onclick="addOperator('8')" class="math-btn bg-white border border-slate-300 rounded p-2 hover:bg-slate-100">8</button>
+                        <button type="button" onclick="addOperator('9')" class="math-btn bg-white border border-slate-300 rounded p-2 hover:bg-slate-100">9</button>
+                        <button type="button" onclick="addOperator('*')" class="math-btn bg-indigo-100 border border-indigo-300 rounded p-2 hover:bg-indigo-200">×</button>
+                        
+                        <!-- Row 4 -->
+                        <button type="button" onclick="addOperator('0')" class="math-btn bg-white border border-slate-300 rounded p-2 hover:bg-slate-100">0</button>
+                        <button type="button" onclick="addOperator('(')" class="math-btn bg-white border border-slate-300 rounded p-2 hover:bg-slate-100">(</button>
+                        <button type="button" onclick="addOperator(')')" class="math-btn bg-white border border-slate-300 rounded p-2 hover:bg-slate-100)">)</button>
+                        <button type="button" onclick="addOperator('/')" class="math-btn bg-indigo-100 border border-indigo-300 rounded p-2 hover:bg-indigo-200">÷</button>
+                        
+                        <!-- Row 5 -->
+                        <button type="button" onclick="addVariable('{')" class="math-btn bg-white border border-slate-300 rounded p-2 hover:bg-slate-100">{</button>
+                        <button type="button" onclick="addVariable('}')" class="math-btn bg-white border border-slate-300 rounded p-2 hover:bg-slate-100">}</button>
+                        <button type="button" onclick="addVariable('pow')" class="math-btn bg-green-100 border border-green-300 rounded p-2 hover:bg-green-200">pow</button>
+                        <button type="button" onclick="deleteLastChar()" class="col-span-2 bg-red-100 border border-red-300 rounded p-2 hover:bg-red-200 text-red-700">⌫ Delete</button>
+                        
+                        <!-- Row 6 -->
+                        <button type="button" onclick="addVariable('[weight]')" class="bg-green-100 border border-green-300 rounded p-2 hover:bg-green-200">weight</button>
+                        <button type="button" onclick="addVariable('[age]')" class="bg-green-100 border border-green-300 rounded p-2 hover:bg-green-200">age</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Description -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                <textarea id="formula_description" name="formula_description" rows="2" 
+                          placeholder="Optional description of what this formula calculates..."
+                          class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+            </div>
+            
+            <div class="flex gap-2">
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                    <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    Save Formula
+                </button>
+                <button type="button" onclick="toggleForm('addFormulaForm')" 
+                        class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Test Formula Modal -->
+    <div id="testModalOverlay" class="modal-overlay">
+        <div class="modal-content max-w-2xl">
+            <h3 class="text-2xl font-bold mb-4 text-slate-800">Test Formula</h3>
+            <p class="text-slate-600 mb-4 font-mono text-sm overflow-wrap" id="displayExpression"></p>
+            
+            <div id="formulaInputs" class="space-y-3 max-h-60 overflow-y-auto mb-4">
+                <!-- Dynamic inputs will be inserted here -->
+            </div>
+            
+            <div class="mt-4 pt-4 border-t border-slate-200">
+                <label class="block text-sm font-medium text-slate-700 mb-2">Result:</label>
+                <input type="text" id="formulaResult" readonly 
+                       class="w-full border-2 border-indigo-300 rounded-lg px-4 py-3 font-mono text-lg bg-indigo-50 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                       placeholder="Click Test to calculate result...">
+            </div>
+            
+            <div class="flex gap-3 mt-6">
+                <button id="testConfirmButton" class="flex-1 py-3 px-4 rounded-lg font-medium transition duration-200 bg-green-600 text-white hover:bg-green-700">
+                    Test
+                </button>
+                <button onclick="closeTestModal()" class="flex-1 py-3 px-4 rounded-lg font-medium transition duration-200 bg-red-600 text-white hover:bg-red-700">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulas Table -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-slate-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Main Test</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Parameter</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Gender</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Created</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-slate-200">
+                {% for formula in formulas %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">#{{ formula.id }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{{ formula.formula_name }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{{ formula.main_test.test_name }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ formula.main_parameter.parameter_name if formula.main_parameter else '-' }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {% if formula.gender_type == 'male' %}bg-blue-100 text-blue-800{% elif formula.gender_type == 'female' %}bg-pink-100 text-pink-800{% else %}bg-slate-100 text-slate-800{% endif %}">
+                            {{ formula.gender_type|capitalize }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ formula.created_at.strftime('%Y-%m-%d') }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div class="flex items-center space-x-3">
+                            <button onclick='editFormula({{ formulas_json[loop.index0] | tojson }})' 
+                                    class="text-blue-600 hover:text-blue-900" title="Edit">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </button>
+                            <button onclick="showTestModal('{{ formula.id }}', '{{ formula.formula_expression }}')" 
+                                    class="text-green-600 hover:text-green-900" title="Test Formula">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 012 2h2a2 2 0 012-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                            </button>
+                            <a href="javascript:void(0)" 
+                               onclick="confirmDelete('/formulas/delete/{{ formula.id }}')"
+                               class="text-red-600 hover:text-red-900" title="Delete">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    {% if not formulas %}
+    <div class="text-center py-12">
+        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-slate-900">No formulas defined</h3>
+        <p class="mt-1 text-sm text-slate-500">Get started by adding a new formula definition.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.math-btn {
+    transition: all 0.2s;
+}
+.math-btn:hover {
+    transform: scale(1.05);
+}
+
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(4px);
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 16px;
+    padding: 2rem;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-50px) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+</style>
+
+<script>
+// Update parameter dropdown based on selected test
+function updateParameterDropdown() {
+    const testSelect = document.getElementById('main_test_id');
+    const paramSelect = document.getElementById('main_parameter_id');
+    const message = document.getElementById('no_params_message');
+    const selectedOption = testSelect.options[testSelect.selectedIndex];
+    const hasParams = selectedOption.dataset.hasParams === 'yes';
+    
+    paramSelect.disabled = !hasParams;
+    paramSelect.required = hasParams;
+    
+    if (!hasParams) {
+        message.classList.remove('hidden');
+        paramSelect.value = '';
+    } else {
+        message.classList.add('hidden');
+    }
+}
+
+function toggleForm(formId) {
+    const form = document.getElementById(formId);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'none') {
+        document.getElementById('formulaForm').reset();
+        document.getElementById('formula_id').value = '';
+        document.getElementById('formula_name').value = '';
+        document.getElementById('formula_expression').value = '';
+        document.getElementById('formula_description').value = '';
+        document.getElementById('formTitle').textContent = 'New Formula Details';
+        document.getElementById('main_parameter_id').value = '';
+        
+        // Reset selects
+        document.getElementById('test_source').selectedIndex = 0;
+        document.getElementById('param_source').selectedIndex = 0;
+        
+        updateParameterDropdown();
+    }
+}
+
+// Auto-add to formula when dropdown changes
+function addToFormula(type, selectElement) {
+    const formulaInput = document.getElementById('formula_expression');
+    const selectedIndex = selectElement.selectedIndex;
+    const selectedOption = selectElement.options[selectedIndex];
+    
+    if (selectedIndex > 0 && selectedOption.text !== 'Select Test...' && selectedOption.text !== 'Select Parameter...') {
+        const itemName = selectedOption.text.trim();
+        
+        let currentValue = formulaInput.value || '';
+        
+        const needsSpace = !currentValue.endsWith('+') && 
+                          !currentValue.endsWith('-') && 
+                          !currentValue.endsWith('*') && 
+                          !currentValue.endsWith('/') && 
+                          currentValue.length > 0;
+        
+        const newValue = currentValue + (needsSpace ? ' ' : '') + '{' + itemName + '}';
+        formulaInput.value = newValue;
+        
+        setTimeout(() => {
+            selectElement.selectedIndex = 0;
+        }, 50);
+    }
+}
+
+// Add operator/button to formula
+function addOperator(symbol) {
+    const formulaInput = document.getElementById('formula_expression');
+    formulaInput.value += symbol;
+}
+
+// Add variable to formula
+function addVariable(variable) {
+    const formulaInput = document.getElementById('formula_expression');
+    formulaInput.value += variable;
+}
+
+// Delete last character
+function deleteLastChar() {
+    const formulaInput = document.getElementById('formula_expression');
+    formulaInput.value = formulaInput.value.slice(0, -1);
+}
+
+function editFormula(formula) {
+    document.getElementById('formula_id').value = formula.id;
+    document.getElementById('formula_name').value = formula.formula_name;
+    document.getElementById('formula_expression').value = formula.formula_expression || '';
+    document.getElementById('formula_description').value = formula.formula_description || '';
+    document.getElementById('main_test_id').value = formula.main_test_id;
+    document.getElementById('main_parameter_id').value = formula.main_parameter_id || '';
+    document.getElementById('gender_type').value = formula.gender_type;
+    
+    document.getElementById('formTitle').textContent = 'Edit Formula Details';
+    document.getElementById('addFormulaForm').style.display = 'block';
+    document.getElementById('formulaForm').action = '/formulas/update/' + formula.id;
+    
+    setTimeout(() => {
+        updateParameterDropdown();
+    }, 100);
+}
+
+// ===========================
+// FORMULA TESTER MODAL FUNCTIONS
+// ===========================
+
+function showTestModal(formulaId, formulaExpression) {
+    const modalOverlay = document.getElementById('testModalOverlay');
+    const inputsContainer = document.getElementById('formulaInputs');
+    const resultInput = document.getElementById('formulaResult');
+    const expressionDisplay = document.getElementById('displayExpression');
+    
+    // Use passed formula expression or fetch from server
+    const expressionToUse = formulaExpression || '';
+    const varRegex = /\{([^}]+)\}/g;
+    const variables = [];
+    let match;
+    
+    while ((match = varRegex.exec(expressionToUse)) !== null) {
+        const varName = match[1].trim().replace(/\s+/g, '_');
+        if (variables.indexOf(varName) === -1) {
+            variables.push(match[1].trim());
+        }
+    }
+    
+    window.currentVariables = variables;
+    window.currentExpression = expressionToUse;
+    
+    // Create input fields for each variable
+    inputsContainer.innerHTML = '';
+    if (variables.length === 0) {
+        inputsContainer.innerHTML = '<p class="text-slate-500 italic text-center py-4">No variables found in formula</p>';
+    } else {
+        variables.forEach((name, index) => {
+            const cleanName = name.replace(/\s+/g, '_');
+            const inputDiv = document.createElement('div');
+            inputDiv.className = 'flex items-center gap-2';
+            inputDiv.innerHTML = `
+                <label class="block text-sm font-medium text-slate-700 w-1/3">${name}</label>
+                <input type="number" step="any" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                       placeholder="Enter value..." data-var-name="${cleanName}" id="var_${index}">
+            `;
+            inputsContainer.appendChild(inputDiv);
+        });
+    }
+    
+    expressionDisplay.textContent = expressionToUse || '(No expression)';
+    resultInput.value = '';
+    modalOverlay.classList.add('active');
+}
+
+function closeTestModal() {
+    document.getElementById('testModalOverlay').classList.remove('active');
+    window.currentVariables = null;
+    window.currentExpression = '';
+}
+
+function calculateFormulaResult() {
+    const expression = window.currentExpression || '';
+    const variables = window.currentVariables || [];
+    
+    if (!expression || expression.trim() === '') {
+        document.getElementById('formulaResult').value = 'Error: No formula defined';
+        return;
+    }
+    
+    try {
+        const inputs = document.querySelectorAll('#formulaInputs input[type="number"]');
+        if (inputs.length === 0 && variables.length > 0) {
+            document.getElementById('formulaResult').value = 'Error: No variables found';
+            return;
+        }
+        
+        let evalExpression = expression;
+        
+        // Replace {} variables with actual values
+        const replaceVar = new RegExp('\\{([^}]+)\\}', 'g');
+        const matches = expression.matchAll(replaceVar);
+        
+        for (const match of matches) {
+            const varName = match[1].trim().replace(/\s+/g, '_');
+            const inputValue = parseFloat(document.querySelector(`[data-var-name="${varName}"]`)?.value);
+            
+            if (!isNaN(inputValue)) {
+                evalExpression = evalExpression.replace(new RegExp('\\{' + match[1].replace(/[.*+?^${}()|[\\]]/g, '\\$&') + '\\}', 'g'), inputValue);
+            }
+        }
+        
+        // Safely evaluate
+        const result = Function('"use strict";return (' + evalExpression + ')')();
+        
+        if (isNaN(result) || !isFinite(result)) {
+            document.getElementById('formulaResult').value = 'Error: Invalid calculation';
+        } else {
+            document.getElementById('formulaResult').value = result.toFixed(2);
+        }
+        
+    } catch (error) {
+        console.error('Calculation error:', error);
+        document.getElementById('formulaResult').value = 'Error: ' + error.message;
+    }
+}
+
+// Attach event listener to Test button
+document.addEventListener('DOMContentLoaded', function() {
+    const testButton = document.getElementById('testConfirmButton');
+    if (testButton) {
+        testButton.onclick = calculateFormulaResult;
+    }
+});
+</script>
+{% endblock %}
