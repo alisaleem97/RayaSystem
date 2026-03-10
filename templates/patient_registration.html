@@ -1,0 +1,618 @@
+<!-- templates/patient_registration.html -->
+{% extends "base.html" %}
+
+{% block title %}Patient Registration - NexLab{% endblock %}
+{% block page_title %}Patient Registration{% endblock %}
+
+{% block content %}
+<!-- Tom Select CSS -->
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="p-6 border-b border-slate-200">
+        <h3 class="text-lg font-semibold text-slate-800">Patient Registration</h3>
+        <p class="text-sm text-slate-500">Register new patient with tests and packages</p>
+    </div>
+
+    <form method="POST" id="registrationForm" action="/patient-registration/create">
+        <div class="p-6 space-y-6">
+            
+            <!-- Main Information -->
+            <div>
+                <h4 class="text-md font-semibold text-slate-700 mb-4">Main Information</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Patient ID</label>
+                        <input type="text" id="patient_id" name="patient_id" readonly
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-100 font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Patient Name *</label>
+                        <input type="text" id="full_name" name="full_name" required
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Gender *</label>
+                        <select id="gender" name="gender" required
+                                class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="">Select...</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Date of Birth *</label>
+                        <input type="date" id="date_of_birth" name="date_of_birth" required onchange="calculateAge()"
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Age *</label>
+                        <input type="number" id="age" name="age" required
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Age Unit *</label>
+                        <select id="age_unit" name="age_unit" required
+                                class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="year">Years</option>
+                            <option value="month">Months</option>
+                            <option value="day">Days</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Phone Key *</label>
+                        <input type="text" id="phone_key" name="phone_key" value="+964" required
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Phone Number *</label>
+                        <input type="text" id="phone_number" name="phone_number" required minlength="10"
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Weight (kg) *</label>
+                        <input type="number" id="weight" name="weight" step="0.1" required
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Height (cm) *</label>
+                        <input type="number" id="height" name="height" step="0.1" required
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Province *</label>
+                        <select id="province_id" name="province_id" required onchange="loadRegions()"
+                                class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="">Select Province...</option>
+                            {% for province in provinces %}
+                            <option value="{{ province.id }}">{{ province.province_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Region *</label>
+                        <select id="region_id" name="region_id" required disabled
+                                class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-100">
+                            <option value="">Select Region...</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-3">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Note</label>
+                        <textarea id="note" name="note" rows="2"
+                                  class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- More Information (Hidden by default) -->
+            <div>
+                <button type="button" onclick="toggleMoreInfo()" 
+                        class="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center">
+                    <svg id="moreIcon" class="w-4 h-4 mr-1 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                    More Information
+                </button>
+                
+                <div id="moreInfoSection" class="hidden mt-4 pt-4 border-t border-slate-200">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                            <input type="email" id="email" name="email"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Diagnosis</label>
+                            <input type="text" id="diagnosis" name="diagnosis"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Symptoms</label>
+                            <input type="text" id="symptoms" name="symptoms"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Therapy</label>
+                            <input type="text" id="therapy" name="therapy"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Partner</label>
+                            <select id="partner_id" name="partner_id"
+                                    class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                                <option value="">Select Partner...</option>
+                                {% for partner in partners %}
+                                <option value="{{ partner.id }}">{{ partner.partner_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Doctor</label>
+                            <input type="text" id="doctor" name="doctor"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Skin Colour</label>
+                            <select id="skin_colour" name="skin_colour"
+                                    class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                                <option value="">Select...</option>
+                                <option value="white">White</option>
+                                <option value="black">Black</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Agent Name</label>
+                            <input type="text" id="agent_name" name="agent_name"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" id="is_outlab" name="is_outlab" value="true"
+                                   class="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500">
+                            <label for="is_outlab" class="ml-2 text-sm text-slate-700">Is Outlab</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tests & Packages Selection -->
+            <div>
+                <h4 class="text-md font-semibold text-slate-700 mb-4">Tests & Packages</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Select Test</label>
+                        <select id="test_select" placeholder="Search tests..."
+                                class="w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="">Select Test...</option>
+                            {% for test in tests %}
+                            <option value="{{ test.id }}" data-price="{{ test.price }}" data-condition="{{ test.test_condition or '' }}">{{ test.test_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Select Package</label>
+                        <select id="package_select" placeholder="Search packages..."
+                                class="w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="">Select Package...</option>
+                            {% for package in packages %}
+                            <option value="{{ package.id }}" data-price="{{ package.price }}" data-name="{{ package.package_name }}">{{ package.package_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div id="duplicateMessage" class="hidden mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
+                    ⚠️ <span id="duplicateMessageText"></span>
+                </div>
+            </div>
+
+            <!-- Selected Tests/Packages Table -->
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">No.</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Type</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Condition</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Price</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-slate-200" id="selectedItemsTable">
+                        <!-- Dynamic rows will be added here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Discount Section -->
+            <div class="flex justify-end">
+                <button type="button" onclick="toggleDiscount()" 
+                        class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                    💰 Discount
+                </button>
+            </div>
+            
+            <div id="discountSection" class="hidden grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                <div>
+                    <label class="block text-sm font-medium text-green-700 mb-1">Discount Percentage (%)</label>
+                    <input type="number" id="discount_percentage" step="0.1" min="0" max="100" onchange="calculateDiscount()"
+                           class="w-full border border-green-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-green-700 mb-1">Discount Amount</label>
+                    <input type="number" id="discount_amount" step="0.01" min="0" onchange="calculateDiscountFromAmount()"
+                           class="w-full border border-green-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-green-700 mb-1">Discount Note *</label>
+                    <input type="text" id="discount_note" name="discount_note"
+                           class="w-full border border-green-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:outline-none">
+                </div>
+            </div>
+
+            <!-- Price Summary -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Total Price</label>
+                    <input type="number" id="total_price" readonly
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-100 font-semibold">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Total After Discount</label>
+                    <input type="number" id="total_after_discount" readonly
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-100 font-semibold text-green-600">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Received Amount</label>
+                    <input type="number" id="received_amount" name="received_amount" step="0.01" onchange="calculateRemaining()"
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Remaining Amount</label>
+                    <input type="number" id="remaining_amount" readonly
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-100 font-semibold">
+                </div>
+            </div>
+
+            <!-- Hidden inputs for form submission -->
+            <input type="hidden" id="selected_items" name="selected_items" value="">
+            <input type="hidden" id="discount_percentage_hidden" name="discount_percentage" value="">
+            <input type="hidden" id="discount_amount_hidden" name="discount_amount" value="">
+
+            <!-- Save Button -->
+            <div class="flex justify-end pt-4 border-t border-slate-200">
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-lg text-sm font-medium">
+                    <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    Save Registration
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Tom Select JS -->
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<script>
+let testSelect, packageSelect;
+let selectedItems = [];
+let itemCounter = 0;
+let labId = 1; // Configure your lab ID here
+let packageTestsMap = {}; // Store package tests mapping
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Generate Patient ID
+    generatePatientId();
+    
+    // Initialize Tom Select for tests
+    testSelect = new TomSelect('#test_select', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Search tests...',
+        create: false,
+        maxItems: 1,
+        onChange: function(value) {
+            if (value) {
+                addTest(value);
+                testSelect.clear();
+            }
+        }
+    });
+    
+    // Initialize Tom Select for packages
+    packageSelect = new TomSelect('#package_select', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Search packages...',
+        create: false,
+        maxItems: 1,
+        onChange: function(value) {
+            if (value) {
+                addPackage(value);
+                packageSelect.clear();
+            }
+        }
+    });
+    
+    // Load all package tests on page load
+    loadAllPackageTests();
+});
+
+
+// Generate Patient ID
+function generatePatientId() {
+    const baseNumber = 100000;
+    const patientId = labId.toString() + baseNumber.toString().padStart(6, '0');
+    document.getElementById('patient_id').value = patientId;
+}
+
+// Load all package tests
+function loadAllPackageTests() {
+    const packageOptions = document.querySelectorAll('#package_select option');
+    packageOptions.forEach(option => {
+        const packageId = option.value;
+        if (packageId) {
+            fetch('/api/package-tests/' + packageId)
+                .then(response => response.json())
+                .then(data => {
+                    packageTestsMap[packageId] = {
+                        test_ids: data.test_ids || [],
+                        name: option.dataset.name || option.textContent
+                    };
+                });
+        }
+    });
+}
+
+// Calculate age from date of birth
+function calculateAge() {
+    const dobInput = document.getElementById('date_of_birth').value;
+    if (!dobInput) return;
+    
+    const dob = new Date(dobInput);
+    const today = new Date();
+    
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    const dayDiff = today.getDate() - dob.getDate();
+    
+    let ageUnit = 'year';
+    
+    if (age < 1) {
+        if (monthDiff < 1 || (monthDiff === 0 && dayDiff < 0)) {
+            age = today.getMonth() * 30 + today.getDate() - (dob.getMonth() * 30 + dob.getDate());
+            ageUnit = 'day';
+            if (age > 30) {
+                age = Math.floor(age / 30);
+                ageUnit = 'month';
+            }
+        } else {
+            age = monthDiff;
+            ageUnit = 'month';
+        }
+    }
+    
+    document.getElementById('age').value = age;
+    document.getElementById('age_unit').value = ageUnit;
+}
+
+// Toggle More Information section
+function toggleMoreInfo() {
+    const section = document.getElementById('moreInfoSection');
+    const icon = document.getElementById('moreIcon');
+    section.classList.toggle('hidden');
+    icon.classList.toggle('rotate-180');
+}
+
+// Load regions based on selected province
+function loadRegions() {
+    const provinceId = document.getElementById('province_id').value;
+    const regionSelect = document.getElementById('region_id');
+    
+    if (!provinceId) {
+        regionSelect.disabled = true;
+        regionSelect.innerHTML = '<option value="">Select Region...</option>';
+        return;
+    }
+    
+    fetch('/api/regions?province_id=' + provinceId)
+        .then(response => response.json())
+        .then(regions => {
+            regionSelect.innerHTML = '<option value="">Select Region...</option>';
+            regions.forEach(region => {
+                const option = document.createElement('option');
+                option.value = region.id;
+                option.textContent = region.region_name;
+                regionSelect.appendChild(option);
+            });
+            regionSelect.disabled = false;
+        });
+}
+
+// Add test to selected items
+function addTest(testId) {
+    const option = document.querySelector(`#test_select option[value="${testId}"]`);
+    if (!option) return;
+    
+    const testName = option.textContent;
+    const price = parseFloat(option.dataset.price);
+    const condition = option.dataset.condition || '';
+    
+    // Check if test is already in a selected package
+    for (const pkgId in packageTestsMap) {
+        const pkg = packageTestsMap[pkgId];
+        if (pkg.test_ids.includes(parseInt(testId))) {
+            // Check if this package is already selected
+            const packageSelected = selectedItems.some(item => item.type === 'package' && item.id == pkgId);
+            if (packageSelected) {
+                document.getElementById('duplicateMessageText').textContent = `The Test is already in ${pkg.name}`;
+                document.getElementById('duplicateMessage').classList.remove('hidden');
+                setTimeout(() => {
+                    document.getElementById('duplicateMessage').classList.add('hidden');
+                }, 3000);
+                return;
+            }
+        }
+    }
+    
+    addItem({
+        id: testId,
+        name: testName,
+        type: 'test',
+        price: price,
+        condition: condition,
+        tests: [parseInt(testId)]
+    });
+}
+
+// Add package to selected items
+function addPackage(packageId) {
+    const option = document.querySelector(`#package_select option[value="${packageId}"]`);
+    if (!option) return;
+    
+    const packageName = option.dataset.name || option.textContent;
+    const price = parseFloat(option.dataset.price);
+    
+    const pkg = packageTestsMap[packageId];
+    if (!pkg) {
+        // Fetch package tests if not loaded
+        fetch('/api/package-tests/' + packageId)
+            .then(response => response.json())
+            .then(data => {
+                packageTestsMap[packageId] = {
+                    test_ids: data.test_ids || [],
+                    name: packageName
+                };
+                processPackageAddition(packageId, packageName, price, data.test_ids || []);
+            });
+    } else {
+        processPackageAddition(packageId, packageName, price, pkg.test_ids);
+    }
+}
+
+function processPackageAddition(packageId, packageName, price, testIds) {
+    // Check if any test in package is already selected individually
+    const duplicateTest = selectedItems.find(item => 
+        item.type === 'test' && testIds.includes(item.id)
+    );
+    
+    if (duplicateTest) {
+        document.getElementById('duplicateMessageText').textContent = `The Test is already in ${packageName}`;
+        document.getElementById('duplicateMessage').classList.remove('hidden');
+        setTimeout(() => {
+            document.getElementById('duplicateMessage').classList.add('hidden');
+        }, 3000);
+        return;
+    }
+    
+    addItem({
+        id: packageId,
+        name: packageName,
+        type: 'package',
+        price: price,
+        condition: 'Package',
+        tests: testIds
+    });
+}
+
+// Add item to selected items array
+function addItem(item) {
+    itemCounter++;
+    item.no = itemCounter;
+    selectedItems.push(item);
+    renderSelectedItems();
+    calculateTotal();
+}
+
+// Remove item from selected items
+function removeItem(index) {
+    selectedItems.splice(index, 1);
+    selectedItems.forEach((item, idx) => {
+        item.no = idx + 1;
+    });
+    itemCounter = selectedItems.length;
+    renderSelectedItems();
+    calculateTotal();
+}
+
+// Render selected items table
+function renderSelectedItems() {
+    const tbody = document.getElementById('selectedItemsTable');
+    tbody.innerHTML = selectedItems.map((item, index) => `
+        <tr class="hover:bg-slate-50">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${item.no}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">${item.name}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="px-2 py-1 rounded-full text-xs ${item.type === 'test' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}">
+                    ${item.type === 'test' ? 'Test' : 'Package'}
+                </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${item.condition || '-'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">$${item.price.toFixed(2)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                <button onclick="removeItem(${index})" class="text-red-600 hover:text-red-900">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+    
+    document.getElementById('selected_items').value = JSON.stringify(selectedItems);
+}
+
+// Toggle discount section
+function toggleDiscount() {
+    const section = document.getElementById('discountSection');
+    section.classList.toggle('hidden');
+}
+
+// Calculate discount from percentage
+function calculateDiscount() {
+    const percentage = parseFloat(document.getElementById('discount_percentage').value) || 0;
+    const totalPrice = parseFloat(document.getElementById('total_price').value) || 0;
+    const discountAmount = (totalPrice * percentage) / 100;
+    
+    document.getElementById('discount_amount').value = discountAmount.toFixed(2);
+    document.getElementById('discount_percentage_hidden').value = percentage;
+    document.getElementById('discount_amount_hidden').value = discountAmount.toFixed(2);
+    
+    calculateTotalAfterDiscount();
+}
+
+// Calculate discount from amount
+function calculateDiscountFromAmount() {
+    const amount = parseFloat(document.getElementById('discount_amount').value) || 0;
+    const totalPrice = parseFloat(document.getElementById('total_price').value) || 0;
+    const percentage = totalPrice > 0 ? (amount / totalPrice) * 100 : 0;
+    
+    document.getElementById('discount_percentage').value = percentage.toFixed(2);
+    document.getElementById('discount_percentage_hidden').value = percentage.toFixed(2);
+    document.getElementById('discount_amount_hidden').value = amount.toFixed(2);
+    
+    calculateTotalAfterDiscount();
+}
+
+// Calculate total price
+function calculateTotal() {
+    const total = selectedItems.reduce((sum, item) => sum + item.price, 0);
+    document.getElementById('total_price').value = total.toFixed(2);
+    calculateTotalAfterDiscount();
+}
+
+// Calculate total after discount
+function calculateTotalAfterDiscount() {
+    const total = parseFloat(document.getElementById('total_price').value) || 0;
+    const discount = parseFloat(document.getElementById('discount_amount').value) || 0;
+    const afterDiscount = total - discount;
+    
+    document.getElementById('total_after_discount').value = afterDiscount.toFixed(2);
+    calculateRemaining();
+}
+
+// Calculate remaining amount
+function calculateRemaining() {
+    const afterDiscount = parseFloat(document.getElementById('total_after_discount').value) || 0;
+    const received = parseFloat(document.getElementById('received_amount').value) || 0;
+    const remaining = afterDiscount - received;
+    
+    document.getElementById('remaining_amount').value = remaining.toFixed(2);
+}
+</script>
+{% endblock %}

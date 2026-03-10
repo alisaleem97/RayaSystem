@@ -1,0 +1,307 @@
+<!-- templates/packages.html -->
+{% extends "base.html" %}
+
+{% block title %}Packages - NexLab{% endblock %}
+{% block page_title %}Package Definition{% endblock %}
+
+{% block content %}
+<!-- Tom Select CSS -->
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+        <div>
+            <h3 class="text-lg font-semibold text-slate-800">Package Definition</h3>
+            <p class="text-sm text-slate-500">Define test packages with multiple tests</p>
+        </div>
+        <button onclick="toggleForm('addPackageForm')" 
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200">
+            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Add Package
+        </button>
+    </div>
+
+    <!-- Add/Edit Package Form -->
+    <div id="addPackageForm" style="display: none;" class="p-6 bg-slate-50 border-b border-slate-200">
+        <h4 class="text-md font-semibold text-slate-700 mb-4" id="formTitle">New Package Details</h4>
+        <form method="POST" id="packageForm" action="/packages/create">
+            <input type="hidden" id="package_id" name="package_id" value="">
+            
+            <!-- Basic Info -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Package Name *</label>
+                    <input type="text" id="package_name" name="package_name" required placeholder="e.g., Complete Health Checkup" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Short Name *</label>
+                    <input type="text" id="package_short_name" name="package_short_name" required placeholder="e.g., CHC" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none uppercase">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Price *</label>
+                    <input type="number" id="price" name="price" step="0.01" required placeholder="0.00" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Package Note</label>
+                    <input type="text" id="package_note" name="package_note" placeholder="e.g., Fasting required" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+            </div>
+            
+            <!-- Select Tests -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-700 mb-1">Select Tests *</label>
+                <select id="test_ids" name="test_ids" multiple placeholder="Search and select tests..." 
+                        class="w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    {% for test in tests %}
+                    <option value="{{ test.id }}">{{ test.test_name }} ({{ test.test_short_name }})</option>
+                    {% endfor %}
+                </select>
+                <p class="text-xs text-slate-500 mt-1">Type to search, click to select multiple tests</p>
+            </div>
+            
+            <div class="flex gap-2">
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                    <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    Save Package
+                </button>
+                <button type="button" onclick="toggleForm('addPackageForm')" 
+                        class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+        <!-- Search Boxes -->
+    <div class="p-6 border-b border-slate-200 bg-slate-50">
+        <h5 class="text-sm font-semibold text-slate-700 mb-3">Search Packages</h5>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Package Name</label>
+                <select id="searchPackageName" placeholder="Search packages..." class="w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">All Packages</option>
+                    {% for package in packages %}
+                    <option value="{{ package.package_name|lower }}">{{ package.package_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Short Name</label>
+                <select id="searchShortName" placeholder="Search short names..." class="w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">All Short Names</option>
+                    {% for package in packages %}
+                    <option value="{{ package.package_short_name|lower }}">{{ package.package_short_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Test</label>
+                <select id="searchTest" placeholder="Search tests..." class="w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">All Tests</option>
+                    {% for test in tests %}
+                    <option value="{{ test.test_name|lower }}">{{ test.test_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Packages Table -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-slate-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Package Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Short Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Tests</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Price</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Note</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-slate-200" id="packagesTableBody">
+                {% for package in packages %}
+                <tr class="hover:bg-slate-50" 
+                    data-package-name="{{ package.package_name|lower }}"
+                    data-short-name="{{ package.package_short_name|lower }}"
+                    data-tests="{% for pt in package.package_tests %}{{ pt.test.test_name|lower }}{% if not loop.last %},{% endif %}{% endfor %}">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{{ package.package_name }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">{{ package.package_short_name }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                        <div class="flex flex-wrap gap-1">
+                            {% for pt in package.package_tests %}
+                            <span class="px-2 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs">
+                                {{ pt.test.test_short_name }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${{ "%.2f"|format(package.price) }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 max-w-md truncate">{{ package.package_note if package.package_note else '-' }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div class="flex items-center space-x-3">
+                            <button onclick='editPackage({{ packages_json[loop.index0] | tojson }})' 
+                                    class="text-blue-600 hover:text-blue-900" title="Edit">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </button>
+                            <a href="javascript:void(0)" 
+                               onclick="confirmDelete('/packages/delete/{{ package.id }}')"
+                               class="text-red-600 hover:text-red-900" title="Delete">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    {% if not packages %}
+    <div class="text-center py-12">
+        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-slate-900">No packages defined</h3>
+        <p class="mt-1 text-sm text-slate-500">Get started by adding a new package definition.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Tom Select JS -->
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<script>
+let testSelect;
+let searchPackageSelect;
+let searchShortNameSelect;
+let searchTestSelect;
+
+function toggleForm(formId) {
+    const form = document.getElementById(formId);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'none') {
+        document.getElementById('packageForm').reset();
+        document.getElementById('package_id').value = '';
+        document.getElementById('formTitle').textContent = 'New Package Details';
+        if (testSelect) {
+            testSelect.clear();
+        }
+    }
+}
+
+// Initialize Tom Select on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize test selection for package creation
+    testSelect = new TomSelect('#test_ids', {
+        plugins: ['remove_button'],
+        placeholder: 'Search and select tests...',
+        create: false,
+        maxItems: null,
+        hidePlaceholder: true,
+        closeAfterSelect: false,
+        clearFilter: true,
+        onChange: function(value) {
+            console.log('Selected test IDs:', value);
+        }
+    });
+    
+    // Initialize search dropdowns
+    searchPackageSelect = new TomSelect('#searchPackageName', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Search packages...',
+        create: false,
+        maxItems: 1,
+        onChange: function(value) {
+            filterPackages();
+        }
+    });
+    
+    searchShortNameSelect = new TomSelect('#searchShortName', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Search short names...',
+        create: false,
+        maxItems: 1,
+        onChange: function(value) {
+            filterPackages();
+        }
+    });
+    
+    searchTestSelect = new TomSelect('#searchTest', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Search tests...',
+        create: false,
+        maxItems: 1,
+        onChange: function(value) {
+            filterPackages();
+        }
+    });
+});
+
+function editPackage(pkg) {
+    document.getElementById('package_id').value = pkg.id;
+    document.getElementById('package_name').value = pkg.package_name;
+    document.getElementById('package_short_name').value = pkg.package_short_name;
+    document.getElementById('price').value = pkg.price;
+    document.getElementById('package_note').value = pkg.package_note || '';
+    
+    // Set selected tests
+    if (testSelect && pkg.test_ids && pkg.test_ids.length > 0) {
+        testSelect.clear();
+        testSelect.setValue(pkg.test_ids.map(String));
+    }
+    
+    document.getElementById('formTitle').textContent = 'Edit Package Details';
+    document.getElementById('addPackageForm').style.display = 'block';
+    document.getElementById('packageForm').action = '/packages/update/' + pkg.id;
+}
+
+// Ensure form submission captures all selected tests
+document.getElementById('packageForm').addEventListener('submit', function(e) {
+    if (testSelect) {
+        const selectedValues = testSelect.getValue();
+        console.log('Submitting test IDs:', selectedValues);
+        
+        // Create hidden inputs for each selected test
+        const existingInput = document.querySelector('input[name="test_ids"]');
+        if (existingInput) {
+            existingInput.remove();
+        }
+        
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'test_ids';
+        hiddenInput.value = Array.isArray(selectedValues) ? selectedValues.join(',') : selectedValues;
+        this.appendChild(hiddenInput);
+    }
+});
+
+// Filter packages based on search selections
+function filterPackages() {
+    const packageNameInput = (searchPackageSelect?.getValue() || '').toLowerCase();
+    const shortNameInput = (searchShortNameSelect?.getValue() || '').toLowerCase();
+    const testInput = (searchTestSelect?.getValue() || '').toLowerCase();
+    
+    const rows = document.querySelectorAll('#packagesTableBody tr');
+    
+    rows.forEach(row => {
+        const packageName = row.dataset.packageName || '';
+        const shortName = row.dataset.shortName || '';
+        const tests = row.dataset.tests || '';
+        
+        const packageMatch = !packageNameInput || packageName.includes(packageNameInput);
+        const shortNameMatch = !shortNameInput || shortName.includes(shortNameInput);
+        const testMatch = !testInput || tests.includes(testInput);
+        
+        if (packageMatch && shortNameMatch && testMatch) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+</script>
+{% endblock %}

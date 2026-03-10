@@ -10,7 +10,7 @@ import json
 import ast
 
 from database import create_db_and_tables, get_session, engine
-from models import User, Patient, TestCatalog, Order, Result, Parameter, Department, Device, SampleType, ReportNote, TestDefinition, TestDevice, TestParameter, AuditLog, Formula, FormulaItem
+from models import User, Patient, TestCatalog, Order, Result, Parameter, Department, Device, SampleType, ReportNote, TestDefinition, TestDevice, TestParameter, AuditLog, Formula, FormulaItem, TestRange, TestResultType, Package, PackageTest, Partner, Province, Region,LabInfo
 
 # Setup templates
 templates = Jinja2Templates(directory="templates")
@@ -848,6 +848,1143 @@ def delete_formula(formula_id: int, request: Request, session: Session = Depends
     except Exception as e:
         session.rollback()
         return RedirectResponse(url=f"/formulas?error={str(e).replace(' ', '%20')}", status_code=status.HTTP_303_SEE_OTHER)
+    
+# ===========================
+# TEST RANGE ROUTES
+# ===========================
+
+@app.get("/test-ranges", response_class=HTMLResponse)
+def test_ranges_page(request: Request, session: Session = Depends(get_session)):
+    ranges = session.exec(select(TestRange).order_by(TestRange.id.asc())).all()
+    
+    ranges_json = []
+    for range_item in ranges:
+        range_dict = model_to_dict(range_item)
+        ranges_json.append(range_dict)
+    
+    tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
+    parameters = session.exec(select(Parameter)).all()
+    devices = session.exec(select(Device).where(Device.is_active == True)).all()
+    departments = session.exec(select(Department).where(Department.is_active == True)).all()  # ✅ Add this line
+    
+    success = request.query_params.get("success")
+    error = request.query_params.get("error")
+    
+    return templates.TemplateResponse("test_ranges.html", {
+        "request": request,
+        "ranges": ranges,
+        "ranges_json": ranges_json,
+        "tests": tests,
+        "parameters": parameters,
+        "devices": devices,
+        "departments": departments,  # ✅ Add this line
+        "message_success": success,
+        "message_error": error
+    })
+
+@app.post("/test-ranges/create")
+def create_test_range(
+    test_id: int = Form(...),
+    parameter_id: Optional[int] = Form(None),
+    device_id: Optional[int] = Form(None),
+    unit: str = Form(...),
+    gender_type: str = Form(...),
+    age_from: int = Form(...),
+    age_to: int = Form(...),
+    age_unit: str = Form(...),
+    fasting_required: str = Form("false"),
+    range_type: str = Form(...),
+    # Numeric range values
+    normal_from: Optional[float] = Form(None),
+    normal_to: Optional[float] = Form(None),
+    vlow_from: Optional[float] = Form(None),
+    vlow_to: Optional[float] = Form(None),
+    low_from: Optional[float] = Form(None),
+    low_to: Optional[float] = Form(None),
+    midlow_from: Optional[float] = Form(None),
+    midlow_to: Optional[float] = Form(None),
+    midhigh_from: Optional[float] = Form(None),
+    midhigh_to: Optional[float] = Form(None),
+    high_from: Optional[float] = Form(None),
+    high_to: Optional[float] = Form(None),
+    vhigh_from: Optional[float] = Form(None),
+    vhigh_to: Optional[float] = Form(None),
+    panic_less_than: Optional[float] = Form(None),
+    panic_more_than: Optional[float] = Form(None),
+    # Text range value
+    text_range: Optional[str] = Form(None),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        fasting_bool = fasting_required.lower() == "true"
+        
+        new_range = TestRange(
+            test_id=test_id,
+            parameter_id=parameter_id if parameter_id else None,
+            device_id=device_id if device_id else None,
+            unit=unit,
+            gender_type=gender_type,
+            age_from=age_from,
+            age_to=age_to,
+            age_unit=age_unit,
+            fasting_required=fasting_bool,
+            range_type=range_type,
+            # Numeric values
+            normal_from=normal_from,
+            normal_to=normal_to,
+            vlow_from=vlow_from,
+            vlow_to=vlow_to,
+            low_from=low_from,
+            low_to=low_to,
+            midlow_from=midlow_from,
+            midlow_to=midlow_to,
+            midhigh_from=midhigh_from,
+            midhigh_to=midhigh_to,
+            high_from=high_from,
+            high_to=high_to,
+            vhigh_from=vhigh_from,
+            vhigh_to=vhigh_to,
+            panic_less_than=panic_less_than,
+            panic_more_than=panic_more_than,
+            # Text value
+            text_range=text_range if range_type == "text" else None,
+            is_active=True,
+            created_by=current_user.id if current_user else None
+        )
+        session.add(new_range)
+        session.commit()
+        session.refresh(new_range)
+        create_audit_log(session, "testrange", new_range.id, "create", current_user, new_values=model_to_dict(new_range))
+        
+        return RedirectResponse(url="/test-ranges?success=Test range saved successfully!", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/test-ranges?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+
+@app.post("/test-ranges/update/{range_id}")
+def update_test_range(
+    range_id: int,
+    test_id: int = Form(...),
+    parameter_id: Optional[int] = Form(None),
+    device_id: Optional[int] = Form(None),
+    unit: str = Form(...),
+    gender_type: str = Form(...),
+    age_from: int = Form(...),
+    age_to: int = Form(...),
+    age_unit: str = Form(...),
+    fasting_required: str = Form("false"),
+    range_type: str = Form(...),
+    # Numeric range values
+    normal_from: Optional[float] = Form(None),
+    normal_to: Optional[float] = Form(None),
+    vlow_from: Optional[float] = Form(None),
+    vlow_to: Optional[float] = Form(None),
+    low_from: Optional[float] = Form(None),
+    low_to: Optional[float] = Form(None),
+    midlow_from: Optional[float] = Form(None),
+    midlow_to: Optional[float] = Form(None),
+    midhigh_from: Optional[float] = Form(None),
+    midhigh_to: Optional[float] = Form(None),
+    high_from: Optional[float] = Form(None),
+    high_to: Optional[float] = Form(None),
+    vhigh_from: Optional[float] = Form(None),
+    vhigh_to: Optional[float] = Form(None),
+    panic_less_than: Optional[float] = Form(None),
+    panic_more_than: Optional[float] = Form(None),
+    # Text range value
+    text_range: Optional[str] = Form(None),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        range_item = session.get(TestRange, range_id)
+        
+        if range_item:
+            old_values = model_to_dict(range_item)
+            fasting_bool = fasting_required.lower() == "true"
+            
+            range_item.test_id = test_id
+            range_item.parameter_id = parameter_id if parameter_id else None
+            range_item.device_id = device_id if device_id else None
+            range_item.unit = unit
+            range_item.gender_type = gender_type
+            range_item.age_from = age_from
+            range_item.age_to = age_to
+            range_item.age_unit = age_unit
+            range_item.fasting_required = fasting_bool
+            range_item.range_type = range_type
+            # Numeric values
+            range_item.normal_from = normal_from
+            range_item.normal_to = normal_to
+            range_item.vlow_from = vlow_from
+            range_item.vlow_to = vlow_to
+            range_item.low_from = low_from
+            range_item.low_to = low_to
+            range_item.midlow_from = midlow_from
+            range_item.midlow_to = midlow_to
+            range_item.midhigh_from = midhigh_from
+            range_item.midhigh_to = midhigh_to
+            range_item.high_from = high_from
+            range_item.high_to = high_to
+            range_item.vhigh_from = vhigh_from
+            range_item.vhigh_to = vhigh_to
+            range_item.panic_less_than = panic_less_than
+            range_item.panic_more_than = panic_more_than
+            # Text value
+            range_item.text_range = text_range if range_type == "text" else None
+            range_item.edited_by = current_user.id if current_user else None
+            range_item.edited_at = datetime.utcnow()
+            
+            session.add(range_item)
+            session.commit()
+            session.refresh(range_item)
+            create_audit_log(session, "testrange", range_item.id, "update", current_user, old_values=old_values, new_values=model_to_dict(range_item))
+            
+            return RedirectResponse(url="/test-ranges?success=Test range updated successfully!", 
+                                  status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/test-ranges?error=Test range not found", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/test-ranges?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+
+@app.get("/test-ranges/delete/{range_id}")
+def delete_test_range(range_id: int, request: Request, session: Session = Depends(get_session)):
+    try:
+        current_user = get_current_user(request, session)
+        range_item = session.get(TestRange, range_id)
+        
+        if range_item:
+            old_values = model_to_dict(range_item)
+            session.delete(range_item)
+            session.commit()
+            create_audit_log(session, "testrange", range_item.id, "delete", current_user, old_values=old_values)
+            
+            return RedirectResponse(url="/test-ranges?success=Test range deleted successfully!", 
+                                  status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/test-ranges?error=Test range not found", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/test-ranges?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    
+
+# ===========================
+# TEST RESULT TYPE ROUTES
+# ===========================
+
+@app.get("/test-result-types", response_class=HTMLResponse)
+def test_result_types_page(request: Request, session: Session = Depends(get_session)):
+    result_types = session.exec(select(TestResultType).order_by(TestResultType.id.asc())).all()
+    
+    result_types_json = []
+    for rt in result_types:
+        rt_dict = model_to_dict(rt)
+        result_types_json.append(rt_dict)
+    
+    tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
+    parameters = session.exec(select(Parameter)).all()
+    
+    success = request.query_params.get("success")
+    error = request.query_params.get("error")
+    
+    return templates.TemplateResponse("test_result_types.html", {
+        "request": request,
+        "result_types": result_types,
+        "result_types_json": result_types_json,
+        "tests": tests,
+        "parameters": parameters,
+        "message_success": success,
+        "message_error": error
+    })
+
+@app.post("/test-result-types/create")
+def create_test_result_type(
+    test_id: int = Form(...),
+    parameter_id: Optional[int] = Form(None),
+    result_type: str = Form(...),
+    selection_options: Optional[str] = Form(None),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        
+        new_result_type = TestResultType(
+            test_id=test_id,
+            parameter_id=parameter_id if parameter_id else None,
+            result_type=result_type,
+            selection_options=selection_options if result_type == "selection" else None,
+            is_active=True,
+            created_by=current_user.id if current_user else None
+        )
+        session.add(new_result_type)
+        session.commit()
+        session.refresh(new_result_type)
+        create_audit_log(session, "testresulttype", new_result_type.id, "create", current_user, new_values=model_to_dict(new_result_type))
+        
+        return RedirectResponse(url="/test-result-types?success=Result type saved successfully!", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/test-result-types?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+
+@app.post("/test-result-types/update/{result_type_id}")
+def update_test_result_type(
+    result_type_id: int,
+    test_id: int = Form(...),
+    parameter_id: Optional[int] = Form(None),
+    result_type: str = Form(...),
+    selection_options: Optional[str] = Form(None),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        rt = session.get(TestResultType, result_type_id)
+        
+        if rt:
+            old_values = model_to_dict(rt)
+            
+            rt.test_id = test_id
+            rt.parameter_id = parameter_id if parameter_id else None
+            rt.result_type = result_type
+            rt.selection_options = selection_options if result_type == "selection" else None
+            rt.edited_by = current_user.id if current_user else None
+            rt.edited_at = datetime.utcnow()
+            
+            session.add(rt)
+            session.commit()
+            session.refresh(rt)
+            create_audit_log(session, "testresulttype", rt.id, "update", current_user, old_values=old_values, new_values=model_to_dict(rt))
+            
+            return RedirectResponse(url="/test-result-types?success=Result type updated successfully!", 
+                                  status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/test-result-types?error=Result type not found", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/test-result-types?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+
+@app.get("/test-result-types/delete/{result_type_id}")
+def delete_test_result_type(result_type_id: int, request: Request, session: Session = Depends(get_session)):
+    try:
+        current_user = get_current_user(request, session)
+        rt = session.get(TestResultType, result_type_id)
+        
+        if rt:
+            old_values = model_to_dict(rt)
+            session.delete(rt)
+            session.commit()
+            create_audit_log(session, "testresulttype", rt.id, "delete", current_user, old_values=old_values)
+            
+            return RedirectResponse(url="/test-result-types?success=Result type deleted successfully!", 
+                                  status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/test-result-types?error=Result type not found", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/test-result-types?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    
+# ===========================
+# PACKAGE ROUTES
+# ===========================
+
+@app.get("/packages", response_class=HTMLResponse)
+def packages_page(request: Request, session: Session = Depends(get_session)):
+    packages = session.exec(select(Package).order_by(Package.id.asc())).all()
+    
+    packages_json = []
+    for pkg in packages:
+        pkg_dict = model_to_dict(pkg)
+        # Get test IDs for this package
+        test_ids = [pt.test_id for pt in pkg.package_tests]
+        pkg_dict['test_ids'] = test_ids
+        packages_json.append(pkg_dict)
+    
+    tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
+    
+    success = request.query_params.get("success")
+    error = request.query_params.get("error")
+    
+    return templates.TemplateResponse("packages.html", {
+        "request": request,
+        "packages": packages,
+        "packages_json": packages_json,
+        "tests": tests,
+        "message_success": success,
+        "message_error": error
+    })
+
+@app.post("/packages/create")
+def create_package(
+    package_name: str = Form(...),
+    package_short_name: str = Form(...),
+    price: float = Form(...),
+    package_note: Optional[str] = Form(None),
+    test_ids: Optional[str] = Form(""),  # Comma-separated string from Tom Select
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        
+        new_package = Package(
+            package_name=package_name,
+            package_short_name=package_short_name.upper(),
+            price=price,
+            package_note=package_note,
+            is_active=True,
+            created_by=current_user.id if current_user else None
+        )
+        session.add(new_package)
+        session.commit()
+        session.refresh(new_package)
+        
+        # Add package-test links
+        if test_ids and test_ids.strip():
+            test_id_list = [int(t.strip()) for t in test_ids.split(',') if t.strip().isdigit()]
+            for test_id in test_id_list:
+                link = PackageTest(package_id=new_package.id, test_id=test_id)
+                session.add(link)
+        
+        session.commit()
+        create_audit_log(session, "package", new_package.id, "create", current_user, new_values=model_to_dict(new_package))
+        
+        return RedirectResponse(url="/packages?success=Package saved successfully!", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/packages?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+
+@app.post("/packages/update/{package_id}")
+def update_package(
+    package_id: int,
+    package_name: str = Form(...),
+    package_short_name: str = Form(...),
+    price: float = Form(...),
+    package_note: Optional[str] = Form(None),
+    test_ids: Optional[str] = Form(""),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        pkg = session.get(Package, package_id)
+        
+        if pkg:
+            old_values = model_to_dict(pkg)
+            
+            pkg.package_name = package_name
+            pkg.package_short_name = package_short_name.upper()
+            pkg.price = price
+            pkg.package_note = package_note
+            pkg.edited_by = current_user.id if current_user else None
+            pkg.edited_at = datetime.utcnow()
+            
+            # Delete existing package-test links
+            existing_links = session.exec(select(PackageTest).where(PackageTest.package_id == package_id)).all()
+            for link in existing_links:
+                session.delete(link)
+            
+            # Add new package-test links
+            if test_ids and test_ids.strip():
+                test_id_list = [int(t.strip()) for t in test_ids.split(',') if t.strip().isdigit()]
+                for test_id in test_id_list:
+                    link = PackageTest(package_id=pkg.id, test_id=test_id)
+                    session.add(link)
+            
+            session.add(pkg)
+            session.commit()
+            session.refresh(pkg)
+            create_audit_log(session, "package", pkg.id, "update", current_user, old_values=old_values, new_values=model_to_dict(pkg))
+            
+            return RedirectResponse(url="/packages?success=Package updated successfully!", 
+                                  status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/packages?error=Package not found", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/packages?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+
+@app.get("/packages/delete/{package_id}")
+def delete_package(package_id: int, request: Request, session: Session = Depends(get_session)):
+    try:
+        current_user = get_current_user(request, session)
+        pkg = session.get(Package, package_id)
+        
+        if pkg:
+            old_values = model_to_dict(pkg)
+            
+            # Delete related package-test links first
+            existing_links = session.exec(select(PackageTest).where(PackageTest.package_id == package_id)).all()
+            for link in existing_links:
+                session.delete(link)
+            
+            session.delete(pkg)
+            session.commit()
+            create_audit_log(session, "package", pkg.id, "delete", current_user, old_values=old_values)
+            
+            return RedirectResponse(url="/packages?success=Package deleted successfully!", 
+                                  status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/packages?error=Package not found", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/packages?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    
+# ===========================
+# PARTNER ROUTES
+# ===========================
+
+@app.get("/partners", response_class=HTMLResponse)
+def partners_page(request: Request, session: Session = Depends(get_session)):
+    partners = session.exec(select(Partner).order_by(Partner.id.asc())).all()
+    
+    partners_json = []
+    for partner in partners:
+        partner_dict = model_to_dict(partner)
+        partners_json.append(partner_dict)
+    
+    success = request.query_params.get("success")
+    error = request.query_params.get("error")
+    
+    return templates.TemplateResponse("partners.html", {
+        "request": request,
+        "partners": partners,
+        "partners_json": partners_json,
+        "message_success": success,
+        "message_error": error
+    })
+
+@app.post("/partners/create")
+def create_partner(
+    partner_name: str = Form(...),
+    partner_note: Optional[str] = Form(None),
+    partner_contact: Optional[str] = Form(None),
+    partner_weight: Optional[float] = Form(None),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        
+        new_partner = Partner(
+            partner_name=partner_name,
+            partner_note=partner_note,
+            partner_contact=partner_contact,
+            partner_weight=partner_weight if partner_weight else None,
+            is_active=True,
+            created_by=current_user.id if current_user else None
+        )
+        session.add(new_partner)
+        session.commit()
+        session.refresh(new_partner)
+        create_audit_log(session, "partner", new_partner.id, "create", current_user, new_values=model_to_dict(new_partner))
+        
+        return RedirectResponse(url="/partners?success=Partner saved successfully!", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/partners?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+
+@app.post("/partners/update/{partner_id}")
+def update_partner(
+    partner_id: int,
+    partner_name: str = Form(...),
+    partner_note: Optional[str] = Form(None),
+    partner_contact: Optional[str] = Form(None),
+    partner_weight: Optional[float] = Form(None),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        partner = session.get(Partner, partner_id)
+        
+        if partner:
+            old_values = model_to_dict(partner)
+            
+            partner.partner_name = partner_name
+            partner.partner_note = partner_note
+            partner.partner_contact = partner_contact
+            partner.partner_weight = partner_weight if partner_weight else None
+            partner.edited_by = current_user.id if current_user else None
+            partner.edited_at = datetime.utcnow()
+            
+            session.add(partner)
+            session.commit()
+            session.refresh(partner)
+            create_audit_log(session, "partner", partner.id, "update", current_user, old_values=old_values, new_values=model_to_dict(partner))
+            
+            return RedirectResponse(url="/partners?success=Partner updated successfully!", 
+                                  status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/partners?error=Partner not found", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/partners?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+
+@app.get("/partners/delete/{partner_id}")
+def delete_partner(partner_id: int, request: Request, session: Session = Depends(get_session)):
+    try:
+        current_user = get_current_user(request, session)
+        partner = session.get(Partner, partner_id)
+        
+        if partner:
+            old_values = model_to_dict(partner)
+            session.delete(partner)
+            session.commit()
+            create_audit_log(session, "partner", partner.id, "delete", current_user, old_values=old_values)
+            
+            return RedirectResponse(url="/partners?success=Partner deleted successfully!", 
+                                  status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/partners?error=Partner not found", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/partners?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    
+# ===========================
+# PROVINCE ROUTES
+# ===========================
+
+@app.get("/provinces", response_class=HTMLResponse)
+def provinces_page(request: Request, session: Session = Depends(get_session)):
+    provinces = session.exec(select(Province).order_by(Province.id.asc())).all()
+    
+    provinces_json = []
+    for province in provinces:
+        province_dict = model_to_dict(province)
+        provinces_json.append(province_dict)
+    
+    success = request.query_params.get("success")
+    error = request.query_params.get("error")
+    
+    return templates.TemplateResponse("provinces.html", {
+        "request": request,
+        "provinces": provinces,
+        "provinces_json": provinces_json,
+        "message_success": success,
+        "message_error": error
+    })
+
+@app.post("/provinces/create")
+def create_province(
+    province_name: str = Form(...),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        
+        new_province = Province(
+            province_name=province_name,
+            is_active=True,
+            created_by=current_user.id if current_user else None
+        )
+        session.add(new_province)
+        session.commit()
+        session.refresh(new_province)
+        create_audit_log(session, "province", new_province.id, "create", current_user, new_values=model_to_dict(new_province))
+        
+        return RedirectResponse(url="/provinces?success=Province saved successfully!", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/provinces?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+
+@app.post("/provinces/update/{province_id}")
+def update_province(
+    province_id: int,
+    province_name: str = Form(...),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        province = session.get(Province, province_id)
+        
+        if province:
+            old_values = model_to_dict(province)
+            
+            province.province_name = province_name
+            province.edited_by = current_user.id if current_user else None
+            province.edited_at = datetime.utcnow()
+            
+            session.add(province)
+            session.commit()
+            session.refresh(province)
+            create_audit_log(session, "province", province.id, "update", current_user, old_values=old_values, new_values=model_to_dict(province))
+            
+            return RedirectResponse(url="/provinces?success=Province updated successfully!", 
+                                  status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/provinces?error=Province not found", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/provinces?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+
+@app.get("/provinces/delete/{province_id}")
+def delete_province(province_id: int, request: Request, session: Session = Depends(get_session)):
+    try:
+        current_user = get_current_user(request, session)
+        province = session.get(Province, province_id)
+        
+        if province:
+            old_values = model_to_dict(province)
+            session.delete(province)
+            session.commit()
+            create_audit_log(session, "province", province.id, "delete", current_user, old_values=old_values)
+            
+            return RedirectResponse(url="/provinces?success=Province deleted successfully!", 
+                                  status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/provinces?error=Province not found", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/provinces?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    
+
+# ===========================
+# REGION ROUTES
+# ===========================
+
+@app.get("/regions", response_class=HTMLResponse)
+def regions_page(request: Request, session: Session = Depends(get_session)):
+    regions = session.exec(select(Region).order_by(Region.id.asc())).all()
+    
+    regions_json = []
+    for region in regions:
+        region_dict = model_to_dict(region)
+        regions_json.append(region_dict)
+    
+    provinces = session.exec(select(Province).where(Province.is_active == True)).all()
+    
+    success = request.query_params.get("success")
+    error = request.query_params.get("error")
+    
+    return templates.TemplateResponse("regions.html", {
+        "request": request,
+        "regions": regions,
+        "regions_json": regions_json,
+        "provinces": provinces,
+        "message_success": success,
+        "message_error": error
+    })
+
+@app.post("/regions/create")
+def create_region(
+    region_name: str = Form(...),
+    province_id: int = Form(...),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        
+        new_region = Region(
+            region_name=region_name,
+            province_id=province_id,
+            is_active=True,
+            created_by=current_user.id if current_user else None
+        )
+        session.add(new_region)
+        session.commit()
+        session.refresh(new_region)
+        create_audit_log(session, "region", new_region.id, "create", current_user, new_values=model_to_dict(new_region))
+        
+        return RedirectResponse(url="/regions?success=Region saved successfully!", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/regions?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+
+@app.post("/regions/update/{region_id}")
+def update_region(
+    region_id: int,
+    region_name: str = Form(...),
+    province_id: int = Form(...),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        region = session.get(Region, region_id)
+        
+        if region:
+            old_values = model_to_dict(region)
+            
+            region.region_name = region_name
+            region.province_id = province_id
+            region.edited_by = current_user.id if current_user else None
+            region.edited_at = datetime.utcnow()
+            
+            session.add(region)
+            session.commit()
+            session.refresh(region)
+            create_audit_log(session, "region", region.id, "update", current_user, old_values=old_values, new_values=model_to_dict(region))
+            
+            return RedirectResponse(url="/regions?success=Region updated successfully!", 
+                                  status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/regions?error=Region not found", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/regions?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+
+@app.get("/regions/delete/{region_id}")
+def delete_region(region_id: int, request: Request, session: Session = Depends(get_session)):
+    try:
+        current_user = get_current_user(request, session)
+        region = session.get(Region, region_id)
+        
+        if region:
+            old_values = model_to_dict(region)
+            session.delete(region)
+            session.commit()
+            create_audit_log(session, "region", region.id, "delete", current_user, old_values=old_values)
+            
+            return RedirectResponse(url="/regions?success=Region deleted successfully!", 
+                                  status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/regions?error=Region not found", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/regions?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+
+# ===========================
+# LAB INFO ROUTES
+# ===========================
+
+import os
+import shutil
+from fastapi import UploadFile, File
+
+# Create uploads directory if it doesn't exist
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+def save_uploaded_file(file: UploadFile, filename: str) -> str:
+    """Save uploaded file and return the filename"""
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return filename
+
+@app.get("/lab-info", response_class=HTMLResponse)
+def lab_info_page(request: Request, session: Session = Depends(get_session)):
+    # Get the first (and should be only) lab info record
+    lab_info = session.exec(select(LabInfo).limit(1)).first()
+    
+    success = request.query_params.get("success")
+    error = request.query_params.get("error")
+    
+    return templates.TemplateResponse("lab_info.html", {
+        "request": request,
+        "lab_info": lab_info,
+        "edit_mode": False,
+        "message_success": success,
+        "message_error": error
+    })
+
+@app.get("/lab-info/edit", response_class=HTMLResponse)
+def lab_info_edit_page(request: Request, session: Session = Depends(get_session)):
+    # Get the first (and should be only) lab info record
+    lab_info = session.exec(select(LabInfo).limit(1)).first()
+    
+    return templates.TemplateResponse("lab_info.html", {
+        "request": request,
+        "lab_info": lab_info,
+        "edit_mode": True
+    })
+
+@app.post("/lab-info/update")
+async def update_lab_info(
+    request: Request,
+    lab_name: str = Form(...),
+    lab_title: Optional[str] = Form(None),
+    first_doctor_name: Optional[str] = Form(None),
+    second_doctor_name: Optional[str] = Form(None),
+    lab_address: Optional[str] = Form(None),
+    lab_phone_1: str = Form(...),
+    lab_phone_2: Optional[str] = Form(None),
+    whatsapp_api: Optional[str] = Form(None),
+    whatsapp_token: Optional[str] = Form(None),
+    telegram_api: Optional[str] = Form(None),
+    telegram_token: Optional[str] = Form(None),
+    lab_email: Optional[str] = Form(None),
+    lab_website: Optional[str] = Form(None),
+    lab_note_1: Optional[str] = Form(None),
+    lab_note_2: Optional[str] = Form(None),
+    lab_logo: Optional[UploadFile] = File(None),
+    lab_qr_1: Optional[UploadFile] = File(None),
+    lab_qr_2: Optional[UploadFile] = File(None),
+    lab_stamp_1: Optional[UploadFile] = File(None),
+    lab_stamp_2: Optional[UploadFile] = File(None),
+    lab_signature_1: Optional[UploadFile] = File(None),
+    lab_signature_2: Optional[UploadFile] = File(None),
+    lab_image_1: Optional[UploadFile] = File(None),
+    lab_image_2: Optional[UploadFile] = File(None),
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        
+        # Get existing lab info or create new
+        lab_info = session.exec(select(LabInfo).limit(1)).first()
+        
+        if not lab_info:
+            lab_info = LabInfo()
+            session.add(lab_info)
+        
+        # Update text fields
+        lab_info.lab_name = lab_name
+        lab_info.lab_title = lab_title
+        lab_info.first_doctor_name = first_doctor_name
+        lab_info.second_doctor_name = second_doctor_name
+        lab_info.lab_address = lab_address
+        lab_info.lab_phone_1 = lab_phone_1
+        lab_info.lab_phone_2 = lab_phone_2
+        lab_info.whatsapp_api = whatsapp_api
+        lab_info.whatsapp_token = whatsapp_token
+        lab_info.telegram_api = telegram_api
+        lab_info.telegram_token = telegram_token
+        lab_info.lab_email = lab_email
+        lab_info.lab_website = lab_website
+        lab_info.lab_note_1 = lab_note_1
+        lab_info.lab_note_2 = lab_note_2
+        lab_info.edited_by = current_user.id if current_user else None
+        lab_info.edited_at = datetime.utcnow()
+        
+        # Handle file uploads
+        import uuid
+        
+        files_to_upload = [
+            ('lab_logo', lab_logo),
+            ('lab_qr_1', lab_qr_1),
+            ('lab_qr_2', lab_qr_2),
+            ('lab_stamp_1', lab_stamp_1),
+            ('lab_stamp_2', lab_stamp_2),
+            ('lab_signature_1', lab_signature_1),
+            ('lab_signature_2', lab_signature_2),
+            ('lab_image_1', lab_image_1),
+            ('lab_image_2', lab_image_2),
+        ]
+        
+        for field_name, file in files_to_upload:
+            if file and file.filename:
+                # Generate unique filename
+                ext = os.path.splitext(file.filename)[1]
+                unique_filename = f"{field_name}_{uuid.uuid4().hex}{ext}"
+                
+                # Save file
+                saved_filename = save_uploaded_file(file, unique_filename)
+                
+                # Update field
+                setattr(lab_info, field_name, saved_filename)
+        
+        session.commit()
+        session.refresh(lab_info)
+        
+        return RedirectResponse(url="/lab-info?success=Lab information updated successfully!", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/lab-info?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+
+# ===========================
+# PATIENT REGISTRATION ROUTES
+# ===========================
+
+@app.get("/patient-registration", response_class=HTMLResponse)
+def patient_registration_page(request: Request, session: Session = Depends(get_session)):
+    provinces = session.exec(select(Province).where(Province.is_active == True)).all()
+    partners = session.exec(select(Partner).where(Partner.is_active == True)).all()
+    tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
+    packages = session.exec(select(Package).where(Package.is_active == True)).all()
+    
+    success = request.query_params.get("success")
+    error = request.query_params.get("error")
+    
+    return templates.TemplateResponse("patient_registration.html", {
+        "request": request,
+        "provinces": provinces,
+        "partners": partners,
+        "tests": tests,
+        "packages": packages,
+        "message_success": success,
+        "message_error": error
+    })
+
+@app.get("/api/regions")
+def get_regions_by_province(province_id: int, session: Session = Depends(get_session)):
+    regions = session.exec(select(Region).where(Region.province_id == province_id)).all()
+    return [{"id": r.id, "region_name": r.region_name} for r in regions]
+
+@app.get("/api/package-tests/{package_id}")
+def get_package_tests(package_id: int, session: Session = Depends(get_session)):
+    package_tests = session.exec(select(PackageTest).where(PackageTest.package_id == package_id)).all()
+    return {"test_ids": [pt.test_id for pt in package_tests]}
+
+@app.post("/patient-registration/create")
+async def create_patient_registration(
+    request: Request,
+    patient_id: str = Form(...),
+    full_name: str = Form(...),
+    gender: str = Form(...),
+    date_of_birth: str = Form(...),
+    age: Optional[int] = Form(None),
+    age_unit: Optional[str] = Form(None),
+    phone_key: str = Form(...),
+    phone_number: str = Form(...),
+    weight: float = Form(...),
+    height: float = Form(...),
+    province_id: int = Form(...),
+    region_id: int = Form(...),
+    note: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+    diagnosis: Optional[str] = Form(None),
+    symptoms: Optional[str] = Form(None),
+    therapy: Optional[str] = Form(None),
+    partner_id: Optional[int] = Form(None),
+    doctor: Optional[str] = Form(None),
+    skin_colour: Optional[str] = Form(None),
+    agent_name: Optional[str] = Form(None),
+    is_outlab: str = Form("false"),
+    selected_items: str = Form(...),  # JSON string
+    discount_percentage: Optional[float] = Form(None),
+    discount_amount: Optional[float] = Form(None),
+    discount_note: Optional[str] = Form(None),
+    received_amount: Optional[float] = Form(None),
+    session: Session = Depends(get_session)
+):
+    try:
+        current_user = get_current_user(request, session)
+        import json
+        
+        # Parse selected items
+        items = json.loads(selected_items)
+        
+        # Create patient
+        new_patient = Patient(
+            patient_id=patient_id,
+            full_name=full_name,
+            gender=gender,
+            date_of_birth=datetime.strptime(date_of_birth, "%Y-%m-%d"),
+            age=age,
+            age_unit=age_unit,
+            phone_key=phone_key,
+            phone_number=phone_number,
+            weight=weight,
+            height=height,
+            province_id=province_id,
+            region_id=region_id,
+            note=note,
+            email=email,
+            diagnosis=diagnosis,
+            symptoms=symptoms,
+            therapy=therapy,
+            partner_id=partner_id if partner_id else None,
+            doctor=doctor,
+            skin_colour=skin_colour,
+            agent_name=agent_name,
+            is_outlab=is_outlab.lower() == "true",
+            created_by=current_user.id if current_user else None
+        )
+        session.add(new_patient)
+        session.commit()
+        session.refresh(new_patient)
+        
+        # Generate Visit ID (PatientID + 3 digits)
+        visit_count = session.exec(select(PatientVisit).where(PatientVisit.patient_id == new_patient.id)).count()
+        visit_id = patient_id + str(visit_count).zfill(3)
+        
+        new_visit = PatientVisit(
+            visit_id=visit_id,
+            patient_id=new_patient.id,
+            created_by=current_user.id if current_user else None
+        )
+        session.add(new_visit)
+        session.commit()
+        session.refresh(new_visit)
+        
+        # Create orders for selected items
+        for item in items:
+            if item['type'] == 'test':
+                order = Order(
+                    order_number=f"ORD-{visit_id}-{item['id']}",
+                    patient_id=new_patient.id,
+                    test_id=item['id'],
+                    visit_id=new_visit.id,
+                    ordered_by=current_user.id if current_user else None
+                )
+                session.add(order)
+            elif item['type'] == 'package':
+                # Get all tests in package
+                package_tests = session.exec(select(PackageTest).where(PackageTest.package_id == item['id'])).all()
+                for pt in package_tests:
+                    order = Order(
+                        order_number=f"ORD-{visit_id}-{pt.test_id}",
+                        patient_id=new_patient.id,
+                        test_id=pt.test_id,
+                        visit_id=new_visit.id,
+                        ordered_by=current_user.id if current_user else None
+                    )
+                    session.add(order)
+        
+        session.commit()
+        
+        return RedirectResponse(url="/patient-registration?success=Patient registered successfully!", 
+                              status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        error_msg = str(e).replace(" ", "%20")
+        return RedirectResponse(url=f"/patient-registration?error={error_msg}", 
+                              status_code=status.HTTP_303_SEE_OTHER) 
+
 
 # ===========================
 # API ENDPOINTS
@@ -888,3 +2025,4 @@ def list_formulas_api(session: Session = Depends(get_session)):
 @app.get("/api/audit-logs")
 def list_audit_logs_api(session: Session = Depends(get_session)):
     return session.exec(select(AuditLog).order_by(AuditLog.created_at.desc())).all()
+

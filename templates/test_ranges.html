@@ -1,0 +1,510 @@
+<!-- templates/test_ranges.html -->
+{% extends "base.html" %}
+
+{% block title %}Test Ranges - NexLab{% endblock %}
+{% block page_title %}Test Range Definition{% endblock %}
+
+{% block content %}
+<!-- Tom Select CSS -->
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+        <div>
+            <h3 class="text-lg font-semibold text-slate-800">Test Range Definition</h3>
+            <p class="text-sm text-slate-500">Define reference ranges for laboratory tests</p>
+        </div>
+        <button onclick="toggleForm('addRangeForm')" 
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200">
+            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Add Range
+        </button>
+    </div>
+
+    <!-- Add/Edit Range Form -->
+    <div id="addRangeForm" style="display: none;" class="p-6 bg-slate-50 border-b border-slate-200">
+        <h4 class="text-md font-semibold text-slate-700 mb-4" id="formTitle">New Range Details</h4>
+        <form method="POST" id="rangeForm" action="/test-ranges/create">
+            <input type="hidden" id="range_id" name="range_id" value="">
+            
+            <!-- Basic Info -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Test *</label>
+                    <select id="test_id" name="test_id" required onchange="updateParameterDropdown()" 
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="">Select Test...</option>
+                        {% for test in tests %}
+                        <option value="{{ test.id }}" data-has-params="{{ 'yes' if test.test_parameters else 'no' }}">{{ test.test_name }} ({{ test.test_short_name }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Parameter</label>
+                    <select id="parameter_id" name="parameter_id" disabled
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-100">
+                        <option value="">Select Parameter...</option>
+                        {% for param in parameters %}
+                        <option value="{{ param.id }}">{{ param.parameter_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-slate-500 mt-1 hidden" id="no_params_message">This test has no parameters.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Device</label>
+                    <select id="device_id" name="device_id" 
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="">Select Device...</option>
+                        {% for device in devices %}
+                        <option value="{{ device.id }}">{{ device.device_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Unit *</label>
+                    <input type="text" id="unit" name="unit" required placeholder="e.g., mg/dL, mmol/L" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Gender *</label>
+                    <select id="gender_type" name="gender_type" required 
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="both">Both</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Fasting Required</label>
+                    <select id="fasting_required" name="fasting_required" 
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="false">No</option>
+                        <option value="true">Yes</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Age Range -->
+            <div class="mb-4 p-4 bg-white rounded-lg border border-slate-200">
+                <h5 class="text-sm font-semibold text-slate-700 mb-3">Age Range</h5>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">From</label>
+                        <input type="number" id="age_from" name="age_from" min="0" max="999" value="0"
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">To</label>
+                        <input type="number" id="age_to" name="age_to" min="0" max="999" value="999"
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Age Unit</label>
+                        <select id="age_unit" name="age_unit" 
+                                class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="year">Years</option>
+                            <option value="month">Months</option>
+                            <option value="day">Days</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Range Type -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-700 mb-2">Range Type</label>
+                <div class="flex gap-4 mb-3">
+                    <label class="flex items-center">
+                        <input type="radio" id="range_type_number" name="range_type" value="number" checked onchange="toggleRangeType()" 
+                               class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
+                        <span class="ml-2 text-sm text-slate-700">Number</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" id="range_type_text" name="range_type" value="text" onchange="toggleRangeType()" 
+                               class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
+                        <span class="ml-2 text-sm text-slate-700">Text</span>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Numeric Range Inputs -->
+            <div id="numericRangeSection" class="mb-4 p-4 bg-white rounded-lg border border-slate-200">
+                <h5 class="text-sm font-semibold text-slate-700 mb-3">Numeric Range Values</h5>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Normal From</label>
+                        <input type="number" step="0.01" id="normal_from" name="normal_from" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Normal To</label>
+                        <input type="number" step="0.01" id="normal_to" name="normal_to" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">V.Low From</label>
+                        <input type="number" step="0.01" id="vlow_from" name="vlow_from" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">V.Low To</label>
+                        <input type="number" step="0.01" id="vlow_to" name="vlow_to" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Low From</label>
+                        <input type="number" step="0.01" id="low_from" name="low_from" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Low To</label>
+                        <input type="number" step="0.01" id="low_to" name="low_to" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Mid Low From</label>
+                        <input type="number" step="0.01" id="midlow_from" name="midlow_from" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Mid Low To</label>
+                        <input type="number" step="0.01" id="midlow_to" name="midlow_to" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Mid High From</label>
+                        <input type="number" step="0.01" id="midhigh_from" name="midhigh_from" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Mid High To</label>
+                        <input type="number" step="0.01" id="midhigh_to" name="midhigh_to" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">High From</label>
+                        <input type="number" step="0.01" id="high_from" name="high_from" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">High To</label>
+                        <input type="number" step="0.01" id="high_to" name="high_to" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">V.High From</label>
+                        <input type="number" step="0.01" id="vhigh_from" name="vhigh_from" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">V.High To</label>
+                        <input type="number" step="0.01" id="vhigh_to" name="vhigh_to" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Panic Less Than</label>
+                        <input type="number" step="0.01" id="panic_less_than" name="panic_less_than" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Panic More Than</label>
+                        <input type="number" step="0.01" id="panic_more_than" name="panic_more_than" 
+                               class="w-full border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Text Range Input -->
+            <div id="textRangeSection" class="mb-4 p-4 bg-white rounded-lg border border-slate-200 hidden">
+                <h5 class="text-sm font-semibold text-slate-700 mb-3">Text Range Value</h5>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Text Range</label>
+                    <input type="text" id="text_range" name="text_range" placeholder="e.g., Positive, Negative, Present, Absent" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+            </div>
+            
+            <div class="flex gap-2">
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                    <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    Save Range
+                </button>
+                <button type="button" onclick="toggleForm('addRangeForm')" 
+                        class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Search Boxes -->
+    <div class="p-6 border-b border-slate-200 bg-slate-50">
+        <h5 class="text-sm font-semibold text-slate-700 mb-3">Search Ranges</h5>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Test</label>
+                <select id="searchTest" onchange="filterTable()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">All Tests</option>
+                    {% for test in tests %}
+                    <option value="{{ test.test_name|lower }}">{{ test.test_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Parameter</label>
+                <select id="searchParameter" onchange="filterTable()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">All Parameters</option>
+                    {% for param in parameters %}
+                    <option value="{{ param.parameter_name|lower }}">{{ param.parameter_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Device</label>
+                <select id="searchDevice" onchange="filterTable()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">All Devices</option>
+                    {% for device in devices %}
+                    <option value="{{ device.device_name|lower }}">{{ device.device_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Department</label>
+                <select id="searchDepartment" onchange="filterTable()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">All Departments</option>
+                    {% for dept in departments %}
+                    <option value="{{ dept.department_name|lower }}">{{ dept.department_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Ranges Table -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-slate-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Test</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Parameter</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Device</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Unit</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Gender</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Age From</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Age To</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Normal From</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Normal To</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Text Range</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-slate-200" id="rangesTableBody">
+                {% for range in ranges %}
+                <tr class="hover:bg-slate-50" 
+                    data-test="{{ range.test.test_name|lower }}"
+                    data-parameter="{{ range.parameter.parameter_name|lower if range.parameter else '' }}"
+                    data-device="{{ range.device.device_name|lower if range.device else '' }}"
+                    data-department="{{ range.test.department.department_name|lower }}">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{{ range.test.test_name }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.parameter.parameter_name if range.parameter else '-' }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.device.device_name if range.device else '-' }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.unit }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {% if range.gender_type == 'male' %}bg-blue-100 text-blue-800{% elif range.gender_type == 'female' %}bg-pink-100 text-pink-800{% else %}bg-slate-100 text-slate-800{% endif %}">
+                            {{ range.gender_type|capitalize }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.age_from }} {{ range.age_unit }}s</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.age_to }} {{ range.age_unit }}s</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.normal_from if range.normal_from is not none else '-' }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.normal_to if range.normal_to is not none else '-' }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.text_range if range.text_range else '-' }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div class="flex items-center space-x-3">
+                            <button onclick='editRange({{ ranges_json[loop.index0] | tojson }})' 
+                                    class="text-blue-600 hover:text-blue-900" title="Edit">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </button>
+                            <a href="javascript:void(0)" 
+                               onclick="confirmDelete('/test-ranges/delete/{{ range.id }}')"
+                               class="text-red-600 hover:text-red-900" title="Delete">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    {% if not ranges %}
+    <div class="text-center py-12">
+        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-slate-900">No test ranges defined</h3>
+        <p class="mt-1 text-sm text-slate-500">Get started by adding a new test range definition.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Tom Select JS -->
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<script>
+// Initialize Tom Select for searchable dropdowns
+let searchTestSelect, searchParamSelect, searchDeviceSelect, searchDeptSelect;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize search dropdowns with Tom Select
+    searchTestSelect = new TomSelect('#searchTest', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Search tests...',
+        create: false,
+        maxItems: 1
+    });
+    
+    searchParamSelect = new TomSelect('#searchParameter', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Search parameters...',
+        create: false,
+        maxItems: 1
+    });
+    
+    searchDeviceSelect = new TomSelect('#searchDevice', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Search devices...',
+        create: false,
+        maxItems: 1
+    });
+    
+    searchDeptSelect = new TomSelect('#searchDepartment', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Search departments...',
+        create: false,
+        maxItems: 1
+    });
+    
+    // Add change event listeners
+    searchTestSelect.on('change', filterTable);
+    searchParamSelect.on('change', filterTable);
+    searchDeviceSelect.on('change', filterTable);
+    searchDeptSelect.on('change', filterTable);
+});
+
+function toggleForm(formId) {
+    const form = document.getElementById(formId);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'none') {
+        document.getElementById('rangeForm').reset();
+        document.getElementById('range_id').value = '';
+        document.getElementById('formTitle').textContent = 'New Range Details';
+        document.getElementById('parameter_id').value = '';
+        toggleRangeType();
+    }
+}
+
+function updateParameterDropdown() {
+    const testSelect = document.getElementById('test_id');
+    const paramSelect = document.getElementById('parameter_id');
+    const message = document.getElementById('no_params_message');
+    const selectedOption = testSelect.options[testSelect.selectedIndex];
+    const hasParams = selectedOption.dataset.hasParams === 'yes';
+    
+    paramSelect.disabled = !hasParams;
+    
+    if (!hasParams) {
+        message.classList.remove('hidden');
+        paramSelect.value = '';
+    } else {
+        message.classList.add('hidden');
+    }
+}
+
+function toggleRangeType() {
+    const isNumber = document.getElementById('range_type_number').checked;
+    const numericSection = document.getElementById('numericRangeSection');
+    const textSection = document.getElementById('textRangeSection');
+    
+    if (isNumber) {
+        numericSection.classList.remove('hidden');
+        textSection.classList.add('hidden');
+    } else {
+        numericSection.classList.add('hidden');
+        textSection.classList.remove('hidden');
+    }
+}
+
+function filterTable() {
+    const testInput = (searchTestSelect?.getValue() || '').toLowerCase();
+    const paramInput = (searchParamSelect?.getValue() || '').toLowerCase();
+    const deviceInput = (searchDeviceSelect?.getValue() || '').toLowerCase();
+    const deptInput = (searchDeptSelect?.getValue() || '').toLowerCase();
+    
+    const rows = document.querySelectorAll('#rangesTableBody tr');
+    
+    rows.forEach(row => {
+        const testMatch = !testInput || row.dataset.test.includes(testInput);
+        const paramMatch = !paramInput || row.dataset.parameter.includes(paramInput);
+        const deviceMatch = !deviceInput || row.dataset.device.includes(deviceInput);
+        const deptMatch = !deptInput || row.dataset.department.includes(deptInput);
+        
+        if (testMatch && paramMatch && deviceMatch && deptMatch) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+function editRange(range) {
+    document.getElementById('range_id').value = range.id;
+    document.getElementById('test_id').value = range.test_id;
+    document.getElementById('parameter_id').value = range.parameter_id || '';
+    document.getElementById('device_id').value = range.device_id || '';
+    document.getElementById('unit').value = range.unit;
+    document.getElementById('gender_type').value = range.gender_type;
+    document.getElementById('age_from').value = range.age_from;
+    document.getElementById('age_to').value = range.age_to;
+    document.getElementById('age_unit').value = range.age_unit;
+    document.getElementById('fasting_required').value = range.fasting_required.toString();
+    document.getElementById('range_type_' + range.range_type).checked = true;
+    
+    // Set numeric values
+    document.getElementById('normal_from').value = range.normal_from || '';
+    document.getElementById('normal_to').value = range.normal_to || '';
+    document.getElementById('vlow_from').value = range.vlow_from || '';
+    document.getElementById('vlow_to').value = range.vlow_to || '';
+    document.getElementById('low_from').value = range.low_from || '';
+    document.getElementById('low_to').value = range.low_to || '';
+    document.getElementById('midlow_from').value = range.midlow_from || '';
+    document.getElementById('midlow_to').value = range.midlow_to || '';
+    document.getElementById('midhigh_from').value = range.midhigh_from || '';
+    document.getElementById('midhigh_to').value = range.midhigh_to || '';
+    document.getElementById('high_from').value = range.high_from || '';
+    document.getElementById('high_to').value = range.high_to || '';
+    document.getElementById('vhigh_from').value = range.vhigh_from || '';
+    document.getElementById('vhigh_to').value = range.vhigh_to || '';
+    document.getElementById('panic_less_than').value = range.panic_less_than || '';
+    document.getElementById('panic_more_than').value = range.panic_more_than || '';
+    
+    // Set text value
+    document.getElementById('text_range').value = range.text_range || '';
+    
+    // Toggle sections
+    toggleRangeType();
+    
+    // Update parameter dropdown
+    setTimeout(() => {
+        updateParameterDropdown();
+    }, 100);
+    
+    document.getElementById('formTitle').textContent = 'Edit Range Details';
+    document.getElementById('addRangeForm').style.display = 'block';
+    document.getElementById('rangeForm').action = '/test-ranges/update/' + range.id;
+}
+</script>
+{% endblock %}

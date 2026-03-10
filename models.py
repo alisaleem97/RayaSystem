@@ -30,17 +30,36 @@ class AuditLog(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 # ===========================
-# 2. PATIENT
+# 2. PATIENT (UPDATED)
 # ===========================
 class Patient(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    patient_id: str = Field(unique=True, index=True)
+    patient_id: str = Field(unique=True, index=True)  # 7 digits (e.g., 1100001)
     full_name: str
-    date_of_birth: datetime
     gender: str
-    phone: str
-    email: Optional[str] = None
-    address: Optional[str] = None
+    age: Optional[int] = Field(default=None)
+    age_unit: Optional[str] = Field(default=None)  # day, month, year
+    date_of_birth: Optional[datetime] = Field(default=None)
+    phone_key: str = Field(default="+964")
+    phone_number: str
+    weight: Optional[float] = Field(default=None)
+    height: Optional[float] = Field(default=None)
+    province_id: Optional[int] = Field(default=None, foreign_key="province.id")
+    region_id: Optional[int] = Field(default=None, foreign_key="region.id")
+    note: Optional[str] = Field(default=None)
+    
+    # Additional info (More section)
+    email: Optional[str] = Field(default=None)
+    diagnosis: Optional[str] = Field(default=None)
+    symptoms: Optional[str] = Field(default=None)
+    therapy: Optional[str] = Field(default=None)
+    partner_id: Optional[int] = Field(default=None, foreign_key="partner.id")
+    doctor: Optional[str] = Field(default=None)
+    skin_colour: Optional[str] = Field(default=None)  # white, black
+    agent_name: Optional[str] = Field(default=None)
+    is_outlab: bool = Field(default=False)
+    
+    is_active: bool = Field(default=True)
     
     created_by: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -49,6 +68,11 @@ class Patient(SQLModel, table=True):
     deleted_by: Optional[int] = Field(default=None, foreign_key="user.id")
     deleted_at: Optional[datetime] = None
     
+    # Relationships
+    province: Optional[Province] = Relationship()
+    region: Optional[Region] = Relationship()
+    partner: Optional[Partner] = Relationship()
+    visits: List["PatientVisit"] = Relationship(back_populates="patient")
     orders: List["Order"] = Relationship(back_populates="patient")
 
 # ===========================
@@ -270,6 +294,9 @@ class Order(SQLModel, table=True):
     patient: Patient = Relationship(back_populates="orders")
     test: TestDefinition = Relationship()
     result: Optional["Result"] = Relationship(back_populates="order")
+    # In the Order class, add:
+    visit_id: Optional[int] = Field(default=None, foreign_key="patientvisit.id")
+    visit: Optional[PatientVisit] = Relationship(back_populates="orders")
 
 # ===========================
 # 15. RESULT
@@ -283,3 +310,225 @@ class Result(SQLModel, table=True):
     entered_by: int = Field(foreign_key="user.id")
     entered_at: datetime = Field(default_factory=datetime.utcnow)
     order: Order = Relationship(back_populates="result")
+
+# ===========================
+# 16. TEST RANGE (NEW - Reference Ranges)
+# ===========================
+class TestRange(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    test_id: int = Field(foreign_key="testdefinition.id")
+    parameter_id: Optional[int] = Field(default=None, foreign_key="parameter.id")
+    device_id: Optional[int] = Field(default=None, foreign_key="device.id")
+    unit: str = Field(default="")
+    gender_type: str = Field(default="both")  # male, female, both
+    age_from: int = Field(default=0)
+    age_to: int = Field(default=999)
+    age_unit: str = Field(default="year")  # year, month, day
+    fasting_required: bool = Field(default=False)
+    range_type: str = Field(default="number")  # number, text
+    
+    # Numeric range values
+    normal_from: Optional[float] = Field(default=None)
+    normal_to: Optional[float] = Field(default=None)
+    vlow_from: Optional[float] = Field(default=None)
+    vlow_to: Optional[float] = Field(default=None)
+    low_from: Optional[float] = Field(default=None)
+    low_to: Optional[float] = Field(default=None)
+    midlow_from: Optional[float] = Field(default=None)
+    midlow_to: Optional[float] = Field(default=None)
+    midhigh_from: Optional[float] = Field(default=None)
+    midhigh_to: Optional[float] = Field(default=None)
+    high_from: Optional[float] = Field(default=None)
+    high_to: Optional[float] = Field(default=None)
+    vhigh_from: Optional[float] = Field(default=None)
+    vhigh_to: Optional[float] = Field(default=None)
+    panic_less_than: Optional[float] = Field(default=None)
+    panic_more_than: Optional[float] = Field(default=None)
+    
+    # Text range value
+    text_range: Optional[str] = Field(default=None)
+    
+    is_active: bool = Field(default=True)
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+    deleted_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    deleted_at: Optional[datetime] = None
+    
+    # Relationships
+    test: TestDefinition = Relationship()
+    parameter: Optional[Parameter] = Relationship()
+    device: Optional[Device] = Relationship()
+
+    
+
+# ===========================
+# 17. TEST RESULT TYPE (NEW)
+# ===========================
+class TestResultType(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    test_id: int = Field(foreign_key="testdefinition.id")
+    parameter_id: Optional[int] = Field(default=None, foreign_key="parameter.id")
+    result_type: str = Field(default="number")  # number, text, selection, paragraph, attachment, image
+    selection_options: Optional[str] = Field(default=None)  # JSON array for selection type
+    is_active: bool = Field(default=True)
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+    deleted_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    deleted_at: Optional[datetime] = None
+    
+    # Relationships
+    test: TestDefinition = Relationship()
+    parameter: Optional[Parameter] = Relationship()
+
+# Add this to your models.py file
+
+# ===========================
+# 18. PACKAGE (NEW)
+# ===========================
+class Package(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    package_name: str = Field(unique=True, index=True)
+    package_short_name: str
+    price: float
+    package_note: Optional[str] = None
+    is_active: bool = Field(default=True)
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+    deleted_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    deleted_at: Optional[datetime] = None
+    
+    # Relationships
+    package_tests: List["PackageTest"] = Relationship(back_populates="package")
+
+# ===========================
+# 19. PACKAGE-TEST LINK (Many-to-Many)
+# ===========================
+class PackageTest(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    package_id: int = Field(foreign_key="package.id")
+    test_id: int = Field(foreign_key="testdefinition.id")
+    
+    package: Package = Relationship(back_populates="package_tests")
+    test: TestDefinition = Relationship()
+
+# ===========================
+# 20. PARTNER (NEW)
+# ===========================
+class Partner(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    partner_name: str = Field(unique=True, index=True)
+    partner_note: Optional[str] = None
+    partner_contact: Optional[str] = None
+    partner_weight: Optional[float] = Field(default=None)
+    is_active: bool = Field(default=True)
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+    deleted_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    deleted_at: Optional[datetime] = None
+
+# Add this to your models.py file
+
+# ===========================
+# 21. PROVINCE (NEW)
+# ===========================
+class Province(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    province_name: str = Field(unique=True, index=True)
+    is_active: bool = Field(default=True)
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+    deleted_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    deleted_at: Optional[datetime] = None
+
+# Add this to your models.py file
+
+# ===========================
+# 22. REGION (NEW)
+# ===========================
+class Region(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    region_name: str = Field(unique=True, index=True)
+    province_id: int = Field(foreign_key="province.id")
+    is_active: bool = Field(default=True)
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+    deleted_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    deleted_at: Optional[datetime] = None
+    
+    # Relationships
+    province: Province = Relationship()
+
+# Add this to your models.py file
+
+# ===========================
+# 23. LAB INFO (NEW - Single Record)
+# ===========================
+class LabInfo(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    lab_name: str = Field(default="")
+    lab_title: Optional[str] = Field(default=None)
+    first_doctor_name: Optional[str] = Field(default=None)
+    second_doctor_name: Optional[str] = Field(default=None)
+    lab_address: Optional[str] = Field(default=None)
+    lab_phone_1: str = Field(default="")
+    lab_phone_2: Optional[str] = Field(default=None)
+    whatsapp_api: Optional[str] = Field(default=None)
+    whatsapp_token: Optional[str] = Field(default=None)
+    telegram_api: Optional[str] = Field(default=None)
+    telegram_token: Optional[str] = Field(default=None)
+    lab_qr_1: Optional[str] = Field(default=None)
+    lab_qr_2: Optional[str] = Field(default=None)
+    lab_stamp_1: Optional[str] = Field(default=None)
+    lab_stamp_2: Optional[str] = Field(default=None)
+    lab_logo: Optional[str] = Field(default=None)
+    lab_signature_1: Optional[str] = Field(default=None)
+    lab_signature_2: Optional[str] = Field(default=None)
+    lab_image_1: Optional[str] = Field(default=None)
+    lab_image_2: Optional[str] = Field(default=None)
+    lab_email: Optional[str] = Field(default=None)
+    lab_note_1: Optional[str] = Field(default=None)
+    lab_note_2: Optional[str] = Field(default=None)
+    lab_website: Optional[str] = Field(default=None)
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+
+# Add this to your models.py file
+
+# ===========================
+# 24. PATIENT VISIT (NEW)
+# ===========================
+class PatientVisit(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    visit_id: str = Field(unique=True, index=True)  # Format: PatientID + 3 digits (e.g., 1100000001)
+    patient_id: int = Field(foreign_key="patient.id")
+    visit_date: datetime = Field(default_factory=datetime.utcnow)
+    is_active: bool = Field(default=True)
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships
+    patient: Patient = Relationship(back_populates="visits")
+    orders: List["Order"] = Relationship(back_populates="visit")
+
