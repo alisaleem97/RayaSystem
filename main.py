@@ -10,7 +10,7 @@ import json
 import ast
 
 from database import create_db_and_tables, get_session, engine
-from models import User, Patient, TestCatalog, Order, Result, Parameter, Department, Device, SampleType, ReportNote, TestDefinition, TestDevice, TestParameter, AuditLog, Formula, FormulaItem, TestRange, TestResultType, Package, PackageTest, Partner, Province, Region,LabInfo
+from models import User, Patient, TestCatalog, Order, Result, Parameter, Department, Device, SampleType, ReportNote, TestDefinition, TestDevice, TestParameter, AuditLog, Formula, FormulaItem, TestRange, TestResultType, Package, PackageTest, Partner, Province, Region,LabInfo, PatientVisit
 
 # Setup templates
 templates = Jinja2Templates(directory="templates")
@@ -1869,6 +1869,62 @@ def get_package_tests(package_id: int, session: Session = Depends(get_session)):
     package_tests = session.exec(select(PackageTest).where(PackageTest.package_id == package_id)).all()
     return {"test_ids": [pt.test_id for pt in package_tests]}
 
+@app.get("/api/generate-patient-id")
+def generate_patient_id_api(session: Session = Depends(get_session)):
+    """Generate next available patient ID on server-side"""
+    try:
+        labId = 1  # Configure your lab ID here
+        baseNumber = 100000
+        
+        # Get the last patient ID
+        last_patient = session.exec(
+            select(Patient).order_by(Patient.id.desc()).limit(1)
+        ).first()
+        
+        if last_patient and last_patient.patient_id:
+            try:
+                last_number = int(last_patient.patient_id[1:])  # Remove first digit (lab ID)
+                next_number = last_number + 1
+            except:
+                next_number = baseNumber
+        else:
+            next_number = baseNumber
+        
+        # Format: LabID (1 digit) + 6 digits
+        patient_id = str(labId) + str(next_number).zfill(6)
+        
+        return {"patient_id": patient_id}
+    except Exception as e:
+        return {"error": str(e)}
+    
+@app.get("/api/generate-patient-id")
+def generate_patient_id_api(session: Session = Depends(get_session)):
+    """Generate next available patient ID on server-side"""
+    try:
+        labId = 1  # Configure your lab ID here
+        baseNumber = 100000
+        
+        # Get the last patient ID
+        last_patient = session.exec(
+            select(Patient).order_by(Patient.id.desc()).limit(1)
+        ).first()
+        
+        if last_patient and last_patient.patient_id:
+            try:
+                last_number = int(last_patient.patient_id[1:])  # Remove first digit (lab ID)
+                next_number = last_number + 1
+            except:
+                next_number = baseNumber
+        else:
+            next_number = baseNumber
+        
+        # Format: LabID (1 digit) + 6 digits
+        patient_id = str(labId) + str(next_number).zfill(6)
+        
+        return {"patient_id": patient_id}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.post("/patient-registration/create")
 async def create_patient_registration(
     request: Request,
@@ -1938,8 +1994,9 @@ async def create_patient_registration(
         session.commit()
         session.refresh(new_patient)
         
-        # Generate Visit ID (PatientID + 3 digits)
-        visit_count = session.exec(select(PatientVisit).where(PatientVisit.patient_id == new_patient.id)).count()
+        # ✅ FIX: Generate Visit ID (PatientID + 3 digits)
+        visits = session.exec(select(PatientVisit).where(PatientVisit.patient_id == new_patient.id)).all()
+        visit_count = len(visits)
         visit_id = patient_id + str(visit_count).zfill(3)
         
         new_visit = PatientVisit(
@@ -1983,7 +2040,7 @@ async def create_patient_registration(
         session.rollback()
         error_msg = str(e).replace(" ", "%20")
         return RedirectResponse(url=f"/patient-registration?error={error_msg}", 
-                              status_code=status.HTTP_303_SEE_OTHER) 
+                              status_code=status.HTTP_303_SEE_OTHER)
 
 
 # ===========================

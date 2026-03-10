@@ -295,12 +295,11 @@
 let testSelect, packageSelect;
 let selectedItems = [];
 let itemCounter = 0;
-let labId = 1; // Configure your lab ID here
 let packageTestsMap = {}; // Store package tests mapping
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    // Generate Patient ID
+    // Generate Patient ID from server
     generatePatientId();
     
     // Initialize Tom Select for tests
@@ -335,12 +334,23 @@ document.addEventListener('DOMContentLoaded', function() {
     loadAllPackageTests();
 });
 
-
-// Generate Patient ID
+// Generate Patient ID from server
 function generatePatientId() {
-    const baseNumber = 100000;
-    const patientId = labId.toString() + baseNumber.toString().padStart(6, '0');
-    document.getElementById('patient_id').value = patientId;
+    fetch('/api/generate-patient-id')
+        .then(response => response.json())
+        .then(data => {
+            if (data.patient_id) {
+                document.getElementById('patient_id').value = data.patient_id;
+            }
+        })
+        .catch(error => {
+            console.error('Error generating patient ID:', error);
+            // Fallback to client-side generation if API fails
+            const labId = 1;
+            const baseNumber = 100000;
+            const patientId = labId.toString() + baseNumber.toString().padStart(6, '0');
+            document.getElementById('patient_id').value = patientId;
+        });
 }
 
 // Load all package tests
@@ -453,7 +463,7 @@ function addTest(testId) {
     }
     
     addItem({
-        id: testId,
+        id: parseInt(testId),
         name: testName,
         type: 'test',
         price: price,
@@ -503,7 +513,7 @@ function processPackageAddition(packageId, packageName, price, testIds) {
     }
     
     addItem({
-        id: packageId,
+        id: parseInt(packageId),
         name: packageName,
         type: 'package',
         price: price,
