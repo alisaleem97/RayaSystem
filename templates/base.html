@@ -111,9 +111,21 @@
                         </a>
                     </li>
                     <li>
-                        <a href="/register" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/register' %}active{% endif %}">
+                        <a href="/patient-registration" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/patient-registration' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
-                            Patients
+                            Patient Registration
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/print-barcode" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path.startswith('/print-barcode') %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                            Print Barcode
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/print-receipt" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path.startswith('/print-receipt') %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            Print Receipt
                         </a>
                     </li>
                     <li>
@@ -152,67 +164,52 @@
                             Tests
                         </a>
                     </li>
-                    <!-- Add this AFTER Tests link in the sidebar nav -->
                     <li>
                         <a href="/formulas" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/formulas' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-        Formulas
+                            Formulas
                         </a>
                     </li>
-                    <!-- Add this after Formulas link -->
                     <li>
                         <a href="/test-ranges" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/test-ranges' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-        Test Ranges
+                            Test Ranges
                         </a>
                     </li>
-                    <!-- Add this after Test Ranges link -->
                     <li>
                         <a href="/test-result-types" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/test-result-types' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
-        Result Types
+                            Result Types
                         </a>
                     </li>
-                    <!-- Add this after Test Result Types link -->
                     <li>
                         <a href="/packages" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/packages' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
-        Packages
+                            Packages
                         </a>
                     </li>
-                    <!-- Add this after Packages link -->
                     <li>
                         <a href="/partners" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/partners' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-        Partners
+                            Partners
                         </a>
                     </li>
-                    <!-- Add this after Partners link -->
                     <li>
                         <a href="/provinces" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/provinces' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-        Provinces
+                            Provinces
                         </a>
                     </li>
-                    <!-- Add this after Provinces link -->
                     <li>
                         <a href="/regions" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/regions' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-        Regions
+                            Regions
                         </a>
                     </li>
-                    <!-- Add this after Dashboard or in a Settings section -->
                     <li>
                         <a href="/lab-info" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/lab-info' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
-        Lab Info
-                        </a>
-                    </li>
-                    <!-- Add this after Lab Info link -->
-                    <li>
-                        <a href="/patient-registration" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/patient-registration' %}active{% endif %}">
-                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
-        Patient Registration
+                            Lab Info
                         </a>
                     </li>
                 </ul>

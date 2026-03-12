@@ -287,7 +287,46 @@
             </div>
         </div>
     </form>
+
+    <!-- ✅ PRINT BUTTONS - Show after successful registration -->
+    {% if message_success and last_patient_id %}
+    <div class="p-6 bg-green-50 border-t border-green-200">
+        <div class="flex items-center justify-between flex-wrap gap-4">
+            <div class="flex items-center">
+                <svg class="w-8 h-8 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <div>
+                    <h4 class="text-lg font-semibold text-green-800">Patient Registered Successfully!</h4>
+                    <p class="text-sm text-green-600">Patient ID: <strong class="font-mono">{{ last_patient_id }}</strong></p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <!-- Print Barcode Button - Direct Print -->
+                <button onclick="printBarcode('{{ last_patient_id }}')" 
+                   class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition duration-200 flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+                    </svg>
+                    Print Barcode
+                </button>
+                <!-- Print Receipt Button - Direct Print -->
+                <button onclick="printReceipt('{{ last_patient_id }}')" 
+                   class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition duration-200 flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Print Receipt
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
 </div>
+
+<!-- Hidden Print Container -->
+<div id="printContainer" style="display: none;"></div>
 
 <!-- Tom Select JS -->
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
@@ -623,6 +662,310 @@ function calculateRemaining() {
     const remaining = afterDiscount - received;
     
     document.getElementById('remaining_amount').value = remaining.toFixed(2);
+}
+
+// ============================================
+// PRINT FUNCTIONS - Direct Print with Saved Design
+// ============================================
+
+// Print Barcode Function - MULTIPLE BARCODES BY SAMPLE TYPE
+async function printBarcode(patientId) {
+    try {
+        // Load saved design
+        const response = await fetch('/api/print-template/load/barcode');
+        const result = await response.json();
+        
+        // Get patient data
+        const patientResponse = await fetch(`/api/patient/${patientId}`);
+        const patient = await patientResponse.json();
+        
+        // ✅ Check if patient data has error
+        if (patient.error) {
+            alert('❌ Error loading patient data: ' + patient.error);
+            return;
+        }
+        
+        if (!result.success || !result.template) {
+            alert('❌ No saved barcode design found. Please design barcode first.');
+            return;
+        }
+        
+        // ✅ Ensure patient.tests is an array
+        if (!patient.tests) {
+            patient.tests = [];
+        }
+        
+        // ✅ Ensure patient.tests_by_sample_type exists
+        if (!patient.tests_by_sample_type) {
+            // Fallback: create from tests array if not available
+            patient.tests_by_sample_type = {
+                'Unknown': patient.tests || []
+            };
+        }
+        
+        console.log('Patient data:', patient);
+        console.log('Tests by sample type:', patient.tests_by_sample_type);
+        
+        if (!patient.tests || patient.tests.length === 0) {
+            // Show warning but continue (barcode can still print)
+            console.warn('⚠️ No tests found for this patient, but continuing with barcode print');
+        }
+        
+        // Create print content
+        const printContainer = document.getElementById('printContainer');
+        printContainer.innerHTML = '';
+        
+        // Get design elements
+        const elements = JSON.parse(result.template.elements || '[]');
+        
+        // ✅ Print one barcode per sample type
+        for (const [sampleType, testNames] of Object.entries(patient.tests_by_sample_type)) {
+            const printArea = document.createElement('div');
+            printArea.style.width = result.template.paper_width || '4in';
+            printArea.style.height = result.template.paper_height || '2in';
+            printArea.style.position = 'relative';
+            printArea.style.background = 'white';
+            printArea.style.border = '1px solid #000';
+            printArea.style.marginBottom = '10px';
+            printArea.style.pageBreakAfter = 'always';
+            
+            // Parse and render saved elements
+            elements.forEach(el => {
+                const clone = document.createElement('div');
+                clone.style.position = 'absolute';
+                clone.style.left = el.x + 'px';
+                clone.style.top = el.y + 'px';
+                clone.style.width = el.width + 'px';
+                clone.style.height = el.height + 'px';
+                clone.style.fontSize = el.fontSize + 'px';
+                clone.style.fontWeight = el.fontWeight;
+                clone.style.color = el.color;
+                clone.style.textAlign = el.align;
+                clone.style.backgroundColor = el.bgColor;
+                
+                if (el.type === 'barcode_image') {
+                    // ✅ NO duplicate patient ID text - barcode image already has it
+                    clone.innerHTML = `
+                        <div style="text-align: center; padding: 5px;">
+                            <img src="https://bwipjs-api.metafloor.com/?bcid=code128&text=${patient.patient_id}&scale=3&height=10&includetext" style="max-width: 100%; height: auto; display: block;">
+                        </div>
+                    `;
+                } else if (el.type === 'patient_id') {
+                    // ✅ No label - just the value
+                    clone.innerHTML = `
+                        <div style="padding: 5px;">
+                            ${patient.patient_id}
+                        </div>
+                    `;
+                } else if (el.type === 'patient_name') {
+                    // ✅ No label - just the value
+                    clone.innerHTML = `
+                        <div style="padding: 5px;">
+                            ${patient.full_name}
+                        </div>
+                    `;
+                } else if (el.type === 'test_list') {
+                    // ✅ Linear format - comma-separated test short names (no label)
+                    const testsArray = testNames || [];
+                    const testsHtml = testsArray.length > 0 
+                        ? testsArray.join(', ')  // ✅ Linear, comma-separated
+                        : 'No tests';
+                    
+                    clone.innerHTML = `
+                        <div style="padding: 5px; font-size: 11px;">
+                            ${testsHtml}
+                        </div>
+                    `;
+                } else if (el.type === 'sample_type') {
+                    // ✅ Show actual sample type (once per barcode) - no label
+                    clone.innerHTML = `
+                        <div style="padding: 5px;">
+                            ${sampleType}
+                        </div>
+                    `;
+                } else {
+                    clone.innerHTML = `<div style="padding: 5px;">${el.label || ''}</div>`;
+                }
+                printArea.appendChild(clone);
+            });
+            
+            printContainer.appendChild(printArea);
+        }
+        
+        // Print
+        const printContent = printContainer.innerHTML;
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>Print Barcodes - ${patient.patient_id}</title>
+                <style>
+                    @media print {
+                        body { margin: 0; padding: 0; }
+                        .no-print { display: none; }
+                        .barcode-page { page-break-after: always; }
+                    }
+                    .barcode-page {
+                        margin-bottom: 20px;
+                    }
+                </style>
+            </head>
+            <body>
+                ${printContent}
+                <script>
+                    window.onload = function() {
+                        window.print();
+                        window.onafterprint = function() {
+                            window.close();
+                        };
+                    };
+                <\/script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    } catch (error) {
+        console.error('Error printing barcode:', error);
+        alert('❌ Error printing barcode: ' + error.message);
+    }
+}
+
+// Print Receipt Function - FIXED WITH PAYMENT DATA
+async function printReceipt(patientId) {
+    try {
+        // Load saved design
+        const response = await fetch('/api/print-template/load/receipt');
+        const result = await response.json();
+        
+        // Get patient data with accounting
+        const patientResponse = await fetch(`/api/patient/${patientId}`);
+        const patientData = await patientResponse.json();
+        
+        if (!result.success || !result.template) {
+            alert('❌ No saved receipt design found. Please design receipt first.');
+            return;
+        }
+        
+        const patient = patientData;
+        const totalAmount = parseFloat(patient.total_amount || 0);
+        const discountAmount = parseFloat(patient.discount_amount || 0);
+        const paidAmount = parseFloat(patient.paid_amount || 0);
+        const remainAmount = parseFloat(patient.remain_amount || totalAmount - paidAmount);
+        
+        console.log('Payment Data:', { total: totalAmount, discount: discountAmount, paid: paidAmount, remain: remainAmount });
+        
+        // Create print content
+        const printContainer = document.getElementById('printContainer');
+        printContainer.innerHTML = '';
+        
+        const printArea = document.createElement('div');
+        printArea.style.width = result.template.paper_width || '80mm';
+        printArea.style.padding = '10px';
+        printArea.style.background = 'white';
+        printArea.style.position = 'relative';
+        
+        // Parse and render saved elements
+        const elements = JSON.parse(result.template.elements || '[]');
+        
+        elements.forEach(el => {
+            const clone = document.createElement('div');
+            clone.style.position = 'absolute';
+            clone.style.left = el.x + 'px';
+            clone.style.top = el.y + 'px';
+            clone.style.fontSize = el.fontSize + 'px';
+            clone.style.color = el.color;
+            clone.style.fontWeight = el.fontWeight;
+            
+            // Render based on element type
+            if (el.type === 'patient_name') {
+                clone.innerHTML = `<strong>Name:</strong> ${patient.full_name}`;
+            } else if (el.type === 'patient_id') {
+                clone.innerHTML = `<strong>Patient ID:</strong> ${patient.patient_id}`;
+            } else if (el.type === 'test_list') {
+                clone.innerHTML = `<strong>Tests:</strong><br>${patient.tests?.join(', ') || 'No tests'}`;
+            } else if (el.type === 'lab_name') {
+                clone.innerHTML = `<strong style="font-size: 14px;">Lab Name</strong>`;
+            } else if (el.type === 'lab_address') {
+                clone.innerHTML = `<div style="text-align: center; font-size: 11px;">Lab Address</div>`;
+            } else if (el.type === 'lab_phone_1') {
+                clone.innerHTML = `<div style="text-align: center; font-size: 11px;">📞 Phone</div>`;
+            } else if (el.type === 'total_amount') {
+                clone.innerHTML = `<div style="display: flex; justify-content: space-between; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 5px 0;"><strong>Total:</strong><span>$${totalAmount.toFixed(2)}</span></div>`;
+            } else if (el.type === 'discount') {
+                clone.innerHTML = `<div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Discount:</span><span>$${discountAmount.toFixed(2)}</span></div>`;
+            } else if (el.type === 'paid_amount') {
+                clone.innerHTML = `<div style="display: flex; justify-content: space-between; padding: 3px 0;"><strong>Paid:</strong><span>$${paidAmount.toFixed(2)}</span></div>`;
+            } else if (el.type === 'remain_amount') {
+                clone.innerHTML = `<div style="display: flex; justify-content: space-between; padding: 3px 0;"><strong>Remain:</strong><span>$${remainAmount.toFixed(2)}</span></div>`;
+            } else if (el.type === 'barcode_image') {
+                clone.innerHTML = `
+                    <div style="text-align: center; margin: 10px 0;">
+                        <img src="https://bwipjs-api.metafloor.com/?bcid=code128&text=${patient.patient_id}&scale=2&height=8&includetext" style="max-width: 100%;">
+                    </div>
+                `;
+            } else if (el.type === 'thank_you_message') {
+                clone.innerHTML = `<div style="text-align: center; margin-top: 20px; font-style: italic;">Thank you for choosing our services!</div>`;
+            } else if (el.type === 'footer_notes') {
+                clone.innerHTML = `<div style="padding: 5px; font-size: 9px; text-align: center;">Results are valid for 30 days. Please consult your doctor for interpretation.</div>`;
+            } else {
+                clone.innerHTML = el.label || '';
+            }
+            
+            printArea.appendChild(clone);
+        });
+        
+        printContainer.appendChild(printArea);
+        
+        // Print
+        const printContent = printContainer.innerHTML;
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>Print Receipt - ${patient.patient_id}</title>
+                <style>
+                    @media print {
+                        body { margin: 0; padding: 0; }
+                    }
+                </style>
+            </head>
+            <body>
+                ${printContent}
+                <script>
+                    window.onload = function() {
+                        window.print();
+                        window.onafterprint = function() {
+                            window.close();
+                        };
+                    };
+                <\/script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    } catch (error) {
+        console.error('Error printing receipt:', error);
+        alert('❌ Error printing receipt: ' + error.message);
+    }
+}
+
+// Helper Functions
+function calculateTotalPrice(patientId) {
+    // You'll need to fetch order totals from backend
+    return 0; // Placeholder - implement actual calculation
+}
+
+function getSampleTypeForPatient(patientId) {
+    return 'Serum'; // Placeholder - implement actual sample type fetching
+}
+
+function getTestsListWithPrices(patientId) {
+    // You'll need to fetch tests with prices from backend
+    return '<div>No price data</div>'; // Placeholder
+}
+
+function barcodeUrl(patientId) {
+    return `https://bwipjs-api.metafloor.com/?bcid=code128&text=${patientId}&scale=3&height=10&includetext`;
 }
 </script>
 {% endblock %}

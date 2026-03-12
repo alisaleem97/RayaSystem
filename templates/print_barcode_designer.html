@@ -1,0 +1,1028 @@
+<!-- templates/print_barcode_designer.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barcode Designer - NexLab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f3f4f6;
+        }
+        
+        .designer-container {
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
+            gap: 20px;
+            padding: 20px;
+            height: calc(100vh - 80px);
+        }
+        
+        .panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .element-item {
+            padding: 12px 16px;
+            margin: 8px 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.3s;
+        }
+        
+        .element-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .preview-area {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .paper-preview {
+            background: white;
+            border: 2px dashed #4f46e5;
+            position: relative;
+            margin: 20px auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            overflow: hidden;
+        }
+        
+        .design-element {
+            position: absolute;
+            padding: 8px 12px;
+            background: rgba(79, 70, 229, 0.1);
+            border: 2px solid #4f46e5;
+            border-radius: 6px;
+            cursor: move;
+            min-width: 100px;
+            min-height: 30px;
+            user-select: none;
+        }
+        
+        .design-element:hover {
+            background: rgba(79, 70, 229, 0.2);
+        }
+        
+        .design-element.selected {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.2);
+        }
+        
+        .design-element .resize-handle {
+            position: absolute;
+            bottom: -4px;
+            right: -4px;
+            width: 12px;
+            height: 12px;
+            background: #10b981;
+            border-radius: 50%;
+            cursor: se-resize;
+        }
+        
+        .design-element .delete-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 20px;
+            height: 20px;
+            background: #ef4444;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .properties-panel {
+            background: #f9fafb;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        
+        .property-group {
+            margin-bottom: 12px;
+        }
+        
+        .property-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 4px;
+        }
+        
+        .property-group input,
+        .property-group select {
+            width: 100%;
+            padding: 6px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        
+        .property-group input[type="color"] {
+            height: 36px;
+            padding: 2px;
+        }
+        
+        .property-group input[type="checkbox"] {
+            margin-right: 5px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        
+        .section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .element-category {
+            margin-bottom: 20px;
+        }
+        
+        .category-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+        
+        /* PRINT STYLES - Only print the barcode area */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            .paper-preview, .paper-preview * {
+                visibility: visible;
+            }
+            .paper-preview {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+                box-shadow: none;
+                margin: 0;
+                padding: 0;
+            }
+            .design-element {
+                border: none;
+                background: transparent;
+            }
+            .design-element .delete-btn,
+            .design-element .resize-handle {
+                display: none;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="bg-white shadow-sm px-6 py-4 flex justify-between items-center no-print">
+        <h1 class="text-2xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">
+            <i class="fas fa-barcode mr-2"></i>Barcode Designer
+        </h1>
+        <div class="flex gap-3">
+            <button onclick="saveDesign()" class="btn btn-success">
+                <i class="fas fa-save"></i> Save Design
+            </button>
+            <button onclick="loadDesign()" class="btn btn-secondary">
+                <i class="fas fa-download"></i> Load Design
+            </button>
+            <a href="/patient-registration" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back
+            </a>
+        </div>
+    </header>
+
+    <!-- Designer Container -->
+    <div class="designer-container no-print">
+        <!-- Left Panel: Available Elements -->
+        <div class="panel">
+            <h2 class="section-title">Available Elements</h2>
+            
+            <!-- Patient Info -->
+            <div class="element-category">
+                <div class="category-title">Patient Information</div>
+                <div class="element-item" draggable="true" data-type="patient_id">
+                    <span><i class="fas fa-id-card mr-2"></i>Patient ID</span>
+                    <i class="fas fa-plus"></i>
+                </div>
+                <div class="element-item" draggable="true" data-type="patient_name">
+                    <span><i class="fas fa-user mr-2"></i>Patient Name</span>
+                    <i class="fas fa-plus"></i>
+                </div>
+                <div class="element-item" draggable="true" data-type="patient_gender">
+                    <span><i class="fas fa-venus-mars mr-2"></i>Gender</span>
+                    <i class="fas fa-plus"></i>
+                </div>
+                <div class="element-item" draggable="true" data-type="patient_age">
+                    <span><i class="fas fa-birthday-cake mr-2"></i>Age</span>
+                    <i class="fas fa-plus"></i>
+                </div>
+                <div class="element-item" draggable="true" data-type="patient_phone">
+                    <span><i class="fas fa-phone mr-2"></i>Phone</span>
+                    <i class="fas fa-plus"></i>
+                </div>
+            </div>
+            
+            <!-- Lab Info -->
+            <div class="element-category">
+                <div class="category-title">Laboratory Information</div>
+                <div class="element-item" draggable="true" data-type="lab_name">
+                    <span><i class="fas fa-hospital mr-2"></i>Lab Name</span>
+                    <i class="fas fa-plus"></i>
+                </div>
+                <div class="element-item" draggable="true" data-type="lab_address">
+                    <span><i class="fas fa-map-marker-alt mr-2"></i>Lab Address</span>
+                    <i class="fas fa-plus"></i>
+                </div>
+                <div class="element-item" draggable="true" data-type="lab_phone">
+                    <span><i class="fas fa-phone-alt mr-2"></i>Lab Phone</span>
+                    <i class="fas fa-plus"></i>
+                </div>
+            </div>
+            
+            <!-- Barcode -->
+            <div class="element-category">
+                <div class="category-title">Barcode</div>
+                <div class="element-item" draggable="true" data-type="barcode_image">
+                    <span><i class="fas fa-barcode mr-2"></i>Barcode Image</span>
+                    <i class="fas fa-plus"></i>
+                </div>
+            </div>
+            
+            <!-- Visit Info -->
+            <div class="element-category">
+                <div class="category-title">Visit Information</div>
+                <div class="element-item" draggable="true" data-type="visit_id">
+                    <span><i class="fas fa-clipboard mr-2"></i>Visit ID</span>
+                    <i class="fas fa-plus"></i>
+                </div>
+                <div class="element-item" draggable="true" data-type="visit_date">
+                    <span><i class="fas fa-calendar mr-2"></i>Visit Date</span>
+                    <i class="fas fa-plus"></i>
+                </div>
+            </div>
+            
+            <!-- Test Info -->
+            <div class="element-category">
+                <div class="category-title">Test Information</div>
+                <div class="element-item" draggable="true" data-type="test_list">
+                    <span><i class="fas fa-flask mr-2"></i>All Tests List</span>
+                    <i class="fas fa-plus"></i>
+                </div>
+                <div class="element-item" draggable="true" data-type="test_name">
+                    <span><i class="fas fa-vial mr-2"></i>Test Name</span>
+                    <i class="fas fa-plus"></i>
+                </div>
+                <!-- ✅ NEW: Sample Type -->
+                <div class="element-item" draggable="true" data-type="sample_type">
+                    <span><i class="fas fa-tint mr-2"></i>Sample Type</span>
+                    <i class="fas fa-plus"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Panel: Preview -->
+        <div class="preview-area">
+            <h2 class="section-title">Design Preview</h2>
+            
+            <!-- Paper Settings -->
+            <div class="grid grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Paper Width</label>
+                    <input type="text" id="paperWidth" value="4in" onchange="updatePaperSize()" 
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Paper Height</label>
+                    <input type="text" id="paperHeight" value="2in" onchange="updatePaperSize()" 
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Margin</label>
+                    <input type="text" id="margin" value="0.1in" onchange="updatePaperSize()" 
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+            
+            <!-- Preview Canvas -->
+            <div id="paperPreview" class="paper-preview" style="width: 4in; height: 2in;">
+                <p class="text-gray-400 text-center py-8" id="placeholderText">Drag elements here to design your barcode</p>
+            </div>
+            
+            <!-- Print Button -->
+            <div class="mt-4 flex justify-center">
+                <button onclick="window.print()" class="btn btn-primary">
+                    <i class="fas fa-print"></i> Print Preview
+                </button>
+            </div>
+        </div>
+
+        <!-- Right Panel: Properties -->
+        <div class="panel">
+            <h2 class="section-title">Element Properties</h2>
+            
+            <div id="propertiesPanel" class="properties-panel" style="display: none;">
+                <div class="property-group">
+                    <label>Position X (px)</label>
+                    <input type="number" id="propX" onchange="updateElementProperty('x', this.value)">
+                </div>
+                <div class="property-group">
+                    <label>Position Y (px)</label>
+                    <input type="number" id="propY" onchange="updateElementProperty('y', this.value)">
+                </div>
+                <div class="property-group">
+                    <label>Width (px)</label>
+                    <input type="number" id="propWidth" onchange="updateElementProperty('width', this.value)">
+                </div>
+                <div class="property-group">
+                    <label>Height (px)</label>
+                    <input type="number" id="propHeight" onchange="updateElementProperty('height', this.value)">
+                </div>
+                <div class="property-group">
+                    <label>Font Size (px)</label>
+                    <input type="number" id="propFontSize" value="12" onchange="updateElementProperty('fontSize', this.value)">
+                </div>
+                <div class="property-group">
+                    <label>Font Weight</label>
+                    <select id="propFontWeight" onchange="updateElementProperty('fontWeight', this.value)">
+                        <option value="normal">Normal</option>
+                        <option value="bold">Bold</option>
+                        <option value="600">Semi Bold</option>
+                    </select>
+                </div>
+                <div class="property-group">
+                    <label>Color</label>
+                    <input type="color" id="propColor" value="#000000" onchange="updateElementProperty('color', this.value)">
+                </div>
+                <div class="property-group">
+                    <label>Text Align</label>
+                    <select id="propAlign" onchange="updateElementProperty('align', this.value)">
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                    </select>
+                </div>
+                <div class="property-group">
+                    <label>Background</label>
+                    <input type="color" id="propBgColor" value="#ffffff" onchange="updateElementProperty('bgColor', this.value)">
+                </div>
+                
+                <!-- ✅ NEW: Barcode-specific properties (only show when barcode_image is selected) -->
+                <div id="barcodeProperties" class="hidden mt-4 pt-4 border-t border-gray-200">
+                    <div class="property-group">
+                        <label>Barcode Scale</label>
+                        <input type="number" id="propBarcodeScale" value="3" min="1" max="10" onchange="updateBarcodeProperty('scale', this.value)">
+                    </div>
+                    <div class="property-group">
+                        <label>Barcode Height</label>
+                        <input type="number" id="propBarcodeHeight" value="10" min="5" max="50" onchange="updateBarcodeProperty('height', this.value)">
+                    </div>
+                    <div class="property-group checkbox-group">
+                        <input type="checkbox" id="propShowBarcodeText" checked onchange="updateBarcodeProperty('showText', this.checked)">
+                        <label for="propShowBarcodeText">Show Text Below Barcode</label>
+                    </div>
+                    <div class="property-group">
+                        <label>Text Font Size</label>
+                        <input type="number" id="propBarcodeTextSize" value="10" min="8" max="20" onchange="updateBarcodeProperty('textSize', this.value)">
+                    </div>
+                </div>
+            </div>
+            
+            <div id="noSelection" class="text-center text-gray-400 py-8">
+                <i class="fas fa-mouse-pointer text-4xl mb-2"></i>
+                <p>Select an element to edit properties</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Print Only Area (Hidden on screen) -->
+    <div id="printArea" style="display: none;">
+        <div id="printPreview" class="paper-preview"></div>
+    </div>
+
+    <script>
+        let designElements = [];
+        let selectedElement = null;
+        let elementIdCounter = 0;
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+        let currentPatient = {
+    patient_id: '60311012414550209',
+    full_name: 'علي كمال علاوي',
+    gender: 'male',
+    age: 26,
+    age_unit: 'year',
+    phone_key: '+964',
+    phone_number: '7806140857',
+    tests: ['Vitm D3', 'PTT', 'PT', 'INR'],  // ✅ Use short names
+    sample_type: 'Serum'
+};
+
+        // Initialize drag and drop
+        document.querySelectorAll('.element-item').forEach(item => {
+            item.addEventListener('dragstart', handleDragStart);
+            item.addEventListener('click', () => addElement(item.dataset.type));
+        });
+
+        const paperPreview = document.getElementById('paperPreview');
+        paperPreview.addEventListener('dragover', handleDragOver);
+        paperPreview.addEventListener('drop', handleDrop);
+        paperPreview.addEventListener('click', handlePaperClick);
+
+        function handleDragStart(e) {
+            e.dataTransfer.setData('type', e.target.dataset.type);
+            e.dataTransfer.setData('label', e.target.querySelector('span').textContent.trim());
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const type = e.dataTransfer.getData('type');
+            const label = e.dataTransfer.getData('label');
+            const rect = paperPreview.getBoundingClientRect();
+            const x = e.clientX - rect.left - 50;
+            const y = e.clientY - rect.top - 15;
+            
+            addElementToCanvas(type, label, Math.max(0, x), Math.max(0, y));
+        }
+
+        function handlePaperClick(e) {
+            if (e.target === paperPreview || e.target.id === 'placeholderText') {
+                deselectAll();
+            }
+        }
+
+        function addElement(type) {
+            const labels = {
+                'patient_id': 'Patient ID',
+                'patient_name': 'Patient Name',
+                'patient_gender': 'Gender',
+                'patient_age': 'Age',
+                'patient_phone': 'Phone',
+                'lab_name': 'Lab Name',
+                'lab_address': 'Lab Address',
+                'lab_phone': 'Lab Phone',
+                'barcode_image': 'Barcode Image',
+                'visit_id': 'Visit ID',
+                'visit_date': 'Visit Date',
+                'test_name': 'Test Name',
+                'test_list': 'All Tests',
+                'sample_type': 'Sample Type'  // ✅ Added sample type label
+            };
+            
+            // Add element in center of preview
+            const rect = paperPreview.getBoundingClientRect();
+            const x = rect.width / 2 - 75;
+            const y = 20 + (designElements.length * 35);
+            
+            addElementToCanvas(type, labels[type], x, y);
+        }
+
+        function addElementToCanvas(type, label, x, y) {
+            // Hide placeholder
+            const placeholder = document.getElementById('placeholderText');
+            if (placeholder) placeholder.style.display = 'none';
+            
+            const element = {
+                id: ++elementIdCounter,
+                type: type,
+                label: label,
+                x: x,
+                y: y,
+                width: type === 'barcode_image' ? 200 : 150,
+                height: type === 'barcode_image' ? 60 : 30,
+                fontSize: type === 'barcode_image' ? 10 : 12,
+                fontWeight: 'normal',
+                color: '#000000',
+                align: type === 'barcode_image' ? 'center' : 'left',
+                bgColor: '#ffffff',
+                // ✅ NEW: Barcode-specific properties
+                barcodeScale: 3,
+                barcodeHeight: 10,
+                showBarcodeText: true,
+                barcodeTextSize: 10
+            };
+            
+            designElements.push(element);
+            renderElement(element);
+            selectElement(element.id);
+        }
+
+        function renderElement(element) {
+    const el = document.createElement('div');
+    el.className = 'design-element';
+    el.id = `element-${element.id}`;
+    el.style.left = element.x + 'px';
+    el.style.top = element.y + 'px';
+    el.style.width = element.width + 'px';
+    el.style.height = element.height + 'px';
+    el.style.fontSize = element.fontSize + 'px';
+    el.style.fontWeight = element.fontWeight;
+    el.style.color = element.color;
+    el.style.textAlign = element.align;
+    el.style.backgroundColor = element.bgColor;
+    
+    if (element.type === 'barcode_image') {
+    el.innerHTML = `
+        <div style="text-align: center; padding: 5px;">
+            <img src="https://bwipjs-api.metafloor.com/?bcid=code128&text=${currentPatient.patient_id}&scale=3&height=10&includetext" style="max-width: 100%; height: auto; display: block;">
+        </div>
+        <div class="resize-handle"></div>
+        <div class="delete-btn" onclick="deleteElement(${element.id})">×</div>
+    `;
+} else if (element.type === 'test_list') {
+    // ✅ Show tests comma-separated with SHORT NAMES (no "Tests:" label)
+    el.innerHTML = `
+        <div style="padding: 5px; font-size: 11px;">
+            ${currentPatient.tests?.join(', ') || 'No tests'}
+        </div>
+        <div class="resize-handle"></div>
+        <div class="delete-btn" onclick="deleteElement(${element.id})">×</div>
+    `;
+} else if (element.type === 'patient_id') {
+        // ✅ No label
+        el.innerHTML = `
+            <div style="padding: 5px;">
+                ${currentPatient.patient_id}
+            </div>
+            <div class="resize-handle"></div>
+            <div class="delete-btn" onclick="deleteElement(${element.id})">×</div>
+        `;
+    } else if (element.type === 'patient_name') {
+        // ✅ No label
+        el.innerHTML = `
+            <div style="padding: 5px;">
+                ${currentPatient.full_name}
+            </div>
+            <div class="resize-handle"></div>
+            <div class="delete-btn" onclick="deleteElement(${element.id})">×</div>
+        `;
+    } else if (element.type === 'sample_type') {
+    // ✅ Show actual sample type (no "Sample Type:" label)
+    el.innerHTML = `
+        <div style="padding: 5px;">
+            ${currentPatient.sample_type || 'Serum'}
+        </div>
+        <div class="resize-handle"></div>
+        <div class="delete-btn" onclick="deleteElement(${element.id})">×</div>
+    `;
+    } else {
+        el.innerHTML = `
+            <div style="padding: 5px;">${element.label}</div>
+            <div class="resize-handle"></div>
+            <div class="delete-btn" onclick="deleteElement(${element.id})">×</div>
+        `;
+    }
+    
+    // Make draggable
+    el.addEventListener('mousedown', handleElementMouseDown);
+    
+    // Make resizable
+    const resizeHandle = el.querySelector('.resize-handle');
+    resizeHandle.addEventListener('mousedown', handleResizeStart);
+    
+    paperPreview.appendChild(el);
+}
+
+        function handleElementMouseDown(e) {
+            if (e.target.classList.contains('resize-handle') || e.target.classList.contains('delete-btn')) {
+                return;
+            }
+            
+            e.stopPropagation();
+            const element = designElements.find(el => el.id === parseInt(e.currentTarget.id.split('-')[1]));
+            selectElement(element.id);
+            
+            isDragging = true;
+            const rect = paperPreview.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left - element.x;
+            dragOffset.y = e.clientY - rect.top - element.y;
+            
+            document.addEventListener('mousemove', handleElementMouseMove);
+            document.addEventListener('mouseup', handleElementMouseUp);
+        }
+
+        function handleElementMouseMove(e) {
+            if (!isDragging) return;
+            
+            const element = designElements.find(el => el.id === selectedElement);
+            const rect = paperPreview.getBoundingClientRect();
+            
+            element.x = Math.max(0, Math.min(rect.width - element.width, e.clientX - rect.left - dragOffset.x));
+            element.y = Math.max(0, Math.min(rect.height - element.height, e.clientY - rect.top - dragOffset.y));
+            
+            const el = document.getElementById(`element-${element.id}`);
+            el.style.left = element.x + 'px';
+            el.style.top = element.y + 'px';
+            
+            updatePropertiesPanel();
+        }
+
+        function handleElementMouseUp() {
+            isDragging = false;
+            document.removeEventListener('mousemove', handleElementMouseMove);
+            document.removeEventListener('mouseup', handleElementMouseUp);
+        }
+
+        function handleResizeStart(e) {
+            e.stopPropagation();
+            const elementId = parseInt(e.target.parentElement.id.split('-')[1]);
+            const element = designElements.find(el => el.id === elementId);
+            
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const startWidth = element.width;
+            const startHeight = element.height;
+            
+            function handleResizeMove(e) {
+                element.width = Math.max(50, startWidth + e.clientX - startX);
+                element.height = Math.max(20, startHeight + e.clientY - startY);
+                
+                const el = document.getElementById(`element-${element.id}`);
+                el.style.width = element.width + 'px';
+                el.style.height = element.height + 'px';
+                
+                updatePropertiesPanel();
+            }
+            
+            function handleResizeEnd() {
+                document.removeEventListener('mousemove', handleResizeMove);
+                document.removeEventListener('mouseup', handleResizeEnd);
+            }
+            
+            document.addEventListener('mousemove', handleResizeMove);
+            document.addEventListener('mouseup', handleResizeEnd);
+        }
+
+        function selectElement(id) {
+            deselectAll();
+            selectedElement = id;
+            const el = document.getElementById(`element-${id}`);
+            if (el) {
+                el.classList.add('selected');
+            }
+            document.getElementById('propertiesPanel').style.display = 'block';
+            document.getElementById('noSelection').style.display = 'none';
+            updatePropertiesPanel();
+            
+            // ✅ Show/hide barcode-specific properties
+            const element = designElements.find(el => el.id === id);
+            const barcodeProps = document.getElementById('barcodeProperties');
+            if (element && element.type === 'barcode_image') {
+                barcodeProps.classList.remove('hidden');
+            } else {
+                barcodeProps.classList.add('hidden');
+            }
+        }
+
+        function deselectAll() {
+            selectedElement = null;
+            document.querySelectorAll('.design-element').forEach(el => {
+                el.classList.remove('selected');
+            });
+            document.getElementById('propertiesPanel').style.display = 'none';
+            document.getElementById('noSelection').style.display = 'block';
+            document.getElementById('barcodeProperties').classList.add('hidden');
+        }
+
+        function updatePropertiesPanel() {
+            if (!selectedElement) return;
+            
+            const element = designElements.find(el => el.id === selectedElement);
+            if (!element) return;
+            
+            document.getElementById('propX').value = Math.round(element.x);
+            document.getElementById('propY').value = Math.round(element.y);
+            document.getElementById('propWidth').value = element.width;
+            document.getElementById('propHeight').value = element.height;
+            document.getElementById('propFontSize').value = element.fontSize;
+            document.getElementById('propFontWeight').value = element.fontWeight;
+            document.getElementById('propColor').value = element.color;
+            document.getElementById('propAlign').value = element.align;
+            document.getElementById('propBgColor').value = element.bgColor;
+            
+            // ✅ Update barcode-specific properties
+            if (element.type === 'barcode_image') {
+                document.getElementById('propBarcodeScale').value = element.barcodeScale || 3;
+                document.getElementById('propBarcodeHeight').value = element.barcodeHeight || 10;
+                document.getElementById('propShowBarcodeText').checked = element.showBarcodeText !== false;
+                document.getElementById('propBarcodeTextSize').value = element.barcodeTextSize || 10;
+            }
+        }
+
+        function updateElementProperty(property, value) {
+            if (!selectedElement) return;
+            
+            const element = designElements.find(el => el.id === selectedElement);
+            if (!element) return;
+            
+            if (property === 'x' || property === 'y' || property === 'width' || property === 'height' || property === 'fontSize') {
+                value = parseInt(value);
+            }
+            
+            element[property] = value;
+            
+            const el = document.getElementById(`element-${element.id}`);
+            if (el) {
+                if (property === 'x') el.style.left = value + 'px';
+                if (property === 'y') el.style.top = value + 'px';
+                if (property === 'width') el.style.width = value + 'px';
+                if (property === 'height') el.style.height = value + 'px';
+                if (property === 'fontSize') el.style.fontSize = value + 'px';
+                if (property === 'fontWeight') el.style.fontWeight = value;
+                if (property === 'color') el.style.color = value;
+                if (property === 'align') el.style.textAlign = value;
+                if (property === 'bgColor') el.style.backgroundColor = value;
+            }
+        }
+
+        // ✅ NEW: Update barcode-specific properties
+        function updateBarcodeProperty(property, value) {
+            if (!selectedElement) return;
+            
+            const element = designElements.find(el => el.id === selectedElement);
+            if (!element || element.type !== 'barcode_image') return;
+            
+            if (property === 'scale' || property === 'height' || property === 'textSize') {
+                value = parseInt(value);
+            } else if (property === 'showText') {
+                value = value === true || value === 'true';
+            }
+            
+            element['barcode' + property.charAt(0).toUpperCase() + property.slice(1)] = value;
+            
+            // Re-render the element to show changes
+            const el = document.getElementById(`element-${element.id}`);
+            if (el) {
+                if (element.type === 'barcode_image') {
+                    el.innerHTML = `
+                        <div style="text-align: center; padding: 5px;">
+                            <img src="https://bwipjs-api.metafloor.com/?bcid=code128&text=${currentPatient.patient_id}&scale=${element.barcodeScale||3}&height=${element.barcodeHeight||10}&includetext=${element.showBarcodeText ? '1' : '0'}" style="max-width: 100%; height: auto; display: block;">
+                            ${element.showBarcodeText ? `<div style="font-size: ${element.barcodeTextSize||10}px; margin-top: 2px; font-family: monospace;">${currentPatient.patient_id}</div>` : ''}
+                        </div>
+                        <div class="resize-handle"></div>
+                        <div class="delete-btn" onclick="deleteElement(${element.id})">×</div>
+                    `;
+                }
+            }
+        }
+
+        function deleteElement(id) {
+            designElements = designElements.filter(el => el.id !== id);
+            const el = document.getElementById(`element-${id}`);
+            if (el) el.remove();
+            deselectAll();
+            
+            if (designElements.length === 0) {
+                const placeholder = document.getElementById('placeholderText');
+                if (placeholder) placeholder.style.display = 'block';
+            }
+        }
+
+        function updatePaperSize() {
+            const width = document.getElementById('paperWidth').value;
+            const height = document.getElementById('paperHeight').value;
+            paperPreview.style.width = width;
+            paperPreview.style.height = height;
+        }
+
+        async function saveDesign() {
+            const design = {
+                template_name: 'barcode',
+                template_type: 'barcode',
+                paper_width: document.getElementById('paperWidth').value,
+                paper_height: document.getElementById('paperHeight').value,
+                margin: document.getElementById('margin').value,
+                elements: JSON.stringify(designElements)
+            };
+
+            try {
+                const response = await fetch('/api/print-template/save', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(design)
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    alert('✅ Design saved successfully!');
+                } else {
+                    alert('❌ Error saving design: ' + result.error);
+                }
+            } catch (error) {
+                alert('❌ Error saving design: ' + error.message);
+            }
+        }
+
+        async function loadDesign() {
+            try {
+                const response = await fetch('/api/print-template/load/barcode');
+                const result = await response.json();
+                
+                if (result.success && result.template) {
+                    document.getElementById('paperWidth').value = result.template.paper_width;
+                    document.getElementById('paperHeight').value = result.template.paper_height;
+                    document.getElementById('margin').value = result.template.margin;
+                    
+                    // Clear existing elements
+                    paperPreview.innerHTML = '<p class="text-gray-400 text-center py-8" id="placeholderText">Drag elements here to design your barcode</p>';
+                    designElements = [];
+                    
+                    // Load saved elements
+                    const elements = JSON.parse(result.template.elements || '[]');
+                    elements.forEach(el => {
+                        designElements.push(el);
+                        renderElement(el);
+                    });
+                    
+                    updatePaperSize();
+                    alert('✅ Design loaded successfully!');
+                } else {
+                    alert('❌ No saved design found');
+                }
+            } catch (error) {
+                alert('❌ Error loading design: ' + error.message);
+            }
+        }
+
+        // Prepare print area before printing
+window.addEventListener('beforeprint', function() {
+    const printPreview = document.getElementById('printPreview');
+    printPreview.innerHTML = '';
+    printPreview.style.width = paperPreview.style.width;
+    printPreview.style.height = paperPreview.style.height;
+    printPreview.style.position = 'absolute';
+    printPreview.style.left = '0';
+    printPreview.style.top = '0';
+    printPreview.style.border = 'none';
+    
+    // Clone all elements without edit controls
+    designElements.forEach(el => {
+        const clone = document.createElement('div');
+        clone.style.position = 'absolute';
+        clone.style.left = el.x + 'px';
+        clone.style.top = el.y + 'px';
+        clone.style.width = el.width + 'px';
+        clone.style.height = el.height + 'px';
+        clone.style.fontSize = el.fontSize + 'px';
+        clone.style.fontWeight = el.fontWeight;
+        clone.style.color = el.color;
+        clone.style.textAlign = el.align;
+        clone.style.backgroundColor = el.bgColor;
+        
+        if (el.type === 'barcode_image') {
+            clone.innerHTML = `
+                <div style="text-align: center; padding: 5px;">
+                    <img src="https://bwipjs-api.metafloor.com/?bcid=code128&text=${currentPatient.patient_id}&scale=3&height=10&includetext" style="max-width: 100%; height: auto; display: block;">
+                    <div style="font-size: 10px; margin-top: 2px; font-family: monospace;">${currentPatient.patient_id}</div>
+                </div>
+            `;
+        } else if (el.type === 'test_list') {
+    clone.innerHTML = `
+        <div style="padding: 5px; font-size: 11px;">
+            ${currentPatient.tests?.join(', ') || 'No tests'}
+        </div>
+    `;
+} else if (el.type === 'patient_id') {
+            // ✅ No label
+            clone.innerHTML = `
+                <div style="padding: 5px;">
+                    ${currentPatient.patient_id}
+                </div>
+            `;
+        } else if (el.type === 'patient_name') {
+            // ✅ No label
+            clone.innerHTML = `
+                <div style="padding: 5px;">
+                    ${currentPatient.full_name}
+                </div>
+            `;
+        } else if (el.type === 'sample_type') {
+    clone.innerHTML = `
+        <div style="padding: 5px;">
+            ${currentPatient.sample_type || 'Serum'}
+        </div>
+    `;
+        } else {
+            clone.innerHTML = `<div style="padding: 5px;">${el.label}</div>`;
+        }
+        
+        printPreview.appendChild(clone);
+    });
+});
+
+        // Save design to localStorage as backup
+        function saveDesignLocal() {
+            const design = {
+                paper_width: document.getElementById('paperWidth').value,
+                paper_height: document.getElementById('paperHeight').value,
+                margin: document.getElementById('margin').value,
+                elements: designElements
+            };
+            localStorage.setItem('barcodeDesign', JSON.stringify(design));
+        }
+
+        // Load design from localStorage
+        function loadDesignLocal() {
+            const saved = localStorage.getItem('barcodeDesign');
+            if (saved) {
+                const design = JSON.parse(saved);
+                document.getElementById('paperWidth').value = design.paper_width || '4in';
+                document.getElementById('paperHeight').value = design.paper_height || '2in';
+                document.getElementById('margin').value = design.margin || '0.1in';
+                designElements = design.elements || [];
+                
+                // Clear and re-render
+                paperPreview.innerHTML = '<p class="text-gray-400 text-center py-8" id="placeholderText">Drag elements here to design your barcode</p>';
+                designElements.forEach(el => renderElement(el));
+                updatePaperSize();
+            }
+        }
+
+        // Auto-save on changes
+        document.querySelectorAll('#propertiesPanel input, #propertiesPanel select').forEach(input => {
+            input.addEventListener('change', saveDesignLocal);
+        });
+
+        // Load local design on page load
+        window.addEventListener('load', function() {
+            loadDesignLocal();
+        });
+    </script>
+</body>
+</html>

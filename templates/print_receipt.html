@@ -1,0 +1,267 @@
+<!-- templates/print_receipt.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print Receipt - {{ patient.patient_id if patient else 'NexLab' }}</title>
+    <style>
+        @page {
+            size: 80mm auto;
+            margin: 0;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 12px;
+            background: white;
+            padding: 10px;
+        }
+        
+        .receipt-container {
+            width: 100%;
+            max-width: 300px;
+            margin: 0 auto;
+            border: 1px dashed #000;
+            padding: 10px;
+        }
+        
+        .receipt-header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .lab-name {
+            font-size: 16px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 5px;
+        }
+        
+        .lab-info {
+            font-size: 10px;
+            color: #666;
+            line-height: 1.4;
+        }
+        
+        .barcode-section {
+            text-align: center;
+            margin: 10px 0;
+            padding: 10px 0;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .barcode-image {
+            max-width: 100%;
+            height: auto;
+            margin: 5px 0;
+        }
+        
+        .patient-info {
+            margin-bottom: 15px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+            font-size: 11px;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .tests-list {
+            margin-bottom: 15px;
+        }
+        
+        .tests-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        
+        .test-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px dotted #ddd;
+            font-size: 11px;
+        }
+        
+        .totals {
+            border-top: 2px solid #000;
+            padding-top: 10px;
+            margin-top: 10px;
+        }
+        
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+            font-size: 12px;
+        }
+        
+        .total-label {
+            font-weight: bold;
+        }
+        
+        .total-amount {
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .receipt-footer {
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px dashed #000;
+            font-size: 10px;
+            color: #666;
+        }
+        
+        .print-btn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        @media print {
+            .print-btn {
+                display: none !important;
+            }
+            body {
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="print-btn" onclick="window.print()">🖨️ Print Receipt</button>
+    
+    <div class="receipt-container">
+        <!-- Header -->
+        <div class="receipt-header">
+            <div class="lab-name">
+                {{ lab_info.lab_name if lab_info and lab_info.lab_name else 'NexLab Medical Center' }}
+            </div>
+            <div class="lab-info">
+                {{ lab_info.lab_address if lab_info and lab_info.lab_address else 'Lab Address' }}<br>
+                {{ lab_info.lab_phone_1 if lab_info and lab_info.lab_phone_1 else 'Phone: +123456789' }}
+            </div>
+        </div>
+        
+        <!-- Barcode Section -->
+        <div class="barcode-section">
+            {% if barcode_data %}
+                <img class="barcode-image" src="{{ barcode_data }}" alt="Barcode" />
+            {% else %}
+                <img class="barcode-image" 
+                     src="https://bwipjs-api.metafloor.com/?bcid=code128&text={{ patient.patient_id if patient else '000000' }}&scale=3&height=10&includetext" 
+                     alt="Barcode" />
+            {% endif %}
+            <div style="font-size: 10px; font-family: monospace; margin-top: 5px;">
+                {{ patient.patient_id if patient else 'N/A' }}
+            </div>
+        </div>
+        
+        <!-- Patient Info -->
+        <div class="patient-info">
+            <div class="info-row">
+                <span class="info-label">Patient ID:</span>
+                <span>{{ patient.patient_id if patient else 'N/A' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Name:</span>
+                <span>{{ patient.full_name if patient and patient.full_name else 'N/A' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Gender:</span>
+                <span>{{ patient.gender|capitalize if patient and patient.gender else 'N/A' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Age:</span>
+                <span>{{ patient.age if patient and patient.age else 'N/A' }} {{ patient.age_unit if patient and patient.age_unit else '' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Phone:</span>
+                <span>{{ patient.phone_key if patient and patient.phone_key else '' }} {{ patient.phone_number if patient and patient.phone_number else '' }}</span>
+            </div>
+            {% if patient and patient.visits and patient.visits|length > 0 %}
+            <div class="info-row">
+                <span class="info-label">Visit ID:</span>
+                <span>{{ patient.visits[0].visit_id }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Date:</span>
+                <span>{{ patient.visits[0].visit_date.strftime('%Y-%m-%d %H:%M') if patient.visits[0].visit_date else 'N/A' }}</span>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Tests List -->
+        <div class="tests-list">
+            <div class="tests-title">Ordered Tests:</div>
+            {% if orders and orders|length > 0 %}
+                {% for order in orders %}
+                <div class="test-item">
+                    <span class="test-name">{{ order.test.test_name if order.test else 'Unknown Test' }}</span>
+                    <span class="test-price">${{ "%.2f"|format(order.test.price if order.test and order.test.price else 0) }}</span>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="test-item">
+                    <span>No tests ordered</span>
+                </div>
+            {% endif %}
+        </div>
+        
+        <!-- Totals -->
+        <div class="totals">
+            {% set total = (orders | sum(attribute='test.price') if orders and orders|length > 0 else 0) %}
+            <div class="total-row">
+                <span class="total-label">Total:</span>
+                <span class="total-amount">${{ "%.2f"|format(total) }}</span>
+            </div>
+            {% if patient and patient.is_outlab %}
+            <div class="total-row">
+                <span class="total-label">Outlab:</span>
+                <span>Yes</span>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Footer -->
+        <div class="receipt-footer">
+            Thank you for choosing us!<br>
+            {{ lab_info.lab_website if lab_info and lab_info.lab_website else 'www.nexlab.com' }}
+        </div>
+    </div>
+    
+    <script>
+        // Auto-print on load (optional - uncomment if you want auto-print)
+        // window.onload = function() { 
+        //     setTimeout(function() { window.print(); }, 500);
+        // }
+    </script>
+</body>
+</html>
