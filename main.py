@@ -1657,7 +1657,7 @@ def load_print_template(template_name: str, session: Session = Depends(get_sessi
 
 @app.get("/api/patient/{patient_id}")
 def get_patient_api(patient_id: str, session: Session = Depends(get_session)):
-    """Get patient data by patient_id with accounting info and tests grouped by sample type"""
+    """Get patient data by patient_id with accounting info AND tests grouped by sample type"""
     try:
         patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
         if not patient:
@@ -1666,30 +1666,31 @@ def get_patient_api(patient_id: str, session: Session = Depends(get_session)):
         # Get patient's orders/tests
         orders = session.exec(select(Order).where(Order.patient_id == patient.id)).all()
         
-        # ✅ Group tests by sample type
-        tests_by_sample_type = {}
-        test_names = []
+        # ✅ Build test names array
+        test_names = [order.test.test_name if order.test else 'Unknown' for order in orders]
         
+        # ✅ Group tests by sample type (FOR BARCODE PRINTING)
+        tests_by_sample_type = {}
         for order in orders:
             if order.test:
-                test_name = order.test.test_name
-                test_names.append(test_name)
-                
-                # Get sample type for this test
                 sample_type_name = "Unknown"
                 if order.test.sample_type_id:
                     sample_type = session.get(SampleType, order.test.sample_type_id)
                     if sample_type:
                         sample_type_name = sample_type.sample_name
                 
-                # Add to grouped dictionary
                 if sample_type_name not in tests_by_sample_type:
                     tests_by_sample_type[sample_type_name] = []
-                tests_by_sample_type[sample_type_name].append(test_name)
+                tests_by_sample_type[sample_type_name].append(order.test.test_name)
         
-        # Get visit info
+        # Get visit info with PAYMENT DATA
         visits = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id)).all()
         visit_id = visits[0].visit_id if visits else patient.patient_id + '000'
+        
+        # ✅ GET ACTUAL PAYMENT DATA FROM PATIENTVISIT
+        received_amount = visits[0].received_amount if visits else 0.0
+        discount_amount = visits[0].discount_amount if visits else 0.0
+        remaining_amount = visits[0].remaining_amount if visits else 0.0
         
         # Calculate total from orders
         total_amount = sum([float(order.test.price) if order.test and order.test.price else 0 for order in orders])
@@ -1702,16 +1703,19 @@ def get_patient_api(patient_id: str, session: Session = Depends(get_session)):
             "age_unit": patient.age_unit,
             "phone_key": patient.phone_key,
             "phone_number": patient.phone_number,
-            "tests": test_names,  # Simple array for backward compatibility
-            "tests_by_sample_type": tests_by_sample_type,  # ✅ NEW: Grouped by sample type
+            "tests": test_names,  # Simple array for receipt
+            "tests_by_sample_type": tests_by_sample_type,  # ✅ Grouped by sample type (for barcode)
             "visit_id": visit_id,
-            # Accounting information
+            # ✅ Accounting information (for receipt)
             "total_amount": round(total_amount, 2),
-            "discount_amount": 0,
-            "paid_amount": 0,
-            "remain_amount": round(total_amount, 2)
+            "discount_amount": round(discount_amount, 2),
+            "paid_amount": round(received_amount, 2),
+            "remain_amount": round(remaining_amount, 2)
         }
     except Exception as e:
+        print(f"❌ Error in get_patient_api: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {"error": str(e)}
 # ===========================
 # BARCODE API FOR JAVASCRIPT
