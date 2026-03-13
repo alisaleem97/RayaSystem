@@ -271,7 +271,7 @@ class TestCatalog(SQLModel, table=True):
     is_active: bool = Field(default=True)
 
 # ===========================
-# 14. ORDER
+# 14. ORDER (UPDATED - Added unit_price for audit compliance)
 # ===========================
 class Order(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -286,6 +286,11 @@ class Order(SQLModel, table=True):
     collection_date: Optional[datetime] = None
     verified_date: Optional[datetime] = None
     visit_id: Optional[int] = Field(default=None, foreign_key="patientvisit.id")
+    
+    # ✅ AUDIT COMPLIANCE: Price snapshot at order time
+    unit_price: float = Field(default=0.0)  # Price frozen at order creation
+    discount_amount: float = Field(default=0.0)  # Discount applied to this order
+    final_price: float = Field(default=0.0)  # unit_price - discount_amount
     
     # Relationships
     patient: Patient = Relationship(back_populates="orders")

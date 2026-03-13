@@ -830,14 +830,19 @@ async function printBarcode(patientId) {
     }
 }
 
-// Print Receipt Function
+// Print Receipt Function - COMPLETE VERSION WITH ALL ELEMENT TYPES + LAB INFO FETCH
 async function printReceipt(patientId) {
     try {
-        // Load saved design
-        const response = await fetch('/api/print-template/load/receipt');
-        const result = await response.json();
+        // 1. Load saved design
+        const designResponse = await fetch('/api/print-template/load/receipt');
+        const designResult = await designResponse.json();
         
-        // Get patient data
+        if (!designResult.success || !designResult.template) {
+            alert('❌ No saved receipt design found. Please design receipt first in Receipt Designer.');
+            return;
+        }
+        
+        // 2. Fetch patient data
         const patientResponse = await fetch(`/api/patient/${patientId}`);
         const patient = await patientResponse.json();
         
@@ -846,79 +851,234 @@ async function printReceipt(patientId) {
             return;
         }
         
-        if (!result.success || !result.template) {
-            alert('❌ No saved receipt design found. Please design receipt first.');
-            return;
-        }
+        // 3. Fetch lab info (NEW - critical fix)
+        const labResponse = await fetch('/api/lab-info');
+        const labResult = await labResponse.json();
+        const labInfo = labResult.success ? labResult.lab_info : {
+            lab_name: 'NexLab Medical Center',
+            lab_title: 'Medical Laboratory',
+            lab_address: '',
+            lab_phone_1: '',
+            lab_phone_2: '',
+            lab_email: '',
+            lab_website: '',
+            first_doctor_name: '',
+            second_doctor_name: '',
+            lab_note_1: '',
+            lab_note_2: ''
+        };
         
-        console.log('Patient data:', patient);  // Debug log
+        // 4. Fetch barcode
+        const barcodeResponse = await fetch(`/api/barcode/${patientId}`);
+        const barcodeResult = await barcodeResponse.json();
+        const barcodeData = barcodeResult.barcode_data;
         
-        // Create print content
+        // 5. Create print container
         const printContainer = document.getElementById('printContainer');
         printContainer.innerHTML = '';
         
         const printArea = document.createElement('div');
-        printArea.style.width = result.template.paper_width || '80mm';
-        printArea.style.padding = '10px';
+        printArea.style.width = designResult.template.paper_width || '80mm';
+        printArea.style.minHeight = designResult.template.paper_height === 'auto' ? '200mm' : designResult.template.paper_height;
+        printArea.style.padding = designResult.template.margin || '0';
         printArea.style.background = 'white';
         printArea.style.position = 'relative';
+        printArea.style.fontFamily = 'Arial, sans-serif';
+        printArea.style.fontSize = '11px';
         
-        // Parse and render saved elements
-        const elements = JSON.parse(result.template.elements || '[]');
+        // 6. Parse and render all saved elements
+        const elements = JSON.parse(designResult.template.elements || '[]');
         
         elements.forEach(el => {
             const clone = document.createElement('div');
             clone.style.position = 'absolute';
             clone.style.left = el.x + 'px';
             clone.style.top = el.y + 'px';
-            clone.style.fontSize = el.fontSize + 'px';
-            clone.style.color = el.color;
-            clone.style.fontWeight = el.fontWeight;
+            clone.style.width = el.width + 'px';
+            clone.style.height = el.height + 'px';
+            clone.style.fontSize = (el.fontSize || 11) + 'px';
+            clone.style.fontWeight = el.fontWeight || 'normal';
+            clone.style.color = el.color || '#000000';
+            clone.style.textAlign = el.align || 'left';
+            clone.style.backgroundColor = el.bgColor || 'transparent';
+            clone.style.padding = '2px 4px';
             
-            console.log('Element type:', el.type);  // Debug log
-            
-            // ✅ Render based on element type
-            if (el.type === 'patient_name') {
-                clone.innerHTML = `<strong>Name:</strong> ${patient.full_name}`;
-            } else if (el.type === 'patient_id') {
-                clone.innerHTML = `<strong>ID:</strong> ${patient.patient_id}`;
-            } else if (el.type === 'test_list_with_price') {
-    // patient.tests is an array of test name strings from API
-    const testsArray = patient.tests || [];
-    const testsHtml = testsArray.length > 0 
-        ? testsArray.map(t => `<div style="border-bottom: 1px dotted #ccc; padding: 3px 0;">${t}</div>`).join('')
-        : '<div>No tests</div>';
-    clone.innerHTML = `<div style="margin: 10px 0;"><strong>Tests:</strong><br>${testsHtml}</div>`;
-} else if (el.type === 'test_list') {
-    // Fallback for old element type
-    const testsArray = patient.tests || [];
-    const testsHtml = testsArray.length > 0 
-        ? testsArray.map(t => `<div style="border-bottom: 1px dotted #ccc; padding: 3px 0;">${t}</div>`).join('')
-        : '<div>No tests</div>';
-    clone.innerHTML = `<div style="margin: 10px 0;"><strong>Tests:</strong><br>${testsHtml}</div>`;
-} else if (el.type === 'lab_name') {
-                clone.innerHTML = `<strong style="font-size: 14px;">Lab Name</strong>`;
-            } else if (el.type === 'total_amount') {
-                clone.innerHTML = `<div style="display: flex; justify-content: space-between; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 5px 0;"><span>Total:</span><span>$${patient.total_amount?.toFixed(2) || '0.00'}</span></div>`;
-            } else if (el.type === 'discount') {
-                clone.innerHTML = `<div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Discount:</span><span>$${patient.discount_amount?.toFixed(2) || '0.00'}</span></div>`;
-            } else if (el.type === 'paid_amount') {
-                clone.innerHTML = `<div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Paid:</span><span>$${patient.paid_amount?.toFixed(2) || '0.00'}</span></div>`;
-            } else if (el.type === 'remain_amount') {
-                clone.innerHTML = `<div style="display: flex; justify-content: space-between; padding: 3px 0;"><span>Remain:</span><span>$${patient.remain_amount?.toFixed(2) || '0.00'}</span></div>`;
-            } else if (el.type === 'barcode_image') {
-                // ✅ FIX: Render barcode image
-                clone.innerHTML = `
-                    <div style="text-align: center; margin: 10px 0;">
-                        <img src="https://bwipjs-api.metafloor.com/?bcid=code128&text=${patient.patient_id}&scale=2&height=8&includetext" style="max-width: 100%;">
-                    </div>
-                `;
-            } else if (el.type === 'thank_you_message') {
-                clone.innerHTML = `<div style="text-align: center; margin-top: 20px; font-style: italic;">Thank you for choosing our services!</div>`;
-            } else if (el.type === 'footer_notes') {
-                clone.innerHTML = `<div style="padding: 5px; font-size: 9px; text-align: center;">Results are valid for 30 days. Please consult your doctor for interpretation.</div>`;
-            } else {
-                clone.innerHTML = el.label || '';
+            // ✅ COMPLETE SWITCH: Handle ALL element types
+            switch(el.type) {
+                // === LAB INFORMATION ===
+                case 'lab_name':
+                    clone.innerHTML = `<div style="font-weight: bold; font-size: 14px; text-align: center;">${labInfo.lab_name}</div>`;
+                    break;
+                case 'lab_title':
+                    clone.innerHTML = `<div style="font-size: 10px; text-align: center;">${labInfo.lab_title}</div>`;
+                    break;
+                case 'lab_address':
+                    clone.innerHTML = `<div style="font-size: 10px; text-align: center;">${labInfo.lab_address}</div>`;
+                    break;
+                case 'lab_phone_1':
+                    clone.innerHTML = `<div style="font-size: 10px;">📞 ${labInfo.lab_phone_1}</div>`;
+                    break;
+                case 'lab_phone_2':
+                    if (labInfo.lab_phone_2) {
+                        clone.innerHTML = `<div style="font-size: 10px;">${labInfo.lab_phone_2}</div>`;
+                    } else {
+                        clone.style.display = 'none';
+                    }
+                    break;
+                case 'lab_email':
+                    if (labInfo.lab_email) {
+                        clone.innerHTML = `<div style="font-size: 10px;">✉️ ${labInfo.lab_email}</div>`;
+                    } else {
+                        clone.style.display = 'none';
+                    }
+                    break;
+                case 'lab_website':
+                    if (labInfo.lab_website) {
+                        clone.innerHTML = `<div style="font-size: 10px;">🌐 ${labInfo.lab_website}</div>`;
+                    } else {
+                        clone.style.display = 'none';
+                    }
+                    break;
+                case 'first_doctor_name':
+                    if (labInfo.first_doctor_name) {
+                        clone.innerHTML = `<div style="font-size: 10px;">${labInfo.first_doctor_name}</div>`;
+                    } else {
+                        clone.style.display = 'none';
+                    }
+                    break;
+                case 'second_doctor_name':
+                    if (labInfo.second_doctor_name) {
+                        clone.innerHTML = `<div style="font-size: 10px;">${labInfo.second_doctor_name}</div>`;
+                    } else {
+                        clone.style.display = 'none';
+                    }
+                    break;
+                case 'lab_note_1':
+                    if (labInfo.lab_note_1) {
+                        clone.innerHTML = `<div style="font-size: 9px; font-style: italic;">${labInfo.lab_note_1}</div>`;
+                    } else {
+                        clone.style.display = 'none';
+                    }
+                    break;
+                case 'lab_note_2':
+                    if (labInfo.lab_note_2) {
+                        clone.innerHTML = `<div style="font-size: 9px; font-style: italic;">${labInfo.lab_note_2}</div>`;
+                    } else {
+                        clone.style.display = 'none';
+                    }
+                    break;
+                    
+                // === PATIENT INFORMATION ===
+                case 'patient_name':
+                    clone.innerHTML = `<div><strong>Name:</strong> ${patient.full_name || 'N/A'}</div>`;
+                    break;
+                case 'patient_id':
+                    clone.innerHTML = `<div><strong>ID:</strong> ${patient.patient_id || 'N/A'}</div>`;
+                    break;
+                case 'visit_id':
+                    clone.innerHTML = `<div><strong>Visit:</strong> ${patient.visit_id || 'N/A'}</div>`;
+                    break;
+                case 'visit_date':
+                    const visitDate = patient.visit_date ? new Date(patient.visit_date).toLocaleDateString('en-GB') + ' ' + new Date(patient.visit_date).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'}) : 'N/A';
+                    clone.innerHTML = `<div><strong>Date:</strong> ${visitDate}</div>`;
+                    break;
+                case 'patient_age':
+                    clone.innerHTML = `<div><strong>Age:</strong> ${patient.age || 'N/A'} ${patient.age_unit || 'year'}${(patient.age||1) > 1 ? 's' : ''}</div>`;
+                    break;
+                case 'patient_gender':
+                    clone.innerHTML = `<div><strong>Gender:</strong> ${(patient.gender || '').charAt(0).toUpperCase() + (patient.gender || '').slice(1) || 'N/A'}</div>`;
+                    break;
+                case 'patient_phone':
+                    clone.innerHTML = `<div><strong>Phone:</strong> ${patient.phone_key || ''} ${patient.phone_number || ''}</div>`;
+                    break;
+                case 'sample_type':
+                    clone.innerHTML = `<div><strong>Sample:</strong> ${patient.sample_type || 'N/A'}</div>`;
+                    break;
+                    
+                // === TESTS ===
+                case 'test_list_with_price':
+                    const tests = patient.tests || [];
+                    if (tests.length > 0) {
+                        const testsHtml = tests.map(t => 
+                            `<div style="border-bottom: 1px dotted #ccc; padding: 2px 0; display: flex; justify-content: space-between;"><span>${t}</span></div>`
+                        ).join('');
+                        clone.innerHTML = `<div><strong>Tests:</strong><br>${testsHtml}</div>`;
+                    } else {
+                        clone.innerHTML = `<div><strong>Tests:</strong><br><em>No tests ordered</em></div>`;
+                    }
+                    break;
+                case 'test_name':
+                    const firstTest = patient.tests?.[0] || 'No test';
+                    clone.innerHTML = `<div>${firstTest}</div>`;
+                    break;
+                    
+                // === BARCODE ===
+                case 'barcode_image':
+                    clone.innerHTML = `
+                        <div style="text-align: center; padding: 5px 0;">
+                            <img src="${barcodeData}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;">
+                            <div style="font-size: 9px; font-family: monospace; margin-top: 3px;">${patient.patient_id}</div>
+                        </div>
+                    `;
+                    break;
+                    
+                // === ACCOUNTING ===
+                case 'total_amount':
+                    clone.innerHTML = `<div style="display: flex; justify-content: space-between; font-weight: bold;"><span>Total:</span><span>${(patient.total_amount || 0).toFixed(2)}</span></div>`;
+                    break;
+                case 'discount':
+                    if ((patient.discount_amount || 0) > 0) {
+                        clone.innerHTML = `<div style="display: flex; justify-content: space-between;"><span>Discount:</span><span>-${(patient.discount_amount || 0).toFixed(2)}</span></div>`;
+                    } else {
+                        clone.style.display = 'none';
+                    }
+                    break;
+                case 'paid_amount':
+                    clone.innerHTML = `<div style="display: flex; justify-content: space-between;"><span>Paid:</span><span>${(patient.paid_amount || 0).toFixed(2)}</span></div>`;
+                    break;
+                case 'remain_amount':
+                    const remainClass = (patient.remain_amount || 0) > 0 ? 'color: #dc2626; font-weight: bold;' : '';
+                    clone.innerHTML = `<div style="display: flex; justify-content: space-between; border-top: 2px solid #000; padding-top: 5px; ${remainClass}"><span>Remaining:</span><span>${(patient.remain_amount || 0).toFixed(2)}</span></div>`;
+                    break;
+                    
+                // === SHAPES ===
+                case 'shape_line':
+                    clone.className = '';
+                    clone.style.height = (el.shapeWidth || 2) + 'px';
+                    clone.style.background = el.shapeColor || '#000000';
+                    clone.style.border = 'none';
+                    clone.innerHTML = '';
+                    break;
+                case 'shape_box':
+                    clone.className = '';
+                    clone.style.border = (el.shapeWidth || 2) + 'px solid ' + (el.shapeColor || '#000000');
+                    clone.style.background = 'transparent';
+                    clone.innerHTML = '';
+                    break;
+                case 'shape_circle':
+                    clone.className = '';
+                    clone.style.border = (el.shapeWidth || 2) + 'px solid ' + (el.shapeColor || '#000000');
+                    clone.style.borderRadius = '50%';
+                    clone.style.background = 'transparent';
+                    clone.innerHTML = '';
+                    break;
+                    
+                // === CUSTOM TEXT ===
+                case 'custom_text':
+                    clone.innerHTML = `<div>${el.customText || 'Custom Text'}</div>`;
+                    break;
+                case 'thank_you_message':
+                    clone.innerHTML = `<div style="text-align: center; font-style: italic; margin-top: 10px;">${el.customText || 'Thank you for choosing our services!'}</div>`;
+                    break;
+                    
+                // === FOOTER ===
+                case 'footer_notes':
+                    clone.innerHTML = `<div style="font-size: 9px; text-align: center; padding-top: 10px; border-top: 1px dashed #ccc;">${labInfo.lab_note_1 || 'Results are valid for 30 days. Please consult your doctor for interpretation.'}</div>`;
+                    break;
+                    
+                // === DEFAULT ===
+                default:
+                    clone.innerHTML = `<div>${el.label || ''}</div>`;
             }
             
             printArea.appendChild(clone);
@@ -926,16 +1086,24 @@ async function printReceipt(patientId) {
         
         printContainer.appendChild(printArea);
         
-        // Print
+        // 7. Print
         const printContent = printContainer.innerHTML;
         const printWindow = window.open('', '_blank');
+        
         printWindow.document.write(`
+            <!DOCTYPE html>
             <html>
             <head>
                 <title>Print Receipt - ${patient.patient_id}</title>
                 <style>
                     @media print {
                         body { margin: 0; padding: 0; }
+                        .no-print { display: none !important; }
+                    }
+                    body { 
+                        font-family: Arial, sans-serif; 
+                        margin: 0; 
+                        padding: 10px;
                     }
                 </style>
             </head>
@@ -943,16 +1111,20 @@ async function printReceipt(patientId) {
                 ${printContent}
                 <script>
                     window.onload = function() {
-                        window.print();
-                        window.onafterprint = function() {
-                            window.close();
-                        };
+                        setTimeout(function() { 
+                            window.print(); 
+                            window.onafterprint = function() { 
+                                window.close(); 
+                            };
+                        }, 500);
                     };
                 <\/script>
             </body>
             </html>
         `);
+        
         printWindow.document.close();
+        
     } catch (error) {
         console.error('Error printing receipt:', error);
         alert('❌ Error printing receipt: ' + error.message);

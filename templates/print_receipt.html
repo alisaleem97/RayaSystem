@@ -160,15 +160,17 @@
     
     <div class="receipt-container">
         <!-- Header -->
-        <div class="receipt-header">
-            <div class="lab-name">
-                {{ lab_info.lab_name if lab_info and lab_info.lab_name else 'NexLab Medical Center' }}
-            </div>
-            <div class="lab-info">
-                {{ lab_info.lab_address if lab_info and lab_info.lab_address else 'Lab Address' }}<br>
-                {{ lab_info.lab_phone_1 if lab_info and lab_info.lab_phone_1 else 'Phone: +123456789' }}
-            </div>
-        </div>
+        <!-- Header - UPDATED: No hardcoded fallbacks -->
+<div class="receipt-header">
+    <div class="lab-name">
+        {{ lab_info.lab_name }}
+    </div>
+    <div class="lab-info">
+        {% if lab_info.lab_address %}{{ lab_info.lab_address }}<br>{% endif %}
+        {% if lab_info.lab_phone_1 %}{{ lab_info.lab_phone_1 }}{% endif %}
+        {% if lab_info.lab_phone_2 %} | {{ lab_info.lab_phone_2 }}{% endif %}
+    </div>
+</div>
         
         <!-- Barcode Section -->
         <div class="barcode-section">
@@ -236,17 +238,35 @@
         </div>
         
         <!-- Totals -->
-        <div class="totals">
-            {% set total = (orders | sum(attribute='test.price') if orders and orders|length > 0 else 0) %}
-            <div class="total-row">
-                <span class="total-label">Total:</span>
-                <span class="total-amount">${{ "%.2f"|format(total) }}</span>
-            </div>
-            {% if patient and patient.is_outlab %}
-            <div class="total-row">
-                <span class="total-label">Outlab:</span>
-                <span>Yes</span>
-            </div>
+        <!-- Totals - UPDATED: Include all financial fields -->
+<div class="totals">
+    <div class="total-row">
+        <span class="total-label">Total:</span>
+        <span class="total-amount">${{ "%.2f"|format(total) }}</span>
+    </div>
+    {% if discount_amount and discount_amount > 0 %}
+    <div class="total-row">
+        <span>Discount:</span>
+        <span>-${{ "%.2f"|format(discount_amount) }}</span>
+    </div>
+    {% endif %}
+    <div class="total-row">
+        <span>Paid:</span>
+        <span>${{ "%.2f"|format(received_amount) }}</span>
+    </div>
+    {% if remaining_amount and remaining_amount > 0 %}
+    <div class="total-row" style="color: #dc2626; font-weight: bold;">
+        <span>Remaining:</span>
+        <span>${{ "%.2f"|format(remaining_amount) }}</span>
+    </div>
+    {% endif %}
+    {% if patient and patient.is_outlab %}
+    <div class="total-row">
+        <span>Outlab:</span>
+        <span>Yes</span>
+    </div>
+    {% endif %}
+</div>
             {% endif %}
         </div>
         

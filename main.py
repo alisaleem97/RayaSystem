@@ -1401,6 +1401,63 @@ async def update_lab_info(request: Request, lab_name: str = Form(...), lab_title
     except Exception as e:
         session.rollback()
         return RedirectResponse(url=f"/lab-info?error={str(e).replace(' ', '%20')}", status_code=status.HTTP_303_SEE_OTHER)
+# ===========================
+# LAB INFO API ENDPOINT (JSON) - FOR FRONTEND PRINTING
+# ===========================
+@app.get("/api/lab-info")
+def get_lab_info_api(session: Session = Depends(get_session)):
+    """Return lab branding data as JSON for frontend/printing"""
+    lab_info = session.exec(select(LabInfo).limit(1)).first()
+    if lab_info:
+        return {
+            "success": True,
+            "lab_info": {
+                "lab_name": lab_info.lab_name or "NexLab Medical Center",
+                "lab_title": lab_info.lab_title or "Medical Laboratory",
+                "lab_address": lab_info.lab_address or "",
+                "lab_phone_1": lab_info.lab_phone_1 or "",
+                "lab_phone_2": lab_info.lab_phone_2 or "",
+                "lab_email": lab_info.lab_email or "",
+                "lab_website": lab_info.lab_website or "",
+                "lab_currency": lab_info.lab_currency or "$",  # ✅ NEW
+                "first_doctor_name": lab_info.first_doctor_name or "",
+                "second_doctor_name": lab_info.second_doctor_name or "",
+                "lab_note_1": lab_info.lab_note_1 or "",
+                "lab_note_2": lab_info.lab_note_2 or "",
+                "lab_logo": lab_info.lab_logo or "",
+                "lab_qr_1": lab_info.lab_qr_1 or "",
+                "lab_qr_2": lab_info.lab_qr_2 or "",
+                "lab_stamp_1": lab_info.lab_stamp_1 or "",
+                "lab_stamp_2": lab_info.lab_stamp_2 or "",
+                "lab_signature_1": lab_info.lab_signature_1 or "",
+                "lab_signature_2": lab_info.lab_signature_2 or "",
+            }
+        }
+    # Return defaults if no lab info configured
+    return {
+        "success": True,
+        "lab_info": {
+            "lab_name": "NexLab Medical Center",
+            "lab_title": "Medical Laboratory",
+            "lab_address": "",
+            "lab_phone_1": "",
+            "lab_phone_2": "",
+            "lab_email": "",
+            "lab_website": "",
+            "lab_currency": "$",
+            "first_doctor_name": "",
+            "second_doctor_name": "",
+            "lab_note_1": "",
+            "lab_note_2": "",
+            "lab_logo": "",
+            "lab_qr_1": "",
+            "lab_qr_2": "",
+            "lab_stamp_1": "",
+            "lab_stamp_2": "",
+            "lab_signature_1": "",
+            "lab_signature_2": "",
+        }
+    }
 
 # ===========================
 # PATIENT REGISTRATION ROUTES

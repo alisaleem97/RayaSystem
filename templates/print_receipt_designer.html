@@ -644,20 +644,49 @@
             remain: 0.00
         };
         
-        // Lab info for preview
-        let labInfo = {
+        // Replace the hardcoded labInfo object with this:
+let labInfo = {}; // Will be populated from API
+
+// Fetch real lab info on page load
+async function loadLabInfoForPreview() {
+    try {
+        const response = await fetch('/api/lab-info');
+        const result = await response.json();
+        if (result.success && result.lab_info) {
+            labInfo = result.lab_info;
+            // Re-render any existing elements that use lab info
+            document.querySelectorAll('.design-element').forEach(el => {
+                const elementId = parseInt(el.id.split('-')[1]);
+                const element = designElements.find(e => e.id === elementId);
+                if (element && element.type.startsWith('lab_')) {
+                    renderElement(element); // Re-render with real data
+                }
+            });
+        }
+    } catch (error) {
+        console.warn('Could not load lab info for preview:', error);
+        // Fallback to defaults
+        labInfo = {
             lab_name: 'NexLab Medical Center',
             lab_title: 'Medical Laboratory',
-            lab_address: '123 Health Street, Medical District',
-            lab_phone_1: '+964 780 123 4567',
-            lab_phone_2: '+964 770 987 6543',
-            lab_email: 'info@nexlab.com',
-            lab_website: 'www.nexlab.com',
-            first_doctor_name: 'Dr. Ahmed Hassan',
-            second_doctor_name: 'Dr. Sarah Ali',
-            lab_note_1: 'Open 24/7',
-            lab_note_2: 'Emergency services available'
+            lab_address: 'Lab Address',
+            lab_phone_1: '+123456789',
+            lab_phone_2: '',
+            lab_email: '',
+            lab_website: '',
+            first_doctor_name: '',
+            second_doctor_name: '',
+            lab_note_1: '',
+            lab_note_2: ''
         };
+    }
+}
+
+// Call on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadLabInfoForPreview();
+    // ... existing loadDesignLocal() call
+});
 
         // Initialize drag and drop
         document.querySelectorAll('.element-item').forEach(item => {
