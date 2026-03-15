@@ -18,7 +18,7 @@ from models import (
     User, Patient, TestCatalog, Order, Result, Parameter, Department, Device,
     SampleType, ReportNote, TestDefinition, TestDevice, TestParameter, AuditLog,
     Formula, FormulaItem, TestRange, TestResultType, Package, PackageTest,
-    Partner, Province, Region, LabInfo, PatientVisit, PrintTemplate
+    Partner, Province, Region, LabInfo, PatientVisit, PrintTemplate,
 )
 
 # Setup templates
@@ -31,7 +31,6 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # ===========================
 # HELPER FUNCTIONS
 # ===========================
-
 def calculate_age(dob: datetime) -> int:
     """Calculate age from date of birth"""
     today = datetime.today()
@@ -80,13 +79,11 @@ def save_uploaded_file(file, filename: str) -> str:
 # ===========================
 # BARCODE GENERATOR (LOCAL) - 100% OFFLINE
 # ===========================
-
 def generate_barcode_base64(patient_id: str) -> str:
     """Generate linear barcode (Code128) as base64 encoded image - 100% OFFLINE"""
     try:
         from barcode import Code128
         from barcode.writer import ImageWriter
-        
         print(f"🔍 Starting barcode generation for: {patient_id}")
         
         # Create barcode
@@ -106,12 +103,10 @@ def generate_barcode_base64(patient_id: str) -> str:
             'quiet_zone': 6.5,
             'write_text': True,
         })
-        
         print(f"✅ Barcode saved to: {filepath}")
         
         # Check if file exists (try with and without .png extension)
         png_path = filepath if filepath.endswith('.png') else filepath + '.png'
-        
         if not os.path.exists(png_path):
             # Try to find the file
             for ext in ['.png', '']:
@@ -129,24 +124,23 @@ def generate_barcode_base64(patient_id: str) -> str:
         
         with open(png_path, 'rb') as f:
             barcode_base64 = base64.b64encode(f.read()).decode()
-        
         print(f"✅ Base64 length: {len(barcode_base64)} characters")
         
         # Delete temporary file
         if os.path.exists(png_path):
             os.remove(png_path)
-            print(f"✅ Temporary file deleted")
-        
+        print(f"✅ Temporary file deleted")
         print(f"✅ Barcode generated successfully for {patient_id}")
-        return f"data:image/png;base64,{barcode_base64}"
         
+        return f"data:image/png;base64,{barcode_base64}"
+    
     except ImportError as e:
         print(f"❌ IMPORT ERROR: python-barcode library not found!")
         print(f"❌ Error: {e}")
         print(f"💡 Run: pip install python-barcode pillow")
         # Fallback to external API
         return f"https://bwipjs-api.metafloor.com/?bcid=code128&text={patient_id}&scale=3&height=10&includetext"
-        
+    
     except Exception as e:
         print(f"❌ GENERATION ERROR: {type(e).__name__}: {e}")
         import traceback
@@ -157,7 +151,6 @@ def generate_barcode_base64(patient_id: str) -> str:
 # ===========================
 # APP LIFESPAN
 # ===========================
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
@@ -178,14 +171,19 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan)
+# ===========================
+# STATIC FILE SERVING (For uploaded images)
+# ===========================
+from fastapi.staticfiles import StaticFiles
 
+# Mount the uploads directory to serve static files
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 # Add helper to templates
 templates.env.globals["calculate_age"] = calculate_age
 
 # ===========================
 # PAGE ROUTES (HTML)
 # ===========================
-
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, session: Session = Depends(get_session)):
     patients = session.exec(select(Patient).order_by(Patient.created_at.desc())).all()
@@ -217,7 +215,6 @@ def logout():
 # ===========================
 # DEPARTMENTS ROUTES
 # ===========================
-
 @app.get("/departments", response_class=HTMLResponse)
 def departments_page(request: Request, session: Session = Depends(get_session)):
     departments = session.exec(select(Department).order_by(Department.id.asc())).all()
@@ -286,7 +283,6 @@ def delete_department(dept_id: int, request: Request, session: Session = Depends
 # ===========================
 # SAMPLE TYPES ROUTES
 # ===========================
-
 @app.get("/sample-types", response_class=HTMLResponse)
 def sample_types_page(request: Request, session: Session = Depends(get_session)):
     sample_types = session.exec(select(SampleType).order_by(SampleType.id.asc())).all()
@@ -355,7 +351,6 @@ def delete_sample_type(sample_id: int, request: Request, session: Session = Depe
 # ===========================
 # DEVICES ROUTES
 # ===========================
-
 @app.get("/devices", response_class=HTMLResponse)
 def devices_page(request: Request, session: Session = Depends(get_session)):
     devices = session.exec(select(Device).order_by(Device.id.asc())).all()
@@ -432,7 +427,6 @@ def delete_device(device_id: int, request: Request, session: Session = Depends(g
 # ===========================
 # PARAMETERS ROUTES
 # ===========================
-
 @app.get("/parameters", response_class=HTMLResponse)
 def parameters_page(request: Request, session: Session = Depends(get_session)):
     parameters = session.exec(select(Parameter).order_by(Parameter.id.asc())).all()
@@ -503,7 +497,6 @@ def delete_parameter(param_id: int, request: Request, session: Session = Depends
 # ===========================
 # REPORT NOTES ROUTES
 # ===========================
-
 @app.get("/report-notes", response_class=HTMLResponse)
 def report_notes_page(request: Request, session: Session = Depends(get_session)):
     report_notes = session.exec(select(ReportNote).order_by(ReportNote.id.asc())).all()
@@ -572,7 +565,6 @@ def delete_report_note(note_id: int, request: Request, session: Session = Depend
 # ===========================
 # TEST DEFINITION ROUTES
 # ===========================
-
 @app.get("/tests", response_class=HTMLResponse)
 def tests_page(request: Request, session: Session = Depends(get_session)):
     tests = session.exec(select(TestDefinition).order_by(TestDefinition.id.asc())).all()
@@ -711,7 +703,6 @@ def delete_test(test_id: int, request: Request, session: Session = Depends(get_s
 # ===========================
 # FORMULA ROUTES
 # ===========================
-
 @app.get("/formulas", response_class=HTMLResponse)
 def formulas_page(request: Request, session: Session = Depends(get_session)):
     formulas = session.exec(select(Formula).order_by(Formula.id.asc())).all()
@@ -796,7 +787,6 @@ def delete_formula(formula_id: int, request: Request, session: Session = Depends
 # ===========================
 # TEST RANGE ROUTES
 # ===========================
-
 @app.get("/test-ranges", response_class=HTMLResponse)
 def test_ranges_page(request: Request, session: Session = Depends(get_session)):
     ranges = session.exec(select(TestRange).order_by(TestRange.id.asc())).all()
@@ -933,7 +923,6 @@ def delete_test_range(range_id: int, request: Request, session: Session = Depend
 # ===========================
 # TEST RESULT TYPE ROUTES
 # ===========================
-
 @app.get("/test-result-types", response_class=HTMLResponse)
 def test_result_types_page(request: Request, session: Session = Depends(get_session)):
     result_types = session.exec(select(TestResultType).order_by(TestResultType.id.asc())).all()
@@ -1013,7 +1002,6 @@ def delete_test_result_type(result_type_id: int, request: Request, session: Sess
 # ===========================
 # PACKAGE ROUTES
 # ===========================
-
 @app.get("/packages", response_class=HTMLResponse)
 def packages_page(request: Request, session: Session = Depends(get_session)):
     packages = session.exec(select(Package).order_by(Package.id.asc())).all()
@@ -1051,7 +1039,7 @@ def create_package(package_name: str = Form(...), package_short_name: str = Form
             for test_id in test_id_list:
                 link = PackageTest(package_id=new_package.id, test_id=test_id)
                 session.add(link)
-            session.commit()
+        session.commit()
         create_audit_log(session, "package", new_package.id, "create", current_user, new_values=model_to_dict(new_package))
         return RedirectResponse(url="/packages?success=Package saved successfully!", status_code=status.HTTP_303_SEE_OTHER)
     except Exception as e:
@@ -1114,7 +1102,6 @@ def delete_package(package_id: int, request: Request, session: Session = Depends
 # ===========================
 # PARTNER ROUTES
 # ===========================
-
 @app.get("/partners", response_class=HTMLResponse)
 def partners_page(request: Request, session: Session = Depends(get_session)):
     partners = session.exec(select(Partner).order_by(Partner.id.asc())).all()
@@ -1190,7 +1177,6 @@ def delete_partner(partner_id: int, request: Request, session: Session = Depends
 # ===========================
 # PROVINCE ROUTES
 # ===========================
-
 @app.get("/provinces", response_class=HTMLResponse)
 def provinces_page(request: Request, session: Session = Depends(get_session)):
     provinces = session.exec(select(Province).order_by(Province.id.asc())).all()
@@ -1258,7 +1244,6 @@ def delete_province(province_id: int, request: Request, session: Session = Depen
 # ===========================
 # REGION ROUTES
 # ===========================
-
 @app.get("/regions", response_class=HTMLResponse)
 def regions_page(request: Request, session: Session = Depends(get_session)):
     regions = session.exec(select(Region).order_by(Region.id.asc())).all()
@@ -1328,7 +1313,6 @@ def delete_region(region_id: int, request: Request, session: Session = Depends(g
 # ===========================
 # LAB INFO ROUTES
 # ===========================
-
 @app.get("/lab-info", response_class=HTMLResponse)
 def lab_info_page(request: Request, session: Session = Depends(get_session)):
     lab_info = session.exec(select(LabInfo).limit(1)).first()
@@ -1401,68 +1385,10 @@ async def update_lab_info(request: Request, lab_name: str = Form(...), lab_title
     except Exception as e:
         session.rollback()
         return RedirectResponse(url=f"/lab-info?error={str(e).replace(' ', '%20')}", status_code=status.HTTP_303_SEE_OTHER)
-# ===========================
-# LAB INFO API ENDPOINT (JSON) - FOR FRONTEND PRINTING
-# ===========================
-@app.get("/api/lab-info")
-def get_lab_info_api(session: Session = Depends(get_session)):
-    """Return lab branding data as JSON for frontend/printing"""
-    lab_info = session.exec(select(LabInfo).limit(1)).first()
-    if lab_info:
-        return {
-            "success": True,
-            "lab_info": {
-                "lab_name": lab_info.lab_name or "NexLab Medical Center",
-                "lab_title": lab_info.lab_title or "Medical Laboratory",
-                "lab_address": lab_info.lab_address or "",
-                "lab_phone_1": lab_info.lab_phone_1 or "",
-                "lab_phone_2": lab_info.lab_phone_2 or "",
-                "lab_email": lab_info.lab_email or "",
-                "lab_website": lab_info.lab_website or "",
-                "lab_currency": lab_info.lab_currency or "$",  # ✅ NEW
-                "first_doctor_name": lab_info.first_doctor_name or "",
-                "second_doctor_name": lab_info.second_doctor_name or "",
-                "lab_note_1": lab_info.lab_note_1 or "",
-                "lab_note_2": lab_info.lab_note_2 or "",
-                "lab_logo": lab_info.lab_logo or "",
-                "lab_qr_1": lab_info.lab_qr_1 or "",
-                "lab_qr_2": lab_info.lab_qr_2 or "",
-                "lab_stamp_1": lab_info.lab_stamp_1 or "",
-                "lab_stamp_2": lab_info.lab_stamp_2 or "",
-                "lab_signature_1": lab_info.lab_signature_1 or "",
-                "lab_signature_2": lab_info.lab_signature_2 or "",
-            }
-        }
-    # Return defaults if no lab info configured
-    return {
-        "success": True,
-        "lab_info": {
-            "lab_name": "NexLab Medical Center",
-            "lab_title": "Medical Laboratory",
-            "lab_address": "",
-            "lab_phone_1": "",
-            "lab_phone_2": "",
-            "lab_email": "",
-            "lab_website": "",
-            "lab_currency": "$",
-            "first_doctor_name": "",
-            "second_doctor_name": "",
-            "lab_note_1": "",
-            "lab_note_2": "",
-            "lab_logo": "",
-            "lab_qr_1": "",
-            "lab_qr_2": "",
-            "lab_stamp_1": "",
-            "lab_stamp_2": "",
-            "lab_signature_1": "",
-            "lab_signature_2": "",
-        }
-    }
 
 # ===========================
 # PATIENT REGISTRATION ROUTES
 # ===========================
-
 @app.get("/patient-registration", response_class=HTMLResponse)
 def patient_registration_page(request: Request, session: Session = Depends(get_session)):
     provinces = session.exec(select(Province).where(Province.is_active == True)).all()
@@ -1508,6 +1434,9 @@ def generate_patient_id_api(session: Session = Depends(get_session)):
     except Exception as e:
         return {"error": str(e)}
 
+# ===========================
+# ✅ UPDATED: PATIENT REGISTRATION CREATE (WITH PRICE SNAPSHOT)
+# ===========================
 @app.post("/patient-registration/create")
 async def create_patient_registration(
     request: Request,
@@ -1549,8 +1478,10 @@ async def create_patient_registration(
         
         # Apply discount
         final_total = total_price
+        discount_amt = float(discount_amount) if discount_amount else 0.0
         if discount_percentage:
             final_total = total_price * (1 - discount_percentage / 100)
+            discount_amt = total_price - final_total
         elif discount_amount:
             final_total = total_price - float(discount_amount)
         
@@ -1558,6 +1489,7 @@ async def create_patient_registration(
         received = float(received_amount) if received_amount else 0.0
         remaining = max(0, final_total - received)
         
+        # Create patient
         new_patient = Patient(
             patient_id=patient_id,
             full_name=full_name,
@@ -1598,35 +1530,67 @@ async def create_patient_registration(
             patient_id=new_patient.id,
             created_by=current_user.id if current_user else None,
             received_amount=received,
-            discount_amount=float(discount_amount) if discount_amount else 0.0,
+            discount_amount=discount_amt,
             remaining_amount=remaining
         )
         session.add(new_visit)
         session.commit()
         session.refresh(new_visit)
         
-        # Process orders
+        # ✅ Calculate discount ratio for proportional distribution
+        discount_ratio = discount_amt / total_price if total_price > 0 else 0
+        
+        # Process orders WITH PRICE SNAPSHOT
         for item in items:
             if item['type'] == 'test':
+                # ✅ CAPTURE PRICE AT ORDER TIME (audit compliance)
+                test = session.get(TestDefinition, item['id'])
+                unit_price = test.price if test else 0.0
+                
+                # ✅ Calculate proportional discount for this order
+                order_discount = unit_price * discount_ratio
+                final_price = unit_price - order_discount
+                
                 order = Order(
                     order_number=f"ORD-{visit_id}-{item['id']}",
                     patient_id=new_patient.id,
                     test_id=item['id'],
                     visit_id=new_visit.id,
-                    ordered_by=current_user.id if current_user else None
+                    ordered_by=current_user.id if current_user else None,
+                    unit_price=unit_price,        # ✅ SNAPSHOT
+                    discount_amount=order_discount,  # ✅ SNAPSHOT
+                    final_price=final_price
+               # ✅ SNAPSHOT
                 )
                 session.add(order)
+                
             elif item['type'] == 'package':
+                package = session.get(Package, item['id'])
+                package_name = package.package_name if package else ''
+                package_price = package.price if package else 0.0
                 package_tests = session.exec(
                     select(PackageTest).where(PackageTest.package_id == item['id'])
                 ).all()
+                num_tests = len(package_tests)
+                price_per_test = package_price / num_tests if num_tests > 0 else 0.
                 for pt in package_tests:
+                    test = session.get(TestDefinition, pt.test_id)
+                    unit_price = price_per_test
+                    
+                    # ✅ Calculate proportional discount for this order
+                    order_discount = unit_price * discount_ratio
+                    final_price = unit_price - order_discount
+                    
                     order = Order(
                         order_number=f"ORD-{visit_id}-{pt.test_id}",
                         patient_id=new_patient.id,
                         test_id=pt.test_id,
                         visit_id=new_visit.id,
-                        ordered_by=current_user.id if current_user else None
+                        ordered_by=current_user.id if current_user else None,
+                        unit_price=unit_price,        # ✅ SNAPSHOT
+                        discount_amount=order_discount,  # ✅ SNAPSHOT
+                        final_price=final_price,
+                        package_name=package_name       # ✅ SNAPSHOT
                     )
                     session.add(order)
         
@@ -1639,6 +1603,8 @@ async def create_patient_registration(
     except Exception as e:
         session.rollback()
         print(f"❌ Error creating patient: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return RedirectResponse(
             url=f"/patient-registration?error={str(e).replace(' ', '%20')}",
             status_code=status.HTTP_303_SEE_OTHER
@@ -1647,7 +1613,6 @@ async def create_patient_registration(
 # ===========================
 # PRINT DESIGNER ROUTES
 # ===========================
-
 @app.get("/print-barcode-designer", response_class=HTMLResponse)
 def print_barcode_designer(request: Request):
     return templates.TemplateResponse("print_barcode_designer.html", {"request": request})
@@ -1659,7 +1624,6 @@ def print_receipt_designer(request: Request):
 # ===========================
 # PRINT TEMPLATE API ROUTES
 # ===========================
-
 @app.post("/api/print-template/save")
 async def save_print_template(request: Request, session: Session = Depends(get_session)):
     try:
@@ -1709,9 +1673,99 @@ def load_print_template(template_name: str, session: Session = Depends(get_sessi
         return {"success": False, "error": str(e)}
 
 # ===========================
+# ✅ NEW: PATIENT ORDERS API (FOR RECEIPT WITH PRICE SNAPSHOT)
+# ===========================
+@app.get("/api/patient-orders/{patient_id}")
+def get_patient_orders_api(patient_id: str, session: Session = Depends(get_session)):
+    """Get patient orders with price snapshot for receipt printing"""
+    try:
+        patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
+        if not patient:
+            return {"success": False, "error": "Patient not found"}
+        
+        orders = session.exec(select(Order).where(Order.patient_id == patient.id)).all()
+        
+        orders_data = []
+        for order in orders:
+            test = session.get(TestDefinition, order.test_id)
+            orders_data.append({
+                "order_id": order.id,
+                "order_number": order.order_number,
+                "test_id": order.test_id,
+                "test_name": test.test_name if test else 'Unknown',
+                "package_name": order.package_name or None,  # ✅ ADD THIS LINE
+                # ✅ PRICE SNAPSHOT (audit compliance)
+                "unit_price": order.unit_price or (test.price if test else 0),
+                "discount_amount": order.discount_amount or 0,
+                "final_price": order.final_price or (order.unit_price or 0),
+                "status": order.status,
+                "order_date": order.order_date.isoformat() if order.order_date else None
+            })
+        
+        return {"success": True, "orders": orders_data}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+# ===========================
+# ✅ NEW: LAB INFO API (JSON FOR FRONTEND)
+# ===========================
+@app.get("/api/lab-info")
+def get_lab_info_api(session: Session = Depends(get_session)):
+    """Return lab branding data as JSON for frontend/printing"""
+    lab_info = session.exec(select(LabInfo).limit(1)).first()
+    if lab_info:
+        return {
+            "success": True,
+            "lab_info": {
+                "lab_name": lab_info.lab_name or "NexLab Medical Center",
+                "lab_title": lab_info.lab_title or "Medical Laboratory",
+                "lab_address": lab_info.lab_address or "",
+                "lab_phone_1": lab_info.lab_phone_1 or "",
+                "lab_phone_2": lab_info.lab_phone_2 or "",
+                "lab_email": lab_info.lab_email or "",
+                "lab_website": lab_info.lab_website or "",
+                "lab_currency": lab_info.lab_currency or "$",
+                "first_doctor_name": lab_info.first_doctor_name or "",
+                "second_doctor_name": lab_info.second_doctor_name or "",
+                "lab_note_1": lab_info.lab_note_1 or "",
+                "lab_note_2": lab_info.lab_note_2 or "",
+                "lab_logo": lab_info.lab_logo or "",
+                "lab_qr_1": lab_info.lab_qr_1 or "",
+                "lab_qr_2": lab_info.lab_qr_2 or "",
+                "lab_stamp_1": lab_info.lab_stamp_1 or "",
+                "lab_stamp_2": lab_info.lab_stamp_2 or "",
+                "lab_signature_1": lab_info.lab_signature_1 or "",
+                "lab_signature_2": lab_info.lab_signature_2 or "",
+            }
+        }
+    return {
+        "success": True,
+        "lab_info": {
+            "lab_name": "NexLab Medical Center",
+            "lab_title": "Medical Laboratory",
+            "lab_address": "",
+            "lab_phone_1": "",
+            "lab_phone_2": "",
+            "lab_email": "",
+            "lab_website": "",
+            "lab_currency": "$",
+            "first_doctor_name": "",
+            "second_doctor_name": "",
+            "lab_note_1": "",
+            "lab_note_2": "",
+            "lab_logo": "",
+            "lab_qr_1": "",
+            "lab_qr_2": "",
+            "lab_stamp_1": "",
+            "lab_stamp_2": "",
+            "lab_signature_1": "",
+            "lab_signature_2": "",
+        }
+    }
+
+# ===========================
 # PATIENT API ENDPOINTS (WITH ACCOUNTING DATA)
 # ===========================
-
 @app.get("/api/patient/{patient_id}")
 def get_patient_api(patient_id: str, session: Session = Depends(get_session)):
     """Get patient data by patient_id with accounting info AND tests grouped by sample type"""
@@ -1735,7 +1789,6 @@ def get_patient_api(patient_id: str, session: Session = Depends(get_session)):
                     sample_type = session.get(SampleType, order.test.sample_type_id)
                     if sample_type:
                         sample_type_name = sample_type.sample_name
-                
                 if sample_type_name not in tests_by_sample_type:
                     tests_by_sample_type[sample_type_name] = []
                 tests_by_sample_type[sample_type_name].append(order.test.test_name)
@@ -1749,8 +1802,8 @@ def get_patient_api(patient_id: str, session: Session = Depends(get_session)):
         discount_amount = visits[0].discount_amount if visits else 0.0
         remaining_amount = visits[0].remaining_amount if visits else 0.0
         
-        # Calculate total from orders
-        total_amount = sum([float(order.test.price) if order.test and order.test.price else 0 for order in orders])
+        # Calculate total from orders (using snapshot prices)
+        total_amount = sum([float(order.final_price) if order.final_price else 0 for order in orders])
         
         return {
             "patient_id": patient.patient_id,
@@ -1763,6 +1816,7 @@ def get_patient_api(patient_id: str, session: Session = Depends(get_session)):
             "tests": test_names,  # Simple array for receipt
             "tests_by_sample_type": tests_by_sample_type,  # ✅ Grouped by sample type (for barcode)
             "visit_id": visit_id,
+            "visit_date": visits[0].visit_date.isoformat() if visits and visits[0].visit_date else None,
             # ✅ Accounting information (for receipt)
             "total_amount": round(total_amount, 2),
             "discount_amount": round(discount_amount, 2),
@@ -1774,10 +1828,10 @@ def get_patient_api(patient_id: str, session: Session = Depends(get_session)):
         import traceback
         traceback.print_exc()
         return {"error": str(e)}
+
 # ===========================
 # BARCODE API FOR JAVASCRIPT
 # ===========================
-
 @app.get("/api/barcode/{patient_id}")
 def get_barcode_api(patient_id: str, session: Session = Depends(get_session)):
     """Return barcode as base64 for JavaScript (works offline)"""
@@ -1787,7 +1841,6 @@ def get_barcode_api(patient_id: str, session: Session = Depends(get_session)):
 # ===========================
 # PRINT ROUTES (WITH LOCAL BARCODE)
 # ===========================
-
 @app.get("/print-barcode/{patient_id}", response_class=HTMLResponse)
 def print_barcode(patient_id: str, request: Request, session: Session = Depends(get_session)):
     patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
@@ -1816,7 +1869,6 @@ def print_receipt(patient_id: str, request: Request, session: Session = Depends(
 # ===========================
 # GENERAL API ENDPOINTS
 # ===========================
-
 @app.get("/api/patients")
 def list_patients_api(session: Session = Depends(get_session)):
     return session.exec(select(Patient)).all()

@@ -1,287 +1,335 @@
-<!-- templates/print_receipt.html -->
+<!-- templates/print_receipt_designer.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Print Receipt - {{ patient.patient_id if patient else 'NexLab' }}</title>
-    <style>
-        @page {
-            size: 80mm auto;
-            margin: 0;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Arial', sans-serif;
-            font-size: 12px;
-            background: white;
-            padding: 10px;
-        }
-        
-        .receipt-container {
-            width: 100%;
-            max-width: 300px;
-            margin: 0 auto;
-            border: 1px dashed #000;
-            padding: 10px;
-        }
-        
-        .receipt-header {
-            text-align: center;
-            border-bottom: 2px solid #000;
-            padding-bottom: 10px;
-            margin-bottom: 10px;
-        }
-        
-        .lab-name {
-            font-size: 16px;
-            font-weight: bold;
-            color: #000;
-            margin-bottom: 5px;
-        }
-        
-        .lab-info {
-            font-size: 10px;
-            color: #666;
-            line-height: 1.4;
-        }
-        
-        .barcode-section {
-            text-align: center;
-            margin: 10px 0;
-            padding: 10px 0;
-            border-bottom: 1px solid #ddd;
-        }
-        
-        .barcode-image {
-            max-width: 100%;
-            height: auto;
-            margin: 5px 0;
-        }
-        
-        .patient-info {
-            margin-bottom: 15px;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 10px;
-        }
-        
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 3px 0;
-            font-size: 11px;
-        }
-        
-        .info-label {
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .tests-list {
-            margin-bottom: 15px;
-        }
-        
-        .tests-title {
-            font-weight: bold;
-            margin-bottom: 5px;
-            font-size: 12px;
-        }
-        
-        .test-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 5px 0;
-            border-bottom: 1px dotted #ddd;
-            font-size: 11px;
-        }
-        
-        .totals {
-            border-top: 2px solid #000;
-            padding-top: 10px;
-            margin-top: 10px;
-        }
-        
-        .total-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 3px 0;
-            font-size: 12px;
-        }
-        
-        .total-label {
-            font-weight: bold;
-        }
-        
-        .total-amount {
-            font-weight: bold;
-            font-size: 14px;
-        }
-        
-        .receipt-footer {
-            text-align: center;
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px dashed #000;
-            font-size: 10px;
-            color: #666;
-        }
-        
-        .print-btn {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            padding: 10px 20px;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        
-        @media print {
-            .print-btn {
-                display: none !important;
-            }
-            body {
-                padding: 0;
-            }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Receipt Designer - NexLab</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+.designer-container { display: grid; grid-template-columns: 320px 1fr 320px; gap: 20px; padding: 20px; height: calc(100vh - 80px); }
+.panel { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 20px; overflow-y: auto; }
+.element-item { padding: 12px 16px; margin: 8px 0; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border-radius: 8px; cursor: grab; display: flex; align-items: center; justify-content: space-between; transition: all 0.3s; }
+.element-item:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); }
+.element-item.shape-item { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+.element-item.text-item { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+.element-item.image-item { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
+.preview-area { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 20px; display: flex; flex-direction: column; }
+.paper-preview { background: white; border: 2px dashed #10b981; position: relative; margin: 20px auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15); overflow: hidden; min-height: 200mm; }
+.design-element { position: absolute; padding: 8px 12px; background: rgba(16, 185, 129, 0.1); border: 2px solid #10b981; border-radius: 6px; cursor: move; min-width: 100px; min-height: 30px; user-select: none; }
+.design-element:hover { background: rgba(16, 185, 129, 0.2); }
+.design-element.selected { border-color: #3b82f6; background: rgba(59, 130, 246, 0.2); }
+.design-element .resize-handle { position: absolute; bottom: -4px; right: -4px; width: 12px; height: 12px; background: #3b82f6; border-radius: 50%; cursor: se-resize; }
+.design-element .delete-btn { position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; background: #ef4444; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; }
+.properties-panel { background: #f9fafb; padding: 12px; border-radius: 8px; margin-top: 10px; }
+.property-group { margin-bottom: 12px; }
+.property-group label { display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 4px; }
+.property-group input, .property-group select { width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; }
+.property-group input[type="color"] { height: 36px; padding: 2px; }
+.property-group input[type="checkbox"] { margin-right: 5px; }
+.btn { padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.3s; border: none; display: inline-flex; align-items: center; gap: 8px; }
+.btn-primary { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); }
+.btn-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; }
+.btn-secondary { background: #f3f4f6; color: #374151; }
+.section-title { font-size: 16px; font-weight: 700; color: #1f2937; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb; }
+.element-category { margin-bottom: 20px; }
+.category-title { font-size: 13px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+@media print { body * { visibility: hidden; } .paper-preview, .paper-preview * { visibility: visible; } .paper-preview { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border: none; box-shadow: none; margin: 0; padding: 0; } .design-element { border: none; background: transparent; } .design-element .delete-btn, .design-element .resize-handle { display: none; } .no-print { display: none !important; } }
+</style>
 </head>
 <body>
-    <button class="print-btn" onclick="window.print()">🖨️ Print Receipt</button>
-    
-    <div class="receipt-container">
-        <!-- Header -->
-        <!-- Header - UPDATED: No hardcoded fallbacks -->
-<div class="receipt-header">
-    <div class="lab-name">
-        {{ lab_info.lab_name }}
-    </div>
-    <div class="lab-info">
-        {% if lab_info.lab_address %}{{ lab_info.lab_address }}<br>{% endif %}
-        {% if lab_info.lab_phone_1 %}{{ lab_info.lab_phone_1 }}{% endif %}
-        {% if lab_info.lab_phone_2 %} | {{ lab_info.lab_phone_2 }}{% endif %}
-    </div>
+<header class="bg-white shadow-sm px-6 py-4 flex justify-between items-center no-print">
+<h1 class="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent"><i class="fas fa-receipt mr-2"></i>Receipt Designer</h1>
+<div class="flex gap-3">
+<button onclick="saveDesign()" class="btn btn-success"><i class="fas fa-save"></i> Save Design</button>
+<button onclick="loadDesign()" class="btn btn-secondary"><i class="fas fa-download"></i> Load Design</button>
+<a href="/patient-registration" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
 </div>
-        
-        <!-- Barcode Section -->
-        <div class="barcode-section">
-            {% if barcode_data %}
-                <img class="barcode-image" src="{{ barcode_data }}" alt="Barcode" />
-            {% else %}
-                <img class="barcode-image" 
-                     src="https://bwipjs-api.metafloor.com/?bcid=code128&text={{ patient.patient_id if patient else '000000' }}&scale=3&height=10&includetext" 
-                     alt="Barcode" />
-            {% endif %}
-            <div style="font-size: 10px; font-family: monospace; margin-top: 5px;">
-                {{ patient.patient_id if patient else 'N/A' }}
-            </div>
-        </div>
-        
-        <!-- Patient Info -->
-        <div class="patient-info">
-            <div class="info-row">
-                <span class="info-label">Patient ID:</span>
-                <span>{{ patient.patient_id if patient else 'N/A' }}</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Name:</span>
-                <span>{{ patient.full_name if patient and patient.full_name else 'N/A' }}</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Gender:</span>
-                <span>{{ patient.gender|capitalize if patient and patient.gender else 'N/A' }}</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Age:</span>
-                <span>{{ patient.age if patient and patient.age else 'N/A' }} {{ patient.age_unit if patient and patient.age_unit else '' }}</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Phone:</span>
-                <span>{{ patient.phone_key if patient and patient.phone_key else '' }} {{ patient.phone_number if patient and patient.phone_number else '' }}</span>
-            </div>
-            {% if patient and patient.visits and patient.visits|length > 0 %}
-            <div class="info-row">
-                <span class="info-label">Visit ID:</span>
-                <span>{{ patient.visits[0].visit_id }}</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Date:</span>
-                <span>{{ patient.visits[0].visit_date.strftime('%Y-%m-%d %H:%M') if patient.visits[0].visit_date else 'N/A' }}</span>
-            </div>
-            {% endif %}
-        </div>
-        
-        <!-- Tests List -->
-        <div class="tests-list">
-            <div class="tests-title">Ordered Tests:</div>
-            {% if orders and orders|length > 0 %}
-                {% for order in orders %}
-                <div class="test-item">
-                    <span class="test-name">{{ order.test.test_name if order.test else 'Unknown Test' }}</span>
-                    <span class="test-price">${{ "%.2f"|format(order.test.price if order.test and order.test.price else 0) }}</span>
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="test-item">
-                    <span>No tests ordered</span>
-                </div>
-            {% endif %}
-        </div>
-        
-        <!-- Totals -->
-        <!-- Totals - UPDATED: Include all financial fields -->
-<div class="totals">
-    <div class="total-row">
-        <span class="total-label">Total:</span>
-        <span class="total-amount">${{ "%.2f"|format(total) }}</span>
-    </div>
-    {% if discount_amount and discount_amount > 0 %}
-    <div class="total-row">
-        <span>Discount:</span>
-        <span>-${{ "%.2f"|format(discount_amount) }}</span>
-    </div>
-    {% endif %}
-    <div class="total-row">
-        <span>Paid:</span>
-        <span>${{ "%.2f"|format(received_amount) }}</span>
-    </div>
-    {% if remaining_amount and remaining_amount > 0 %}
-    <div class="total-row" style="color: #dc2626; font-weight: bold;">
-        <span>Remaining:</span>
-        <span>${{ "%.2f"|format(remaining_amount) }}</span>
-    </div>
-    {% endif %}
-    {% if patient and patient.is_outlab %}
-    <div class="total-row">
-        <span>Outlab:</span>
-        <span>Yes</span>
-    </div>
-    {% endif %}
+</header>
+
+<div class="designer-container no-print">
+<!-- Left Panel: Available Elements -->
+<div class="panel">
+<h2 class="section-title">Available Elements</h2>
+
+<!-- Lab Information -->
+<div class="element-category">
+<div class="category-title"><i class="fas fa-hospital mr-2"></i>Laboratory Information</div>
+<div class="element-item" draggable="true" data-type="lab_name"><span><i class="fas fa-building mr-2"></i>Lab Name</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="lab_title"><span><i class="fas fa-tag mr-2"></i>Lab Title</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="lab_address"><span><i class="fas fa-map-marker-alt mr-2"></i>Lab Address</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="lab_phone_1"><span><i class="fas fa-phone mr-2"></i>Phone 1</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="lab_phone_2"><span><i class="fas fa-phone-alt mr-2"></i>Phone 2</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="lab_email"><span><i class="fas fa-envelope mr-2"></i>Email</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="lab_website"><span><i class="fas fa-globe mr-2"></i>Website</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="first_doctor_name"><span><i class="fas fa-user-md mr-2"></i>First Doctor</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="second_doctor_name"><span><i class="fas fa-user-md mr-2"></i>Second Doctor</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="lab_note_1"><span><i class="fas fa-sticky-note mr-2"></i>Lab Note 1</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="lab_note_2"><span><i class="fas fa-sticky-note mr-2"></i>Lab Note 2</span><i class="fas fa-plus"></i></div>
 </div>
-            {% endif %}
-        </div>
-        
-        <!-- Footer -->
-        <div class="receipt-footer">
-            Thank you for choosing us!<br>
-            {{ lab_info.lab_website if lab_info and lab_info.lab_website else 'www.nexlab.com' }}
-        </div>
-    </div>
+
+<!-- Lab Images (NEW) -->
+<div class="element-category">
+<div class="category-title"><i class="fas fa-image mr-2"></i>Lab Images</div>
+<div class="element-item image-item" draggable="true" data-type="lab_logo"><span><i class="fas fa-image mr-2"></i>Lab Logo</span><i class="fas fa-plus"></i></div>
+<div class="element-item image-item" draggable="true" data-type="lab_qr_1"><span><i class="fas fa-qrcode mr-2"></i>QR Code 1</span><i class="fas fa-plus"></i></div>
+<div class="element-item image-item" draggable="true" data-type="lab_qr_2"><span><i class="fas fa-qrcode mr-2"></i>QR Code 2</span><i class="fas fa-plus"></i></div>
+<div class="element-item image-item" draggable="true" data-type="lab_stamp_1"><span><i class="fas fa-stamp mr-2"></i>Stamp 1</span><i class="fas fa-plus"></i></div>
+<div class="element-item image-item" draggable="true" data-type="lab_stamp_2"><span><i class="fas fa-stamp mr-2"></i>Stamp 2</span><i class="fas fa-plus"></i></div>
+<div class="element-item image-item" draggable="true" data-type="lab_signature_1"><span><i class="fas fa-signature mr-2"></i>Signature 1</span><i class="fas fa-plus"></i></div>
+<div class="element-item image-item" draggable="true" data-type="lab_signature_2"><span><i class="fas fa-signature mr-2"></i>Signature 2</span><i class="fas fa-plus"></i></div>
+</div>
+
+<!-- Patient Information -->
+<div class="element-category">
+<div class="category-title"><i class="fas fa-user mr-2"></i>Patient Information</div>
+<div class="element-item" draggable="true" data-type="patient_name"><span><i class="fas fa-user mr-2"></i>Patient Name</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="patient_id"><span><i class="fas fa-id-card mr-2"></i>Patient ID</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="visit_id"><span><i class="fas fa-clipboard mr-2"></i>Visit ID</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="visit_date"><span><i class="fas fa-calendar mr-2"></i>Visit Date</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="patient_age"><span><i class="fas fa-birthday-cake mr-2"></i>Age</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="patient_gender"><span><i class="fas fa-venus-mars mr-2"></i>Gender</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="patient_phone"><span><i class="fas fa-phone mr-2"></i>Phone</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="sample_type"><span><i class="fas fa-tint mr-2"></i>Sample Type</span><i class="fas fa-plus"></i></div>
+</div>
+
+<!-- Tests & Packages -->
+<div class="element-category">
+<div class="category-title"><i class="fas fa-flask mr-2"></i>Tests & Packages</div>
+<div class="element-item" draggable="true" data-type="test_list_with_price"><span><i class="fas fa-list mr-2"></i>Tests List (with Price)</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="test_name"><span><i class="fas fa-vial mr-2"></i>Single Test Name</span><i class="fas fa-plus"></i></div>
+</div>
+
+<!-- Barcode -->
+<div class="element-category">
+<div class="category-title"><i class="fas fa-barcode mr-2"></i>Barcode</div>
+<div class="element-item" draggable="true" data-type="barcode_image"><span><i class="fas fa-barcode mr-2"></i>Barcode Image</span><i class="fas fa-plus"></i></div>
+</div>
+
+<!-- Accounting -->
+<div class="element-category">
+<div class="category-title"><i class="fas fa-calculator mr-2"></i>Accounting</div>
+<div class="element-item" draggable="true" data-type="total_amount"><span><i class="fas fa-dollar-sign mr-2"></i>Total Amount</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="discount"><span><i class="fas fa-percent mr-2"></i>Discount</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="paid_amount"><span><i class="fas fa-money-bill mr-2"></i>Paid Amount</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="remain_amount"><span><i class="fas fa-coins mr-2"></i>Remain Amount</span><i class="fas fa-plus"></i></div>
+</div>
+
+<!-- Shapes -->
+<div class="element-category">
+<div class="category-title"><i class="fas fa-shapes mr-2"></i>Shapes</div>
+<div class="element-item shape-item" draggable="true" data-type="shape_line"><span><i class="fas fa-minus mr-2"></i>Horizontal Line</span><i class="fas fa-plus"></i></div>
+<div class="element-item shape-item" draggable="true" data-type="shape_box"><span><i class="far fa-square mr-2"></i>Rectangle Box</span><i class="fas fa-plus"></i></div>
+<div class="element-item shape-item" draggable="true" data-type="shape_circle"><span><i class="far fa-circle mr-2"></i>Circle</span><i class="fas fa-plus"></i></div>
+</div>
+
+<!-- Custom Text -->
+<div class="element-category">
+<div class="category-title"><i class="fas fa-font mr-2"></i>Custom Text</div>
+<div class="element-item text-item" draggable="true" data-type="custom_text"><span><i class="fas fa-edit mr-2"></i>Custom Label</span><i class="fas fa-plus"></i></div>
+<div class="element-item text-item" draggable="true" data-type="thank_you_message"><span><i class="fas fa-heart mr-2"></i>Thank You Message</span><i class="fas fa-plus"></i></div>
+</div>
+
+<!-- Footer -->
+<div class="element-category">
+<div class="category-title"><i class="fas fa-info-circle mr-2"></i>Footer</div>
+<div class="element-item" draggable="true" data-type="footer_notes"><span><i class="fas fa-sticky-note mr-2"></i>Lab Notes</span><i class="fas fa-plus"></i></div>
+</div>
+</div>
+
+<!-- Center Panel: Preview -->
+<div class="preview-area">
+<h2 class="section-title">Receipt Preview</h2>
+<div class="grid grid-cols-4 gap-4 mb-4">
+<div><label class="block text-sm font-medium text-gray-700 mb-1">Paper Width</label><input type="text" id="paperWidth" value="80mm" onchange="updatePaperSize()" class="w-full border border-gray-300 rounded-lg px-3 py-2"></div>
+<div><label class="block text-sm font-medium text-gray-700 mb-1">Paper Height</label><input type="text" id="paperHeight" value="auto" onchange="updatePaperSize()" class="w-full border border-gray-300 rounded-lg px-3 py-2"></div>
+<div><label class="block text-sm font-medium text-gray-700 mb-1">Margin</label><input type="text" id="margin" value="0" onchange="updatePaperSize()" class="w-full border border-gray-300 rounded-lg px-3 py-2"></div>
+<div><label class="block text-sm font-medium text-gray-700 mb-1">Currency</label><input type="text" id="currency" value="$" onchange="updateCurrency()" class="w-full border border-gray-300 rounded-lg px-3 py-2"></div>
+</div>
+<div id="paperPreview" class="paper-preview" style="width: 80mm; min-height: 200mm;">
+<p class="text-gray-400 text-center py-8" id="placeholderText">Drag elements here to design your receipt</p>
+</div>
+<div class="mt-4 flex justify-center">
+<button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print Preview</button>
+</div>
+</div>
+
+<!-- Right Panel: Properties -->
+<div class="panel">
+<h2 class="section-title">Element Properties</h2>
+<div id="propertiesPanel" class="properties-panel" style="display: none;">
+<div class="property-group"><label>Position X (px)</label><input type="number" id="propX" onchange="updateElementProperty('x', this.value)"></div>
+<div class="property-group"><label>Position Y (px)</label><input type="number" id="propY" onchange="updateElementProperty('y', this.value)"></div>
+<div class="property-group"><label>Width (px)</label><input type="number" id="propWidth" min="1" onchange="updateElementProperty('width', this.value)"></div>
+<div class="property-group"><label>Height (px)</label><input type="number" id="propHeight" onchange="updateElementProperty('height', this.value)"></div>
+<div class="property-group"><label>Font Size (px)</label><input type="number" id="propFontSize" value="11" onchange="updateElementProperty('fontSize', this.value)"></div>
+<div class="property-group"><label>Font Weight</label><select id="propFontWeight" onchange="updateElementProperty('fontWeight', this.value)"><option value="normal">Normal</option><option value="bold">Bold</option><option value="600">Semi Bold</option></select></div>
+<div class="property-group"><label>Color</label><input type="color" id="propColor" value="#000000" onchange="updateElementProperty('color', this.value)"></div>
+<div class="property-group"><label>Text Align</label><select id="propAlign" onchange="updateElementProperty('align', this.value)"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></div>
+<div class="property-group"><label>Background</label><input type="color" id="propBgColor" value="#ffffff" onchange="updateElementProperty('bgColor', this.value)"></div>
+<div id="customTextInput" class="property-group hidden"><label>Custom Text</label><input type="text" id="propCustomText" onchange="updateCustomText(this.value)"></div>
+<div id="imageInputGroup" class="property-group hidden"><label>Image URL (uploads/...)</label><input type="text" id="propImageUrl" onchange="updateElementProperty('imageUrl', this.value)"><small class="text-gray-500">e.g., uploads/lab_logo_abc123.png</small></div>
+<div class="property-group"><label><input type="checkbox" id="propHideIfEmpty" onchange="updateElementProperty('hideIfEmpty', this.checked)"> Hide If Empty</label></div>
+<div id="shapeProperties" class="hidden">
+<div class="property-group"><label>Line/Border Width (px)</label><input type="number" id="propShapeWidth" value="2" onchange="updateShapeProperty('width', this.value)"></div>
+<div class="property-group"><label>Border Color</label><input type="color" id="propShapeColor" value="#000000" onchange="updateShapeProperty('color', this.value)"></div>
+</div>
+</div>
+<div id="noSelection" class="text-center text-gray-400 py-8"><i class="fas fa-mouse-pointer text-4xl mb-2"></i><p>Select an element to edit properties</p></div>
+</div>
+</div>
+
+<div id="printArea" style="display: none;"><div id="printPreview" class="paper-preview"></div></div>
+
+<script>
+let designElements = [];
+let selectedElement = null;
+let elementIdCounter = 0;
+let isDragging = false;
+let dragOffset = { x: 0, y: 0 };
+let currency = '$';
+let labInfo = {};
+
+// Fetch real lab info on page load
+async function loadLabInfoForPreview() {
+    try {
+        const response = await fetch('/api/lab-info');
+        const result = await response.json();
+        if (result.success && result.lab_info) {
+            labInfo = result.lab_info;
+            designElements.forEach(el => renderElement(el));
+        }
+    } catch (error) {
+        console.warn('Could not load lab info for preview:', error);
+        labInfo = { lab_name: 'NexLab Medical Center', lab_title: 'Medical Laboratory', lab_address: '', lab_phone_1: '', lab_phone_2: '', lab_email: '', lab_website: '', lab_currency: '$', first_doctor_name: '', second_doctor_name: '', lab_note_1: '', lab_note_2: '', lab_logo: '', lab_qr_1: '', lab_qr_2: '', lab_stamp_1: '', lab_stamp_2: '', lab_signature_1: '', lab_signature_2: '' };
+    }
+}
+
+let currentPatient = { patient_id: '1100001', full_name: 'محمد عبد الكريم', gender: 'male', age: 30, age_unit: 'year', phone_key: '+964', phone_number: '7806140857', sample_type: 'Serum', visit_id: '1100001000', visit_date: new Date().toLocaleDateString('en-GB'), tests: [{ name: 'Vitamin D3', price: 25.00 }, { name: 'Complete Blood Count (CBC)', price: 15.00 }, { name: 'Liver Function Tests', price: 30.00 }], total_amount: 70.00, discount_amount: 5.00, paid_amount: 65.00, remain_amount: 0.00 };
+
+document.querySelectorAll('.element-item').forEach(item => { item.addEventListener('dragstart', handleDragStart); item.addEventListener('click', () => addElement(item.dataset.type)); });
+const paperPreview = document.getElementById('paperPreview');
+paperPreview.addEventListener('dragover', handleDragOver);
+paperPreview.addEventListener('drop', handleDrop);
+paperPreview.addEventListener('click', handlePaperClick);
+
+function handleDragStart(e) { e.dataTransfer.setData('type', e.target.dataset.type); e.dataTransfer.setData('label', e.target.querySelector('span').textContent.trim()); }
+function handleDragOver(e) { e.preventDefault(); }
+function handleDrop(e) { e.preventDefault(); const type = e.dataTransfer.getData('type'); const label = e.dataTransfer.getData('label'); const rect = paperPreview.getBoundingClientRect(); const x = e.clientX - rect.left - 50; const y = e.clientY - rect.top - 15; addElementToCanvas(type, label, Math.max(0, x), Math.max(0, y)); }
+function handlePaperClick(e) { if (e.target === paperPreview || e.target.id === 'placeholderText') { deselectAll(); } }
+
+function addElement(type) {
+    const labels = { 'lab_name': 'Lab Name', 'lab_title': 'Lab Title', 'lab_address': 'Lab Address', 'lab_phone_1': 'Phone 1', 'lab_phone_2': 'Phone 2', 'lab_email': 'Email', 'lab_website': 'Website', 'first_doctor_name': 'First Doctor', 'second_doctor_name': 'Second Doctor', 'lab_note_1': 'Lab Note 1', 'lab_note_2': 'Lab Note 2', 'lab_logo': 'Lab Logo', 'lab_qr_1': 'QR Code 1', 'lab_qr_2': 'QR Code 2', 'lab_stamp_1': 'Stamp 1', 'lab_stamp_2': 'Stamp 2', 'lab_signature_1': 'Signature 1', 'lab_signature_2': 'Signature 2', 'patient_name': 'Patient Name', 'patient_id': 'Patient ID', 'visit_id': 'Visit ID', 'visit_date': 'Visit Date', 'patient_age': 'Age', 'patient_gender': 'Gender', 'patient_phone': 'Phone', 'sample_type': 'Sample Type', 'test_list_with_price': 'Tests List', 'test_name': 'Test Name', 'barcode_image': 'Barcode', 'total_amount': 'Total', 'discount': 'Discount', 'paid_amount': 'Paid', 'remain_amount': 'Remain', 'shape_line': 'Line', 'shape_box': 'Box', 'shape_circle': 'Circle', 'custom_text': 'Custom Text', 'thank_you_message': 'Thank You', 'footer_notes': 'Notes' };
+    const rect = paperPreview.getBoundingClientRect();
+    const x = rect.width / 2 - 75;
+    const y = 20 + (designElements.length * 35);
+    addElementToCanvas(type, labels[type], x, y);
+}
+
+function addElementToCanvas(type, label, x, y) {
+    const placeholder = document.getElementById('placeholderText');
+    if (placeholder) placeholder.style.display = 'none';
+    const element = { id: ++elementIdCounter, type: type, label: label, x: x, y: y, width: type.includes('test_list') ? 280 : (type.includes('shape') ? 300 : 250), height: type.includes('test_list') ? 100 : (type.includes('shape') ? 10 : 25), fontSize: 11, fontWeight: 'normal', color: '#000000', align: type.includes('amount') ? 'right' : 'left', bgColor: '#ffffff', customText: (type === 'custom_text' || type === 'thank_you_message') ? (type === 'thank_you_message' ? 'Thank you for choosing our services!' : 'Your Text Here') : '', shapeWidth: 2, shapeColor: '#000000', hideIfEmpty: true, imageUrl: '' };
+    designElements.push(element);
+    renderElement(element);
+    selectElement(element.id);
+}
+
+function renderElement(element) {
+    const el = document.createElement('div');
+    el.className = 'design-element receipt-element';
+    if (element.type.includes('shape')) { el.classList.add('shape-' + element.type.split('_')[1]); }
+    el.id = `element-${element.id}`;
+    el.style.left = element.x + 'px'; el.style.top = element.y + 'px'; el.style.width = element.width + 'px'; el.style.height = element.height + 'px';
+    el.style.fontSize = element.fontSize + 'px'; el.style.fontWeight = element.fontWeight; el.style.color = element.color; el.style.textAlign = element.align; el.style.backgroundColor = element.bgColor;
     
-    <script>
-        // Auto-print on load (optional - uncomment if you want auto-print)
-        // window.onload = function() { 
-        //     setTimeout(function() { window.print(); }, 500);
-        // }
-    </script>
+    if (element.type === 'lab_name') { el.innerHTML = `<div style="padding: 5px; font-weight: bold; font-size: 14px;">${labInfo.lab_name}</div>`; }
+    else if (element.type === 'lab_title') { el.innerHTML = `<div style="padding: 5px; font-size: 10px;">${labInfo.lab_title}</div>`; }
+    else if (element.type === 'lab_address') { el.innerHTML = `<div style="padding: 5px; font-size: 10px;">${labInfo.lab_address}</div>`; }
+    else if (element.type === 'lab_phone_1') { el.innerHTML = `<div style="padding: 5px; font-size: 10px;">📞 ${labInfo.lab_phone_1}</div>`; }
+    else if (element.type === 'lab_phone_2') { el.innerHTML = `<div style="padding: 5px; font-size: 10px;">${labInfo.lab_phone_2}</div>`; }
+    else if (element.type === 'lab_email') { el.innerHTML = `<div style="padding: 5px; font-size: 10px;">✉️ ${labInfo.lab_email}</div>`; }
+    else if (element.type === 'lab_website') { el.innerHTML = `<div style="padding: 5px; font-size: 10px;">🌐 ${labInfo.lab_website}</div>`; }
+    else if (element.type === 'first_doctor_name') { el.innerHTML = `<div style="padding: 5px; font-size: 10px;">${labInfo.first_doctor_name}</div>`; }
+    else if (element.type === 'second_doctor_name') { el.innerHTML = `<div style="padding: 5px; font-size: 10px;">${labInfo.second_doctor_name}</div>`; }
+    else if (element.type === 'lab_note_1') { el.innerHTML = `<div style="padding: 5px; font-size: 9px; font-style: italic;">${labInfo.lab_note_1}</div>`; }
+    else if (element.type === 'lab_note_2') { el.innerHTML = `<div style="padding: 5px; font-size: 9px; font-style: italic;">${labInfo.lab_note_2}</div>`; }
+    else if (element.type === 'lab_logo') { const imgUrl = element.imageUrl || labInfo.lab_logo; if (imgUrl) { el.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="/uploads/${imgUrl}" style="max-width: 100%; max-height: 60px;"></div>`; } else { el.innerHTML = `<div style="text-align: center; padding: 5px; color: #999;">[Logo]</div>`; } }
+    else if (element.type === 'lab_qr_1') { const imgUrl = element.imageUrl || labInfo.lab_qr_1; if (imgUrl) { el.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="/uploads/${imgUrl}" style="max-width: 80px; max-height: 80px;"></div>`; } else { el.innerHTML = `<div style="text-align: center; padding: 5px; color: #999;">[QR 1]</div>`; } }
+    else if (element.type === 'lab_qr_2') { const imgUrl = element.imageUrl || labInfo.lab_qr_2; if (imgUrl) { el.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="/uploads/${imgUrl}" style="max-width: 80px; max-height: 80px;"></div>`; } else { el.innerHTML = `<div style="text-align: center; padding: 5px; color: #999;">[QR 2]</div>`; } }
+    else if (element.type === 'lab_stamp_1') { const imgUrl = element.imageUrl || labInfo.lab_stamp_1; if (imgUrl) { el.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="/uploads/${imgUrl}" style="max-width: 100px; max-height: 100px;"></div>`; } else { el.innerHTML = `<div style="text-align: center; padding: 5px; color: #999;">[Stamp 1]</div>`; } }
+    else if (element.type === 'lab_stamp_2') { const imgUrl = element.imageUrl || labInfo.lab_stamp_2; if (imgUrl) { el.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="/uploads/${imgUrl}" style="max-width: 100px; max-height: 100px;"></div>`; } else { el.innerHTML = `<div style="text-align: center; padding: 5px; color: #999;">[Stamp 2]</div>`; } }
+    else if (element.type === 'lab_signature_1') { const imgUrl = element.imageUrl || labInfo.lab_signature_1; if (imgUrl) { el.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="/uploads/${imgUrl}" style="max-width: 120px; max-height: 50px;"></div>`; } else { el.innerHTML = `<div style="text-align: center; padding: 5px; color: #999;">[Signature 1]</div>`; } }
+    else if (element.type === 'lab_signature_2') { const imgUrl = element.imageUrl || labInfo.lab_signature_2; if (imgUrl) { el.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="/uploads/${imgUrl}" style="max-width: 120px; max-height: 50px;"></div>`; } else { el.innerHTML = `<div style="text-align: center; padding: 5px; color: #999;">[Signature 2]</div>`; } }
+    else if (element.type === 'patient_name') { el.innerHTML = `<div style="padding: 5px;"><strong>Name:</strong> ${currentPatient.full_name}</div>`; }
+    else if (element.type === 'patient_id') { el.innerHTML = `<div style="padding: 5px;"><strong>ID:</strong> ${currentPatient.patient_id}</div>`; }
+    else if (element.type === 'visit_id') { el.innerHTML = `<div style="padding: 5px;"><strong>Visit:</strong> ${currentPatient.visit_id}</div>`; }
+    else if (element.type === 'visit_date') { el.innerHTML = `<div style="padding: 5px;"><strong>Date:</strong> ${currentPatient.visit_date}</div>`; }
+    else if (element.type === 'patient_age') { el.innerHTML = `<div style="padding: 5px;"><strong>Age:</strong> ${currentPatient.age} ${currentPatient.age_unit}s</div>`; }
+    else if (element.type === 'patient_gender') { el.innerHTML = `<div style="padding: 5px;"><strong>Gender:</strong> ${currentPatient.gender}</div>`; }
+    else if (element.type === 'patient_phone') { el.innerHTML = `<div style="padding: 5px;"><strong>Phone:</strong> ${currentPatient.phone_key} ${currentPatient.phone_number}</div>`; }
+    else if (element.type === 'sample_type') { el.innerHTML = `<div style="padding: 5px;"><strong>Sample:</strong> ${currentPatient.sample_type}</div>`; }
+    else if (element.type === 'test_list_with_price') { let testsHtml = currentPatient.tests.map(t => `<div class="test-item"><span>${t.name}</span><span>${currency}${t.price.toFixed(2)}</span></div>`).join(''); el.innerHTML = `<div style="padding: 5px;"><strong>Tests:</strong><br>${testsHtml}</div>`; }
+    else if (element.type === 'test_name') { el.innerHTML = `<div style="padding: 5px;">${currentPatient.tests[0]?.name || 'Test Name'}</div>`; }
+    else if (element.type === 'barcode_image') { el.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="https://bwipjs-api.metafloor.com/?bcid=code128&text=${currentPatient.patient_id}&scale=2&height=8&includetext" style="max-width: 100%; height: auto;"></div>`; }
+    else if (element.type === 'total_amount') { el.innerHTML = `<div class="total-row" style="padding: 5px; display: flex; justify-content: space-between;"><span>Total:</span><span>${currency}${currentPatient.total_amount.toFixed(2)}</span></div>`; }
+    else if (element.type === 'discount') { el.innerHTML = `<div style="padding: 5px; display: flex; justify-content: space-between;"><span>Discount:</span><span>-${currency}${currentPatient.discount_amount.toFixed(2)}</span></div>`; }
+    else if (element.type === 'paid_amount') { el.innerHTML = `<div style="padding: 5px; display: flex; justify-content: space-between;"><span>Paid:</span><span>${currency}${currentPatient.paid_amount.toFixed(2)}</span></div>`; }
+    else if (element.type === 'remain_amount') { el.innerHTML = `<div class="total-row" style="padding: 5px; display: flex; justify-content: space-between;"><span>Remain:</span><span>${currency}${currentPatient.remain_amount.toFixed(2)}</span></div>`; }
+    else if (element.type === 'shape_line') { el.className = 'design-element receipt-element shape-line'; el.style.height = element.shapeWidth + 'px'; el.style.background = element.shapeColor; el.innerHTML = ''; }
+    else if (element.type === 'shape_box') { el.className = 'design-element receipt-element shape-box'; el.style.border = element.shapeWidth + 'px solid ' + element.shapeColor; el.style.background = 'transparent'; el.innerHTML = ''; }
+    else if (element.type === 'shape_circle') { el.style.border = element.shapeWidth + 'px solid ' + element.shapeColor; el.style.borderRadius = '50%'; el.style.background = 'transparent'; el.innerHTML = ''; }
+    else if (element.type === 'custom_text') { el.innerHTML = `<div style="padding: 5px;">${element.customText || 'Custom Text'}</div>`; }
+    else if (element.type === 'thank_you_message') { el.innerHTML = `<div style="padding: 5px; text-align: center; font-style: italic;">${element.customText || 'Thank you for choosing our services!'}</div>`; }
+    else if (element.type === 'footer_notes') { el.innerHTML = `<div style="padding: 5px; font-size: 9px; text-align: center;">Results are valid for 30 days. Please consult your doctor for interpretation.</div>`; }
+    else { el.innerHTML = `<div style="padding: 5px;">${element.label}</div>`; }
+    
+    el.innerHTML += `<div class="resize-handle"></div><div class="delete-btn" onclick="deleteElement(${element.id})">×</div>`;
+    el.addEventListener('mousedown', handleElementMouseDown);
+    const resizeHandle = el.querySelector('.resize-handle');
+    resizeHandle.addEventListener('mousedown', handleResizeStart);
+    paperPreview.appendChild(el);
+}
+
+function handleElementMouseDown(e) { if (e.target.classList.contains('resize-handle') || e.target.classList.contains('delete-btn')) { return; } e.stopPropagation(); const element = designElements.find(el => el.id === parseInt(e.currentTarget.id.split('-')[1])); selectElement(element.id); isDragging = true; const rect = paperPreview.getBoundingClientRect(); dragOffset.x = e.clientX - rect.left - element.x; dragOffset.y = e.clientY - rect.top - element.y; document.addEventListener('mousemove', handleElementMouseMove); document.addEventListener('mouseup', handleElementMouseUp); }
+function handleElementMouseMove(e) { if (!isDragging) return; const element = designElements.find(el => el.id === selectedElement); const rect = paperPreview.getBoundingClientRect(); element.x = Math.max(0, Math.min(rect.width - element.width, e.clientX - rect.left - dragOffset.x)); element.y = Math.max(0, Math.min(rect.height - element.height, e.clientY - rect.top - dragOffset.y)); const el = document.getElementById(`element-${element.id}`); el.style.left = element.x + 'px'; el.style.top = element.y + 'px'; updatePropertiesPanel(); }
+function handleElementMouseUp() { isDragging = false; document.removeEventListener('mousemove', handleElementMouseMove); document.removeEventListener('mouseup', handleElementMouseUp); }
+function handleResizeStart(e) { e.stopPropagation(); const elementId = parseInt(e.target.parentElement.id.split('-')[1]); const element = designElements.find(el => el.id === elementId); const startX = e.clientX; const startY = e.clientY; const startWidth = element.width; const startHeight = element.height; function handleResizeMove(e) { element.width = Math.max(1, startWidth + e.clientX - startX); element.height = Math.max(20, startHeight + e.clientY - startY); const el = document.getElementById(`element-${element.id}`); el.style.width = element.width + 'px'; el.style.height = element.height + 'px'; updatePropertiesPanel(); } function handleResizeEnd() { document.removeEventListener('mousemove', handleResizeMove); document.removeEventListener('mouseup', handleResizeEnd); } document.addEventListener('mousemove', handleResizeMove); document.addEventListener('mouseup', handleResizeEnd); }
+
+function selectElement(id) { deselectAll(); selectedElement = id; const el = document.getElementById(`element-${id}`); if (el) { el.classList.add('selected'); } document.getElementById('propertiesPanel').style.display = 'block'; document.getElementById('noSelection').style.display = 'none'; updatePropertiesPanel(); const element = designElements.find(el => el.id === id); const customTextInput = document.getElementById('customTextInput'); const imageInputGroup = document.getElementById('imageInputGroup'); const shapeProperties = document.getElementById('shapeProperties'); if (element && (element.type === 'custom_text' || element.type === 'thank_you_message')) { customTextInput.classList.remove('hidden'); } else { customTextInput.classList.add('hidden'); } if (element && ['lab_logo', 'lab_qr_1', 'lab_qr_2', 'lab_stamp_1', 'lab_stamp_2', 'lab_signature_1', 'lab_signature_2'].includes(element.type)) { imageInputGroup.style.display = 'block'; document.getElementById('propImageUrl').value = element.imageUrl || ''; } else { imageInputGroup.style.display = 'none'; } if (element && element.type.includes('shape')) { shapeProperties.classList.remove('hidden'); } else { shapeProperties.classList.add('hidden'); } document.getElementById('propHideIfEmpty').checked = element?.hideIfEmpty ?? true; }
+function deselectAll() { selectedElement = null; document.querySelectorAll('.design-element').forEach(el => { el.classList.remove('selected'); }); document.getElementById('propertiesPanel').style.display = 'none'; document.getElementById('noSelection').style.display = 'block'; }
+
+function updatePropertiesPanel() { if (!selectedElement) return; const element = designElements.find(el => el.id === selectedElement); if (!element) return; document.getElementById('propX').value = Math.round(element.x); document.getElementById('propY').value = Math.round(element.y); document.getElementById('propWidth').value = element.width; document.getElementById('propHeight').value = element.height; document.getElementById('propFontSize').value = element.fontSize; document.getElementById('propFontWeight').value = element.fontWeight; document.getElementById('propColor').value = element.color; document.getElementById('propAlign').value = element.align; document.getElementById('propBgColor').value = element.bgColor; if (element.type === 'custom_text' || element.type === 'thank_you_message') { document.getElementById('propCustomText').value = element.customText || ''; } if (element.type.includes('shape')) { document.getElementById('propShapeWidth').value = element.shapeWidth || 2; document.getElementById('propShapeColor').value = element.shapeColor || '#000000'; } }
+
+function updateElementProperty(property, value) { if (!selectedElement) return; const element = designElements.find(el => el.id === selectedElement); if (!element) return; if (property === 'x' || property === 'y' || property === 'width' || property === 'height' || property === 'fontSize') { value = parseInt(value); } element[property] = value; const el = document.getElementById(`element-${element.id}`); if (el) { if (property === 'x') el.style.left = value + 'px'; if (property === 'y') el.style.top = value + 'px'; if (property === 'width') el.style.width = value + 'px'; if (property === 'height') el.style.height = value + 'px'; if (property === 'fontSize') el.style.fontSize = value + 'px'; if (property === 'fontWeight') el.style.fontWeight = value; if (property === 'color') el.style.color = value; if (property === 'align') el.style.textAlign = value; if (property === 'bgColor') el.style.backgroundColor = value; if (property === 'imageUrl') { /* Image URL stored but rendered on next render */ } if (property === 'hideIfEmpty') { /* Stored for print function */ } } }
+
+function updateCustomText(value) { if (!selectedElement) return; const element = designElements.find(el => el.id === selectedElement); if (!element || (element.type !== 'custom_text' && element.type !== 'thank_you_message')) return; element.customText = value; const el = document.getElementById(`element-${element.id}`); if (el) { if (element.type === 'thank_you_message') { el.innerHTML = `<div style="padding: 5px; text-align: center; font-style: italic;">${value}</div><div class="resize-handle"></div><div class="delete-btn" onclick="deleteElement(${element.id})">×</div>`; } else { el.innerHTML = `<div style="padding: 5px;">${value}</div><div class="resize-handle"></div><div class="delete-btn" onclick="deleteElement(${element.id})">×</div>`; } } }
+
+function updateShapeProperty(property, value) { if (!selectedElement) return; const element = designElements.find(el => el.id === selectedElement); if (!element || !element.type.includes('shape')) return; if (property === 'width') { element.shapeWidth = parseInt(value); } else if (property === 'color') { element.shapeColor = value; } const el = document.getElementById(`element-${element.id}`); if (el) { if (element.type === 'shape_line') { el.style.height = element.shapeWidth + 'px'; el.style.background = element.shapeColor; } else if (element.type === 'shape_box') { el.style.border = element.shapeWidth + 'px solid ' + element.shapeColor; } else if (element.type === 'shape_circle') { el.style.border = element.shapeWidth + 'px solid ' + element.shapeColor; } } }
+
+function deleteElement(id) { designElements = designElements.filter(el => el.id !== id); const el = document.getElementById(`element-${id}`); if (el) el.remove(); deselectAll(); if (designElements.length === 0) { const placeholder = document.getElementById('placeholderText'); if (placeholder) placeholder.style.display = 'block'; } }
+
+function updatePaperSize() { const width = document.getElementById('paperWidth').value; const height = document.getElementById('paperHeight').value; paperPreview.style.width = width; paperPreview.style.minHeight = height === 'auto' ? '200mm' : height; }
+
+function updateCurrency() { currency = document.getElementById('currency').value || '$'; saveDesignLocal(); designElements.forEach(el => { if (['total_amount', 'discount', 'paid_amount', 'remain_amount'].includes(el.type)) { renderElement(el); } }); }
+
+async function saveDesign() { const design = { template_name: 'receipt', template_type: 'receipt', paper_width: document.getElementById('paperWidth').value, paper_height: document.getElementById('paperHeight').value, margin: document.getElementById('margin').value, currency: document.getElementById('currency').value || '$', elements: JSON.stringify(designElements) }; try { const response = await fetch('/api/print-template/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(design) }); const result = await response.json(); if (result.success) { alert('✅ Receipt design saved successfully!'); } else { alert('❌ Error saving design: ' + result.error); } } catch (error) { alert('❌ Error saving design: ' + error.message); } }
+
+async function loadDesign() { try { const response = await fetch('/api/print-template/load/receipt'); const result = await response.json(); if (result.success && result.template) { document.getElementById('paperWidth').value = result.template.paper_width; document.getElementById('paperHeight').value = result.template.paper_height; document.getElementById('margin').value = result.template.margin; if (result.template.currency) { document.getElementById('currency').value = result.template.currency; currency = result.template.currency; } paperPreview.innerHTML = '<p class="text-gray-400 text-center py-8" id="placeholderText">Drag elements here to design your receipt</p>'; designElements = []; const elements = JSON.parse(result.template.elements || '[]'); elements.forEach(el => { designElements.push(el); renderElement(el); }); updatePaperSize(); alert('✅ Receipt design loaded successfully!'); } else { alert('❌ No saved receipt design found'); } } catch (error) { alert('❌ Error loading design: ' + error.message); } }
+
+window.addEventListener('beforeprint', function() { const printPreview = document.getElementById('printPreview'); printPreview.innerHTML = ''; printPreview.style.width = paperPreview.style.width; printPreview.style.minHeight = paperPreview.style.minHeight; printPreview.style.position = 'absolute'; printPreview.style.left = '0'; printPreview.style.top = '0'; printPreview.style.border = 'none'; designElements.forEach(el => { const clone = document.createElement('div'); clone.style.position = 'absolute'; clone.style.left = el.x + 'px'; clone.style.top = el.y + 'px'; clone.style.width = el.width + 'px'; clone.style.height = el.height + 'px'; clone.style.fontSize = el.fontSize + 'px'; clone.style.fontWeight = el.fontWeight; clone.style.color = el.color; clone.style.textAlign = el.align; clone.style.backgroundColor = el.bgColor; const contentDiv = document.createElement('div'); contentDiv.innerHTML = el.innerHTML; const resizeHandle = contentDiv.querySelector('.resize-handle'); const deleteBtn = contentDiv.querySelector('.delete-btn'); if (resizeHandle) resizeHandle.remove(); if (deleteBtn) deleteBtn.remove(); clone.innerHTML = contentDiv.innerHTML; printPreview.appendChild(clone); }); });
+
+function saveDesignLocal() { const design = { paper_width: document.getElementById('paperWidth').value, paper_height: document.getElementById('paperHeight').value, margin: document.getElementById('margin').value, currency: currency, elements: designElements }; localStorage.setItem('receiptDesign', JSON.stringify(design)); }
+
+function loadDesignLocal() { const saved = localStorage.getItem('receiptDesign'); if (saved) { const design = JSON.parse(saved); document.getElementById('paperWidth').value = design.paper_width || '80mm'; document.getElementById('paperHeight').value = design.paper_height || 'auto'; document.getElementById('margin').value = design.margin || '0'; if (design.currency) { document.getElementById('currency').value = design.currency; currency = design.currency; } designElements = design.elements || []; paperPreview.innerHTML = '<p class="text-gray-400 text-center py-8" id="placeholderText">Drag elements here to design your receipt</p>'; designElements.forEach(el => renderElement(el)); updatePaperSize(); } }
+
+document.querySelectorAll('#propertiesPanel input, #propertiesPanel select').forEach(input => { input.addEventListener('change', saveDesignLocal); });
+
+window.addEventListener('load', function() { loadLabInfoForPreview(); loadDesignLocal(); });
+</script>
 </body>
 </html>

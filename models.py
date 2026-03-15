@@ -30,7 +30,7 @@ class AuditLog(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 # ===========================
-# 2. PATIENT (FIXED - Added orders relationship)
+# 2. PATIENT
 # ===========================
 class Patient(SQLModel, table=True):
     __tablename__ = "patient"
@@ -66,9 +66,9 @@ class Patient(SQLModel, table=True):
     deleted_by: Optional[int] = Field(default=None, foreign_key="user.id")
     deleted_at: Optional[datetime] = None
     
-    # ✅ Relationships
+    # Relationships
     visits: List["PatientVisit"] = Relationship(back_populates="patient", cascade_delete=True)
-    orders: List["Order"] = Relationship(back_populates="patient")  # ✅ ADDED THIS
+    orders: List["Order"] = Relationship(back_populates="patient")
 
 # ===========================
 # 3. PARAMETER
@@ -271,7 +271,7 @@ class TestCatalog(SQLModel, table=True):
     is_active: bool = Field(default=True)
 
 # ===========================
-# 14. ORDER (UPDATED - Added unit_price for audit compliance)
+# 14. ORDER (UPDATED - Price Snapshot for Audit Compliance)
 # ===========================
 class Order(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -286,11 +286,11 @@ class Order(SQLModel, table=True):
     collection_date: Optional[datetime] = None
     verified_date: Optional[datetime] = None
     visit_id: Optional[int] = Field(default=None, foreign_key="patientvisit.id")
-    
+    package_name: Optional[str] = Field(default=None)  # Store package name if order is from a package
     # ✅ AUDIT COMPLIANCE: Price snapshot at order time
-    unit_price: float = Field(default=0.0)  # Price frozen at order creation
-    discount_amount: float = Field(default=0.0)  # Discount applied to this order
-    final_price: float = Field(default=0.0)  # unit_price - discount_amount
+    unit_price: float = Field(default=0.0)
+    discount_amount: float = Field(default=0.0)
+    final_price: float = Field(default=0.0)
     
     # Relationships
     patient: Patient = Relationship(back_populates="orders")
@@ -463,7 +463,7 @@ class Region(SQLModel, table=True):
     province: Province = Relationship()
 
 # ===========================
-# 23. LAB INFO
+# 23. LAB INFO (UPDATED - Added lab_currency field)
 # ===========================
 class LabInfo(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -491,6 +491,7 @@ class LabInfo(SQLModel, table=True):
     lab_note_1: Optional[str] = Field(default=None)
     lab_note_2: Optional[str] = Field(default=None)
     lab_website: Optional[str] = Field(default=None)
+    lab_currency: str = Field(default="$")  # ✅ NEW FIELD
     
     created_by: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -498,7 +499,7 @@ class LabInfo(SQLModel, table=True):
     edited_at: Optional[datetime] = None
 
 # ===========================
-# 24. PATIENT VISIT (FIXED - Added orders relationship)
+# 24. PATIENT VISIT
 # ===========================
 class PatientVisit(SQLModel, table=True):
     __tablename__ = "patientvisit"
@@ -520,9 +521,9 @@ class PatientVisit(SQLModel, table=True):
     discount_amount: float = Field(default=0.0)
     remaining_amount: float = Field(default=0.0)
     
-    # ✅ Relationships
+    # Relationships
     patient: Optional["Patient"] = Relationship(back_populates="visits")
-    orders: List["Order"] = Relationship(back_populates="visit")  # ✅ ADDED THIS
+    orders: List["Order"] = Relationship(back_populates="visit")
 
 # ===========================
 # 25. PRINT TEMPLATE
