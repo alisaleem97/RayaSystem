@@ -1443,7 +1443,7 @@ async def create_patient_registration(
     patient_id: str = Form(...),
     full_name: str = Form(...),
     gender: str = Form(...),
-    date_of_birth: str = Form(...),
+    date_of_birth: Optional[str] = Form(None),
     age: Optional[int] = Form(None),
     age_unit: Optional[str] = Form(None),
     phone_key: str = Form(...),
@@ -1494,7 +1494,7 @@ async def create_patient_registration(
             patient_id=patient_id,
             full_name=full_name,
             gender=gender,
-            date_of_birth=datetime.strptime(date_of_birth, "%Y-%m-%d"),
+            ate_of_birth=datetime.strptime(date_of_birth, "%Y-%m-%d") if date_of_birth else None,  # ✅ Handle None
             age=age,
             age_unit=age_unit,
             phone_key=phone_key,
@@ -1865,7 +1865,39 @@ def print_receipt(patient_id: str, request: Request, session: Session = Depends(
         "request": request, "patient": patient, "visits": visits, "orders": orders,
         "lab_info": lab_info, "barcode_data": barcode_data
     })
-
+# ===========================
+# ✅ NEW: CHECK DUPLICATE PATIENT BY PHONE
+# ===========================
+@app.get("/api/check-patient-phone")
+def check_patient_phone(phone_key: str, phone_number: str, session: Session = Depends(get_session)):
+    """Check if patient with same phone number already exists"""
+    try:
+        patient = session.exec(select(Patient).where(
+            Patient.phone_key == phone_key,
+            Patient.phone_number == phone_number,
+            Patient.is_active == True
+        )).first()
+        
+        if patient:
+            return {
+                "exists": True,
+                "patient": {
+                    "id": patient.id,
+                    "patient_id": patient.patient_id,
+                    "full_name": patient.full_name,
+                    "phone_key": patient.phone_key,
+                    "phone_number": patient.phone_number,
+                    "gender": patient.gender,
+                    "age": patient.age,
+                    "province_id": patient.province_id,
+                    "region_id": patient.region_id,
+                    "email": patient.email,
+                    "note": patient.note
+                }
+            }
+        return {"exists": False}
+    except Exception as e:
+        return {"exists": False, "error": str(e)}
 # ===========================
 # GENERAL API ENDPOINTS
 # ===========================
