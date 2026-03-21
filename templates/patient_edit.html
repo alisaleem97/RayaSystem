@@ -1,0 +1,910 @@
+<!-- templates/patient_edit.html -->
+{% extends "base.html" %}
+{% block title %}Edit Patient - NexLab{% endblock %}
+{% block page_title %}Edit Patient Data{% endblock %}
+{% block content %}
+<!-- Tom Select CSS -->
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+<style>
+.popup-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 16px 24px;
+    border-radius: 8px;
+    color: white;
+    font-weight: 500;
+    z-index: 9999;
+    animation: slideIn 0.3s ease-out;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.popup-success { background: #10b981; }
+.popup-error { background: #ef4444; }
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+.ts-wrapper { position: relative !important; width: 100%; z-index: 100; }
+.ts-dropdown {
+    max-height: 250px !important;
+    overflow-y: auto !important;
+    z-index: 9999 !important;
+    position: absolute !important;
+    width: 100% !important;
+}
+</style>
+
+<!-- Popup Container -->
+<div id="popupContainer"></div>
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <!-- Header -->
+    <div class="p-6 border-b border-slate-200">
+        <div class="flex items-center justify-between flex-wrap gap-4">
+            <div>
+                <h3 class="text-lg font-semibold text-slate-800">Edit Patient</h3>
+                <p class="text-sm text-slate-500">Patient ID: <strong class="font-mono">{{ patient.patient_id }}</strong></p>
+            </div>
+            <div class="flex gap-3">
+                <a href="/patients" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium">← Back</a>
+                <button type="button" onclick="printReceipt('{{ patient.patient_id }}')" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium">📄 Print Receipt</button>
+                <button type="button" onclick="printBarcode('{{ patient.patient_id }}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">🏷️ Print Barcode</button>
+            </div>
+        </div>
+    </div>
+
+    <form method="POST" action="/patients/update/{{ patient.patient_id }}" id="editForm">
+        <div class="p-6 space-y-6">
+            <!-- Main Information -->
+            <div>
+                <h4 class="text-md font-semibold text-slate-700 mb-4">Main Information</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Patient ID</label>
+                        <input type="text" value="{{ patient.patient_id }}" readonly class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-100 font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Patient Name *</label>
+                        <input type="text" id="full_name" name="full_name" value="{{ patient.full_name }}" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Gender *</label>
+                        <select id="gender" name="gender" required onchange="verifyGender()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                            <option value="">Select...</option>
+                            <option value="male" {% if patient.gender == 'male' %}selected{% endif %}>Male</option>
+                            <option value="female" {% if patient.gender == 'female' %}selected{% endif %}>Female</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label>
+                        <input type="date" id="date_of_birth" name="date_of_birth" value="{{ patient.date_of_birth.strftime('%Y-%m-%d') if patient.date_of_birth else '' }}" onchange="calculateAge()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Age *</label>
+                        <input type="number" id="age" name="age" value="{{ patient.age }}" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Age Unit *</label>
+                        <select id="age_unit" name="age_unit" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                            <option value="year" {% if patient.age_unit == 'year' %}selected{% endif %}>Years</option>
+                            <option value="month" {% if patient.age_unit == 'month' %}selected{% endif %}>Months</option>
+                            <option value="day" {% if patient.age_unit == 'day' %}selected{% endif %}>Days</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Phone Key *</label>
+                        <select id="phone_key" name="phone_key" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                            <option value="+964" {% if patient.phone_key == '+964' %}selected{% endif %}>Iraq (+964)</option>
+                            <option value="+1" {% if patient.phone_key == '+1' %}selected{% endif %}>USA (+1)</option>
+                            <option value="+966" {% if patient.phone_key == '+966' %}selected{% endif %}>Saudi (+966)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Phone Number *</label>
+                        <input type="text" id="phone_number" name="phone_number" value="{{ patient.phone_number }}" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Weight (kg) *</label>
+                        <input type="number" id="weight" name="weight" value="{{ patient.weight }}" step="0.1" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Height (cm) *</label>
+                        <input type="number" id="height" name="height" value="{{ patient.height }}" step="0.1" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Province *</label>
+                        <select id="province_id" name="province_id" required onchange="loadRegions()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                            <option value="">Select Province...</option>
+                            {% for province in provinces %}
+                            <option value="{{ province.id }}" {% if patient.province_id == province.id %}selected{% endif %}>{{ province.province_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Region *</label>
+                        <select id="region_id" name="region_id" required {% if not patient.province_id %}disabled{% endif %} class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                            <option value="">Select Region...</option>
+                            {% for region in regions %}
+                            <option value="{{ region.id }}" {% if patient.region_id == region.id %}selected{% endif %}>{{ region.region_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tests & Packages -->
+            <div>
+                <h4 class="text-md font-semibold text-slate-700 mb-4">Tests & Packages</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Select Test</label>
+                        <select id="test_select" placeholder="Search tests..." class="w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                            <option value="">Select Test...</option>
+                            {% for test in tests %}
+                            <option value="{{ test.id }}" data-price="{{ test.price }}">{{ test.test_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Select Package</label>
+                        <select id="package_select" placeholder="Search packages..." class="w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                            <option value="">Select Package...</option>
+                            {% for package in packages %}
+                            <option value="{{ package.id }}" data-price="{{ package.price }}" data-name="{{ package.package_name }}">{{ package.package_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-200">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">No.</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Type</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Price</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-slate-200" id="selectedItemsTable"></tbody>
+                    </table>
+                    <p id="emptyTableMessage" class="text-center text-slate-500 py-8">No tests or packages selected</p>
+                </div>
+            </div>
+
+            <!-- Discount Section -->
+<div class="flex justify-end">
+    <button type="button" onclick="toggleDiscount()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">💰 Discount</button>
+</div>
+<div id="discountSection" class="hidden grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-green-50 rounded-lg border border-green-200">
+    <div>
+        <label class="block text-sm font-medium text-green-700 mb-1">Discount Percentage (%)</label>
+        <!-- ✅ REMOVED step attribute to prevent validation error -->
+        <input type="number" id="discount_percentage" value="0" min="0" max="100" onchange="calculateDiscount()"
+            class="w-full border border-green-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500">
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-green-700 mb-1">Discount Amount</label>
+        <!-- ✅ REMOVED step attribute to prevent validation error -->
+        <input type="text" id="discount_amount_display" value="0" min="0" onchange="calculateDiscountFromAmount()"
+            class="w-full border border-green-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500">
+    </div>
+    <!-- ✅ Discount Note Field - Required when discount applied -->
+    <div class="md:col-span-2">
+        <label class="block text-sm font-medium text-green-700 mb-1">Discount Note <span class="text-red-500">*</span></label>
+        <input type="text" id="discount_note" name="discount_note" placeholder="Required when discount applied"
+            class="w-full border border-green-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500">
+    </div>
+</div>
+
+            <!-- Payment Summary -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Total Price</label>
+                    <input type="text" id="total_price" readonly class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-100 font-semibold">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Total After Discount</label>
+                    <input type="text" id="total_after_discount" readonly class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-100 font-semibold text-green-600">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Received Amount</label>
+                    <input type="number" id="received_amount" name="received_amount" step="0.01" oninput="calculateRemaining()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Remaining Amount</label>
+                    <input type="text" id="remaining_amount" readonly class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-100 font-semibold">
+                </div>
+            </div>
+
+            <!-- Hidden inputs for form submission -->
+            <input type="hidden" id="selected_items" name="selected_items" value="">
+            <input type="hidden" id="discount_percentage_hidden" name="discount_percentage" value="">
+            <input type="hidden" id="discount_amount_hidden" name="discount_amount" value="">
+
+            <!-- Save Button -->
+            <div class="flex justify-end pt-4 border-t border-slate-200">
+                <a href="/patients" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-3 rounded-lg text-sm font-medium mr-3">Cancel</a>
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-lg text-sm font-medium">💾 Save Changes</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<div id="printContainer" style="display: none;"></div>
+<!-- Hidden element to store orders JSON data -->
+<div id="orders_json_data" style="display: none;">{{ orders_json | safe }}</div>
+<!-- Tom Select JS -->
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<script>
+// ============================================
+// ✅ COMPLETE JAVASCRIPT FOR PATIENT EDIT PAGE
+// ============================================
+
+// Global Variables
+let testSelect, packageSelect;
+let selectedItems = [];
+let itemCounter = 0;
+let receivedAmountAutoFilled = false;
+
+// Format price with comma separator
+function formatPrice(amount) {
+    return Math.round(amount).toLocaleString('en-US');
+}
+
+// Show popup notification
+function showPopup(message, type = 'success') {
+    const container = document.getElementById('popupContainer');
+    if (!container) {
+        alert(message);
+        return;
+    }
+    
+    const popup = document.createElement('div');
+    popup.className = `popup-notification popup-${type}`;
+    popup.innerHTML = `<span>${message}</span>`;
+    container.appendChild(popup);
+    
+    setTimeout(() => {
+        popup.style.animation = 'slideIn 0.3s ease-out reverse';
+        setTimeout(() => popup.remove(), 300);
+    }, 3000);
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🔍 Page loaded, initializing...');
+    
+    // ✅ Load existing orders from server - IMPROVED ERROR HANDLING
+    const ordersJsonElement = document.getElementById('orders_json_data');
+    let ordersJsonString = '[]';
+    
+    if (ordersJsonElement) {
+        ordersJsonString = ordersJsonElement.textContent.trim();
+    }
+    
+    console.log('📦 Raw orders JSON:', ordersJsonString);
+    
+    try {
+        // ✅ Handle empty/null/invalid JSON gracefully
+        let ordersJson = [];
+        if (ordersJsonString && ordersJsonString !== 'null' && ordersJsonString.trim() !== '') {
+            ordersJson = JSON.parse(ordersJsonString);
+        }
+        
+        console.log('📦 Parsed orders:', ordersJson);
+        
+        if (ordersJson && Array.isArray(ordersJson) && ordersJson.length > 0) {
+            ordersJson.forEach((order, index) => {
+                console.log('➕ Adding order:', order);
+                addItem({
+                    id: order.id,
+                    name: order.name,
+                    type: order.type || 'test',
+                    price: parseFloat(order.price) || 0,
+                    package_name: order.package_name
+                });
+            });
+            calculateTotal();
+            document.getElementById('emptyTableMessage').style.display = 'none';
+            showPopup(`Loaded ${ordersJson.length} existing test(s)`, 'success');
+        } else {
+            console.log('ℹ️ No existing orders found for this patient (this is normal for new patients)');
+        }
+    } catch (e) {
+        console.error('❌ Error parsing orders JSON:', e);
+        console.error('Raw JSON:', ordersJsonString);
+        // Don't show error popup for empty orders - it's normal
+        if (ordersJsonString && ordersJsonString.trim() !== '' && ordersJsonString !== 'null') {
+            showPopup('⚠️ Could not load existing orders', 'error');
+        }
+    }
+    
+    // Set payment values from latest visit
+    {% if latest_visit %}
+    const receivedEl = document.getElementById('received_amount');
+    const discountEl = document.getElementById('discount_amount_display');
+    if (receivedEl) receivedEl.value = {{ latest_visit.received_amount }};
+    if (discountEl) discountEl.value = {{ latest_visit.discount_amount }};
+    receivedAmountAutoFilled = true;
+    {% endif %}
+    
+    // Initialize Tom Select
+    initializeTomSelect();
+    
+    // Show success/error messages from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get('success');
+    const error = urlParams.get('error');
+    
+    if (success) {
+        showPopup(success, 'success');
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    if (error) {
+        showPopup(decodeURIComponent(error), 'error');
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+});
+
+// Initialize Tom Select for tests and packages
+function initializeTomSelect() {
+    const testSelectEl = document.getElementById('test_select');
+    const packageSelectEl = document.getElementById('package_select');
+    
+    if (!testSelectEl || !packageSelectEl) {
+        console.error('❌ Tom Select elements not found!');
+        return;
+    }
+    
+    testSelect = new TomSelect('#test_select', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Search tests...',
+        create: false,
+        maxItems: 1,
+        onChange: function(value) {
+            if (value) {
+                addTest(value);
+                testSelect.clear();
+            }
+        }
+    });
+    
+    packageSelect = new TomSelect('#package_select', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Search packages...',
+        create: false,
+        maxItems: 1,
+        onChange: function(value) {
+            if (value) {
+                addPackage(value);
+                packageSelect.clear();
+            }
+        }
+    });
+    
+    console.log('✅ Tom Select initialized');
+}
+
+// Add test to selected items
+function addTest(testId) {
+    const option = document.querySelector(`#test_select option[value="${testId}"]`);
+    if (!option) return;
+    
+    const testAlreadySelected = selectedItems.some(item => 
+        item.type === 'test' && item.id === parseInt(testId)
+    );
+    
+    if (testAlreadySelected) {
+        showPopup('This test is already selected!', 'error');
+        return;
+    }
+    
+    addItem({
+        id: parseInt(testId),
+        name: option.textContent,
+        type: 'test',
+        price: parseFloat(option.dataset.price)
+    });
+}
+
+// Add package to selected items
+function addPackage(packageId) {
+    const option = document.querySelector(`#package_select option[value="${packageId}"]`);
+    if (!option) return;
+    
+    const packageAlreadySelected = selectedItems.some(item => 
+        item.type === 'package' && item.id === parseInt(packageId)
+    );
+    
+    if (packageAlreadySelected) {
+        showPopup('This package is already selected!', 'error');
+        return;
+    }
+    
+    addItem({
+        id: parseInt(packageId),
+        name: option.dataset.name || option.textContent,
+        type: 'package',
+        price: parseFloat(option.dataset.price)
+    });
+}
+
+// Add item to selected items array
+function addItem(item) {
+    itemCounter++;
+    item.no = itemCounter;
+    selectedItems.push(item);
+    renderSelectedItems();
+    calculateTotal();
+    document.getElementById('emptyTableMessage').style.display = 'none';
+}
+
+// Remove item from selected items
+function removeItem(index) {
+    selectedItems.splice(index, 1);
+    selectedItems.forEach((item, idx) => {
+        item.no = idx + 1;
+    });
+    itemCounter = selectedItems.length;
+    renderSelectedItems();
+    calculateTotal();
+    if (selectedItems.length === 0) {
+        document.getElementById('emptyTableMessage').style.display = 'block';
+    }
+}
+
+// Render selected items table
+function renderSelectedItems() {
+    const tbody = document.getElementById('selectedItemsTable');
+    if (!tbody) return;
+    
+    if (selectedItems.length === 0) {
+        tbody.innerHTML = '';
+        return;
+    }
+    
+    tbody.innerHTML = selectedItems.map((item, index) => `
+        <tr class="hover:bg-slate-50">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${item.no}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">${item.name}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="px-2 py-1 rounded-full text-xs ${item.type === 'test' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}">
+                    ${item.type === 'test' ? 'Test' : 'Package'}
+                </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${formatPrice(item.price)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                <button onclick="removeItem(${index})" class="text-red-600 hover:text-red-900">🗑️ Remove</button>
+            </td>
+        </tr>
+    `).join('');
+    
+    document.getElementById('selected_items').value = JSON.stringify(selectedItems);
+}
+
+// Toggle discount section
+function toggleDiscount() {
+    const section = document.getElementById('discountSection');
+    section.classList.toggle('hidden');
+}
+
+// Calculate discount from percentage
+function calculateDiscount() {
+    const percentageInput = document.getElementById('discount_percentage');
+    const percentage = parseFloat(percentageInput.value) || 0;
+    const totalPrice = parseFloat(document.getElementById('total_price').value.replace(/,/g, '')) || 0;
+    const discountAmount = (totalPrice * percentage) / 100;
+    
+    // ✅ Round to 2 decimal places for display
+    const roundedAmount = Math.round(discountAmount * 100) / 100;
+    document.getElementById('discount_amount_display').value = formatPrice(roundedAmount);
+    
+    // ✅ Round percentage to 2 decimal places to avoid validation error
+    const roundedPercentage = Math.round(percentage * 100) / 100;
+    percentageInput.value = roundedPercentage;
+    
+    document.getElementById('discount_percentage_hidden').value = roundedPercentage;
+    document.getElementById('discount_amount_hidden').value = roundedAmount;
+    calculateTotalAfterDiscount();
+}
+
+// Calculate discount from amount
+function calculateDiscountFromAmount() {
+    const amountInput = document.getElementById('discount_amount_display');
+    const amount = parseFloat(amountInput.value.replace(/,/g, '')) || 0;
+    const totalPrice = parseFloat(document.getElementById('total_price').value.replace(/,/g, '')) || 0;
+    const percentage = totalPrice > 0 ? (amount / totalPrice) * 100 : 0;
+    
+    // ✅ Round percentage to 2 decimal places to avoid validation error
+    const roundedPercentage = Math.round(percentage * 100) / 100;
+    const roundedAmount = Math.round(amount * 100) / 100;
+    
+    document.getElementById('discount_percentage').value = roundedPercentage;
+    document.getElementById('discount_percentage_hidden').value = roundedPercentage;
+    document.getElementById('discount_amount_hidden').value = roundedAmount;
+    amountInput.value = formatPrice(roundedAmount);
+    
+    calculateTotalAfterDiscount();
+}
+
+// Calculate total price
+function calculateTotal() {
+    const total = selectedItems.reduce((sum, item) => sum + item.price, 0);
+    const totalEl = document.getElementById('total_price');
+    if (totalEl) {
+        totalEl.value = formatPrice(total);
+    }
+    calculateTotalAfterDiscount();
+}
+
+// Calculate total after discount
+function calculateTotalAfterDiscount() {
+    const totalEl = document.getElementById('total_price');
+    const discountEl = document.getElementById('discount_amount_display');
+    const receivedEl = document.getElementById('received_amount');
+    const remainingEl = document.getElementById('remaining_amount');
+    const totalAfterDiscountEl = document.getElementById('total_after_discount');
+    
+    if (!totalEl || !discountEl || !receivedEl || !remainingEl || !totalAfterDiscountEl) return;
+    
+    const total = parseFloat(totalEl.value.replace(/,/g, '')) || 0;
+    const discount = parseFloat(discountEl.value.replace(/,/g, '')) || 0;
+    const afterDiscount = total - discount;
+    
+    totalAfterDiscountEl.value = formatPrice(afterDiscount);
+    
+    const currentReceived = parseFloat(receivedEl.value.replace(/,/g, '')) || 0;
+    if (!receivedAmountAutoFilled && currentReceived === 0) {
+        receivedEl.value = afterDiscount;
+        receivedAmountAutoFilled = true;
+    } else if (receivedAmountAutoFilled) {
+        receivedEl.value = afterDiscount;
+    }
+    
+    calculateRemaining();
+}
+
+// Calculate remaining amount
+function calculateRemaining() {
+    const afterDiscountEl = document.getElementById('total_after_discount');
+    const receivedEl = document.getElementById('received_amount');
+    const remainingEl = document.getElementById('remaining_amount');
+    
+    if (!afterDiscountEl || !receivedEl || !remainingEl) return;
+    
+    const afterDiscount = parseFloat(afterDiscountEl.value.replace(/,/g, '')) || 0;
+    const received = parseFloat(receivedEl.value.replace(/,/g, '')) || 0;
+    const remaining = afterDiscount - received;
+    
+    remainingEl.value = formatPrice(remaining);
+}
+
+// Detect manual changes to received amount
+document.addEventListener('DOMContentLoaded', function() {
+    const receivedEl = document.getElementById('received_amount');
+    if (receivedEl) {
+        receivedEl.addEventListener('input', function() {
+            const totalAfterDiscountEl = document.getElementById('total_after_discount');
+            const totalAfterDiscount = parseFloat(totalAfterDiscountEl.value.replace(/,/g, '')) || 0;
+            const currentReceived = parseFloat(this.value.replace(/,/g, '')) || 0;
+            
+            if (Math.abs(currentReceived - totalAfterDiscount) > 0.01) {
+                receivedAmountAutoFilled = false;
+            } else {
+                receivedAmountAutoFilled = true;
+            }
+        });
+    }
+});
+
+// Verify gender vs name
+function verifyGender() {
+    const nameInput = document.getElementById('full_name');
+    const genderSelect = document.getElementById('gender');
+    if (!nameInput || !genderSelect) return;
+    
+    const name = nameInput.value.trim();
+    const selectedGender = genderSelect.value;
+    if (!name || !selectedGender) return;
+    
+    const lastChar = name.slice(-1);
+    const detectedGender = (lastChar === 'ة' || lastChar === 'ه') ? 'female' : 'male';
+    
+    if (detectedGender !== selectedGender) {
+        showPopup('⚠️ Gender may not match name pattern', 'error');
+    }
+}
+
+// Calculate age from DOB
+function calculateAge() {
+    const dobInput = document.getElementById('date_of_birth');
+    const ageEl = document.getElementById('age');
+    const ageUnitEl = document.getElementById('age_unit');
+    
+    if (!dobInput || !ageEl || !ageUnitEl) return;
+    
+    if (!dobInput.value) {
+        ageEl.value = '';
+        return;
+    }
+    
+    const dob = new Date(dobInput.value);
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    
+    if (age < 1 || (age === 1 && monthDiff < 0)) {
+        age = monthDiff < 0 ? (age - 1) * 12 + (12 + monthDiff) : monthDiff;
+        ageUnitEl.value = 'month';
+    }
+    
+    ageEl.value = age;
+}
+
+// Load regions based on province
+function loadRegions() {
+    const provinceId = document.getElementById('province_id');
+    const regionSelect = document.getElementById('region_id');
+    
+    if (!provinceId || !regionSelect) return;
+    
+    if (!provinceId.value) {
+        regionSelect.disabled = true;
+        regionSelect.innerHTML = '<option value="">Select Region...</option>';
+        return;
+    }
+    
+    fetch('/api/regions?province_id=' + provinceId.value)
+        .then(response => response.json())
+        .then(regions => {
+            regionSelect.innerHTML = '<option value="">Select Region...</option>';
+            regions.forEach(region => {
+                const option = document.createElement('option');
+                option.value = region.id;
+                option.textContent = region.region_name;
+                regionSelect.appendChild(option);
+            });
+            regionSelect.disabled = false;
+        });
+}
+
+// Print Receipt Function
+async function printReceipt(patientId) {
+    try {
+        const designResponse = await fetch('/api/print-template/load/receipt');
+        const designResult = await designResponse.json();
+        
+        if (!designResult.success || !designResult.template) {
+            showPopup('❌ No saved receipt design found', 'error');
+            return;
+        }
+        
+        const patientResponse = await fetch(`/api/patient/${patientId}`);
+        const patient = await patientResponse.json();
+        
+        if (patient.error) {
+            showPopup('❌ Error loading patient data', 'error');
+            return;
+        }
+        
+        const labResponse = await fetch('/api/lab-info');
+        const labResult = await labResponse.json();
+        const labInfo = labResult.success ? labResult.lab_info : {};
+        
+        const barcodeResponse = await fetch(`/api/barcode/${patientId}`);
+        const barcodeResult = await barcodeResponse.json();
+        const barcodeData = barcodeResult.barcode_data;
+        
+        const ordersResponse = await fetch(`/api/patient-orders/${patientId}`);
+        const ordersResult = await ordersResponse.json();
+        const orders = ordersResult.success ? ordersResult.orders : [];
+        
+        const printContainer = document.getElementById('printContainer');
+        printContainer.innerHTML = '';
+        
+        const printArea = document.createElement('div');
+        printArea.style.width = designResult.template.paper_width || '80mm';
+        printArea.style.minHeight = designResult.template.paper_height === 'auto' ? '200mm' : designResult.template.paper_height;
+        printArea.style.padding = designResult.template.margin || '0';
+        printArea.style.background = 'white';
+        printArea.style.position = 'relative';
+        printArea.style.fontFamily = 'Arial, sans-serif';
+        printArea.style.fontSize = '11px';
+        
+        const elements = JSON.parse(designResult.template.elements || '[]');
+        elements.forEach(el => {
+            const clone = document.createElement('div');
+            clone.style.position = 'absolute';
+            clone.style.left = el.x + 'px';
+            clone.style.top = el.y + 'px';
+            clone.style.width = el.width + 'px';
+            clone.style.height = el.height + 'px';
+            clone.style.fontSize = (el.fontSize || 11) + 'px';
+            clone.style.fontWeight = el.fontWeight || 'normal';
+            clone.style.color = el.color || '#000000';
+            clone.style.textAlign = el.align || 'left';
+            
+            if (el.type === 'lab_name') {
+                clone.innerHTML = `<div style="font-weight: bold; font-size: 14px; text-align: center;">${labInfo.lab_name || ''}</div>`;
+            } else if (el.type === 'patient_name') {
+                clone.innerHTML = `<div><strong>Name:</strong> ${patient.full_name || ''}</div>`;
+            } else if (el.type === 'patient_id') {
+                clone.innerHTML = `<div><strong>ID:</strong> ${patient.patient_id || ''}</div>`;
+            } else if (el.type === 'barcode_image') {
+                clone.innerHTML = `<div style="text-align: center;"><img src="${barcodeData}" style="max-width: 100%;"></div>`;
+            } else if (el.type === 'total_amount') {
+                clone.innerHTML = `<div><strong>Total:</strong> ${formatPrice(patient.total_amount || 0)}</div>`;
+            } else if (el.type === 'test_list_with_price') {
+                const testsHtml = orders.map(o => 
+                    `<div style="border-bottom: 1px dotted #ccc; padding: 3px 0;">
+                        <span>${o.test_name}</span>
+                        <span style="float: right;">${formatPrice(o.final_price || 0)}</span>
+                    </div>`
+                ).join('');
+                clone.innerHTML = `<div><strong>Tests:</strong><br>${testsHtml}</div>`;
+            }
+            printArea.appendChild(clone);
+        });
+        
+        printContainer.appendChild(printArea);
+        
+        const printContent = printContainer.innerHTML;
+        const printWindow = window.open('', '_blank', 'width=400,height=600');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Print Receipt - ${patientId}</title>
+                <style>
+                    @media print { body { margin: 0; padding: 0; } }
+                    body { font-family: Arial, sans-serif; margin: 0; padding: 10px; }
+                </style>
+            </head>
+            <body>${printContent}
+            <script>
+                window.onload = function() {
+                    setTimeout(function() {
+                        window.print();
+                        window.onafterprint = function() {
+                            setTimeout(function() { window.close(); }, 500);
+                        };
+                    }, 300);
+                };
+            <\/script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    } catch (error) {
+        console.error('Error printing receipt:', error);
+        showPopup('❌ Error printing receipt: ' + error.message, 'error');
+    }
+}
+
+// Print Barcode Function
+async function printBarcode(patientId) {
+    try {
+        const designResponse = await fetch('/api/print-template/load/barcode');
+        const designResult = await designResponse.json();
+        
+        if (!designResult.success || !designResult.template) {
+            showPopup('❌ No saved barcode design found', 'error');
+            return;
+        }
+        
+        const patientResponse = await fetch(`/api/patient/${patientId}`);
+        const patient = await patientResponse.json();
+        
+        if (patient.error) {
+            showPopup('❌ Error loading patient data', 'error');
+            return;
+        }
+        
+        const barcodeResponse = await fetch(`/api/barcode/${patientId}`);
+        const barcodeResult = await barcodeResponse.json();
+        const barcodeData = barcodeResult.barcode_data;
+        
+        const printContainer = document.getElementById('printContainer');
+        printContainer.innerHTML = '';
+        
+        const elements = JSON.parse(designResult.template.elements || '[]');
+        
+        const printArea = document.createElement('div');
+        printArea.style.width = designResult.template.paper_width || '4in';
+        printArea.style.height = designResult.template.paper_height || '2in';
+        printArea.style.position = 'relative';
+        printArea.style.background = 'white';
+        printArea.style.border = '1px solid #000';
+        
+        elements.forEach(el => {
+            const clone = document.createElement('div');
+            clone.style.position = 'absolute';
+            clone.style.left = el.x + 'px';
+            clone.style.top = el.y + 'px';
+            clone.style.width = el.width + 'px';
+            clone.style.height = el.height + 'px';
+            clone.style.fontSize = el.fontSize + 'px';
+            clone.style.fontWeight = el.fontWeight;
+            clone.style.color = el.color;
+            clone.style.textAlign = el.align;
+            clone.style.backgroundColor = el.bgColor;
+            
+            if (el.type === 'barcode_image') {
+                clone.innerHTML = `<div style="text-align: center; padding: 5px;">
+                    <img src="${barcodeData}" style="max-width: 100%; height: auto; display: block;">
+                </div>`;
+            } else if (el.type === 'patient_id') {
+                clone.innerHTML = `<div style="padding: 5px;">${patient.patient_id}</div>`;
+            } else if (el.type === 'patient_name') {
+                clone.innerHTML = `<div style="padding: 5px;">${patient.full_name}</div>`;
+            } else if (el.type === 'test_list') {
+                const testsArray = patient.tests || [];
+                clone.innerHTML = `<div style="padding: 5px; font-size: 11px;">${testsArray.join(', ') || 'No tests'}</div>`;
+            } else if (el.type === 'sample_type') {
+                clone.innerHTML = `<div style="padding: 5px;">${patient.sample_type || 'Unknown'}</div>`;
+            } else {
+                clone.innerHTML = `<div style="padding: 5px;">${el.label || ''}</div>`;
+            }
+            
+            printArea.appendChild(clone);
+        });
+        
+        printContainer.appendChild(printArea);
+        
+        const printContent = printContainer.innerHTML;
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>Print Barcode - ${patientId}</title>
+                <style>
+                    @media print { body { margin: 0; padding: 0; } }
+                    body { font-family: Arial, sans-serif; }
+                </style>
+            </head>
+            <body>${printContent}
+            <script>
+                window.onload = function() {
+                    window.print();
+                    window.onafterprint = function() { window.close(); };
+                };
+            <\/script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    } catch (error) {
+        console.error('Error printing barcode:', error);
+        showPopup('❌ Error printing barcode: ' + error.message, 'error');
+    }
+}
+
+// Form submission validation
+document.addEventListener('DOMContentLoaded', function() {
+    const editForm = document.getElementById('editForm');
+    if (editForm) {
+        editForm.addEventListener('submit', function(e) {
+            const discountAmount = parseFloat(document.getElementById('discount_amount_hidden').value) || 0;
+            const discountPercentage = parseFloat(document.getElementById('discount_percentage_hidden').value) || 0;
+            const discountNote = document.getElementById('discount_note').value.trim();
+            
+            if (discountAmount > 0 || discountPercentage > 0) {
+                if (!discountNote) {
+                    e.preventDefault();
+                    showPopup('⚠️ Discount note is required when applying discount', 'error');
+                    document.getElementById('discount_note').focus();
+                    return;
+                }
+            }
+            
+            if (selectedItems.length === 0) {
+                e.preventDefault();
+                showPopup('⚠️ Please add at least one test or package', 'error');
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1609,7 +1609,192 @@ async def create_patient_registration(
             url=f"/patient-registration?error={str(e).replace(' ', '%20')}",
             status_code=status.HTTP_303_SEE_OTHER
         )
+# ===========================
+# ✅ PATIENT MANAGEMENT ROUTES (CLEAN - NO DUPLICATES)
+# ===========================
+@app.get("/patients", response_class=HTMLResponse)
+def patients_page(request: Request, session: Session = Depends(get_session)):
+    """List all active patients"""
+    search = request.query_params.get("search", "")
+    province_filter = request.query_params.get("province", "")
+    gender_filter = request.query_params.get("gender", "")
+    
+    query = select(Patient).where(Patient.is_active == True)
+    
+    if search:
+        query = query.where(
+            (Patient.full_name.ilike(f"%{search}%")) |
+            (Patient.patient_id.ilike(f"%{search}%")) |
+            (Patient.phone_number.ilike(f"%{search}%"))
+        )
+    
+    if province_filter:
+        query = query.where(Patient.province_id == int(province_filter))
+    
+    if gender_filter:
+        query = query.where(Patient.gender == gender_filter)
+    
+    patients = session.exec(query.order_by(Patient.created_at.desc())).all()
+    provinces = session.exec(select(Province).where(Province.is_active == True)).all()
+    
+    success = request.query_params.get("success")
+    error = request.query_params.get("error")
+    
+    return templates.TemplateResponse("patients.html", {
+        "request": request,
+        "patients": patients,
+        "provinces": provinces,
+        "search": search,
+        "province_filter": province_filter,
+        "gender_filter": gender_filter,
+        "message_success": success,
+        "message_error": error
+    })
 
+@app.get("/patients/edit/{patient_id}", response_class=HTMLResponse)
+def patient_edit_page(request: Request, patient_id: str, session: Session = Depends(get_session)):
+    """Edit patient data page WITH tests and prices"""
+    try:
+        patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
+        
+        if not patient:
+            return RedirectResponse(url="/patients?error=Patient not found", status_code=status.HTTP_303_SEE_OTHER)
+        
+        provinces = session.exec(select(Province).where(Province.is_active == True)).all()
+        regions = session.exec(select(Region).where(Region.province_id == patient.province_id)).all() if patient.province_id else []
+        partners = session.exec(select(Partner).where(Partner.is_active == True)).all()
+        tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
+        packages = session.exec(select(Package).where(Package.is_active == True)).all()
+        
+        # Get patient's latest visit
+        visits = session.exec(
+            select(PatientVisit)
+            .where(PatientVisit.patient_id == patient.id)
+            .order_by(PatientVisit.visit_date.desc())
+        ).all()
+        latest_visit = visits[0] if visits else None
+        
+        # ✅ Get patient's orders for latest visit - FIXED
+        orders_json = []
+        if latest_visit:
+            orders = session.exec(select(Order).where(Order.visit_id == latest_visit.id)).all()
+            for order in orders:
+                test = session.get(TestDefinition, order.test_id)
+                orders_json.append({
+                    "id": order.test_id,
+                    "name": test.test_name if test else 'Unknown Test',
+                    "type": 'test',
+                    "price": float(order.unit_price) if order.unit_price else (float(test.price) if test else 0.0),
+                    "package_name": order.package_name
+                })
+        
+        # ✅ CRITICAL: Always pass valid JSON string (even if empty)
+        orders_json_str = json.dumps(orders_json if orders_json else [])
+        
+        print(f"✅ Orders JSON for patient {patient_id}: {orders_json_str}")  # Debug log
+        
+        success = request.query_params.get("success")
+        error = request.query_params.get("error")
+        
+        return templates.TemplateResponse("patient_edit.html", {
+            "request": request,
+            "patient": patient,
+            "provinces": provinces,
+            "regions": regions,
+            "partners": partners,
+            "tests": tests,
+            "packages": packages,
+            "visits": visits,
+            "latest_visit": latest_visit,
+            "orders_json": orders_json_str,  # ✅ Always valid JSON string
+            "message_success": success,
+            "message_error": error
+        })
+    except Exception as e:
+        print(f"❌ ERROR in patient_edit_page: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return HTMLResponse(content=f"<h1>Error Loading Page</h1><p>{str(e)}</p>", status_code=500)
+# ===========================
+# ✅ DELETED PATIENTS PAGE
+# ===========================
+@app.get("/patients/deleted", response_class=HTMLResponse)
+def deleted_patients_page(request: Request, session: Session = Depends(get_session)):
+    """List all deleted/deactivated patients"""
+    search = request.query_params.get("search", "")
+    
+    query = select(Patient).where(Patient.is_active == False)
+    
+    if search:
+        query = query.where(
+            (Patient.full_name.ilike(f"%{search}%")) |
+            (Patient.patient_id.ilike(f"%{search}%")) |
+            (Patient.phone_number.ilike(f"%{search}%"))
+        )
+    
+    patients = session.exec(query.order_by(Patient.deleted_at.desc())).all()
+    
+    success = request.query_params.get("success")
+    error = request.query_params.get("error")
+    
+    return templates.TemplateResponse("deleted_patients.html", {
+        "request": request,
+        "patients": patients,
+        "search": search,
+        "message_success": success,
+        "message_error": error
+    })
+
+@app.get("/patients/view-deleted/{patient_id}", response_class=HTMLResponse)
+def view_deleted_patient(request: Request, patient_id: str, session: Session = Depends(get_session)):
+    """View deleted patient details (read-only)"""
+    patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
+    
+    if not patient or patient.is_active:
+        return RedirectResponse(url="/patients/deleted?error=Patient not found", status_code=status.HTTP_303_SEE_OTHER)
+    
+    provinces = session.exec(select(Province).where(Province.is_active == True)).all()
+    regions = session.exec(select(Region).where(Region.province_id == patient.province_id)).all() if patient.province_id else []
+    partners = session.exec(select(Partner).where(Partner.is_active == True)).all()
+    
+    visits = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id).order_by(PatientVisit.visit_date.desc())).all()
+    orders = session.exec(select(Order).where(Order.patient_id == patient.id).order_by(Order.order_date.desc())).all()
+    
+    return templates.TemplateResponse("view_deleted_patient.html", {
+        "request": request,
+        "patient": patient,
+        "provinces": provinces,
+        "regions": regions,
+        "partners": partners,
+        "visits": visits,
+        "orders": orders
+    })
+
+@app.get("/patients/restore/{patient_id}")
+def restore_patient(patient_id: str, request: Request, session: Session = Depends(get_session)):
+    """Restore deleted patient"""
+    try:
+        current_user = get_current_user(request, session)
+        patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
+        
+        if patient:
+            old_values = model_to_dict(patient)
+            patient.is_active = True
+            patient.deleted_by = None
+            patient.deleted_at = None
+            patient.edited_by = current_user.id if current_user else None
+            patient.edited_at = datetime.utcnow()
+            session.add(patient)
+            session.commit()
+            
+            create_audit_log(session, "patient", patient.id, "restore", current_user, old_values=old_values)
+            return RedirectResponse(url="/patients/deleted?success=Patient restored successfully!", status_code=status.HTTP_303_SEE_OTHER)
+        
+        return RedirectResponse(url="/patients/deleted?error=Patient not found", status_code=status.HTTP_303_SEE_OTHER)
+        
+    except Exception as e:
+        session.rollback()
+        return RedirectResponse(url=f"/patients/deleted?error={str(e).replace(' ', '%20')}", status_code=status.HTTP_303_SEE_OTHER)
 # ===========================
 # PRINT DESIGNER ROUTES
 # ===========================
