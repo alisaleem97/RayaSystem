@@ -51,7 +51,7 @@
 
         <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
             <h4 class="text-md font-semibold text-red-700 mb-2">⚠️ Deletion Information</h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                 <div>
                     <span class="text-red-600">Deleted By:</span>
                     <span class="text-slate-700 ml-2">User ID {{ patient.deleted_by or 'Unknown' }}</span>
@@ -59,6 +59,10 @@
                 <div>
                     <span class="text-red-600">Deleted At:</span>
                     <span class="text-slate-700 ml-2">{{ patient.deleted_at.strftime('%Y-%m-%d %H:%M') if patient.deleted_at else 'N/A' }}</span>
+                </div>
+                <div class="md:col-span-3">
+                    <span class="text-red-600">Reason:</span>
+                    <span class="text-slate-700 ml-2">{{ patient.deleted_reason or 'No reason provided' }}</span>
                 </div>
             </div>
         </div>

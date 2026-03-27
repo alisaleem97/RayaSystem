@@ -181,7 +181,7 @@
     <div>
         <label class="block text-sm font-medium text-green-700 mb-1">Discount Percentage (%)</label>
         <!-- ✅ REMOVED step attribute to prevent validation error -->
-        <input type="number" id="discount_percentage" value="0" min="0" max="100" onchange="calculateDiscount()"
+        <input type="number" id="discount_percentage" value="0" min="0" max="100" step="any" onchange="calculateDiscount()"
             class="w-full border border-green-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500">
     </div>
     <div>
@@ -325,8 +325,19 @@ document.addEventListener('DOMContentLoaded', function() {
     {% if latest_visit %}
     const receivedEl = document.getElementById('received_amount');
     const discountEl = document.getElementById('discount_amount_display');
+    const discountPctEl = document.getElementById('discount_percentage');
+    const discountNoteEl = document.getElementById('discount_note');
     if (receivedEl) receivedEl.value = {{ latest_visit.received_amount }};
-    if (discountEl) discountEl.value = {{ latest_visit.discount_amount }};
+    if (discountEl) discountEl.value = formatPrice(Math.round({{ latest_visit.discount_amount }}));
+    if (discountPctEl) discountPctEl.value = {{ latest_visit.discount_percentage|default(0) }};
+    if (discountNoteEl) discountNoteEl.value = "{{ latest_visit.discount_note|default('', true)|e }}";
+    // Populate hidden fields too
+    document.getElementById('discount_percentage_hidden').value = {{ latest_visit.discount_percentage|default(0) }};
+    document.getElementById('discount_amount_hidden').value = Math.round({{ latest_visit.discount_amount }});
+    // Auto-show discount section if discount was applied
+    if ({{ latest_visit.discount_amount }} > 0 || {{ latest_visit.discount_percentage|default(0) }} > 0) {
+        document.getElementById('discountSection').classList.remove('hidden');
+    }
     receivedAmountAutoFilled = true;
     {% endif %}
     
@@ -492,40 +503,25 @@ function toggleDiscount() {
 
 // Calculate discount from percentage
 function calculateDiscount() {
-    const percentageInput = document.getElementById('discount_percentage');
-    const percentage = parseFloat(percentageInput.value) || 0;
+    const percentage = parseFloat(document.getElementById('discount_percentage').value) || 0;
     const totalPrice = parseFloat(document.getElementById('total_price').value.replace(/,/g, '')) || 0;
     const discountAmount = (totalPrice * percentage) / 100;
     
-    // ✅ Round to 2 decimal places for display
-    const roundedAmount = Math.round(discountAmount * 100) / 100;
-    document.getElementById('discount_amount_display').value = formatPrice(roundedAmount);
-    
-    // ✅ Round percentage to 2 decimal places to avoid validation error
-    const roundedPercentage = Math.round(percentage * 100) / 100;
-    percentageInput.value = roundedPercentage;
-    
-    document.getElementById('discount_percentage_hidden').value = roundedPercentage;
-    document.getElementById('discount_amount_hidden').value = roundedAmount;
+    document.getElementById('discount_amount_display').value = formatPrice(discountAmount);
+    document.getElementById('discount_percentage_hidden').value = percentage;
+    document.getElementById('discount_amount_hidden').value = Math.round(discountAmount);
     calculateTotalAfterDiscount();
 }
 
 // Calculate discount from amount
 function calculateDiscountFromAmount() {
-    const amountInput = document.getElementById('discount_amount_display');
-    const amount = parseFloat(amountInput.value.replace(/,/g, '')) || 0;
+    const amount = parseFloat(document.getElementById('discount_amount_display').value.replace(/,/g, '')) || 0;
     const totalPrice = parseFloat(document.getElementById('total_price').value.replace(/,/g, '')) || 0;
     const percentage = totalPrice > 0 ? (amount / totalPrice) * 100 : 0;
     
-    // ✅ Round percentage to 2 decimal places to avoid validation error
-    const roundedPercentage = Math.round(percentage * 100) / 100;
-    const roundedAmount = Math.round(amount * 100) / 100;
-    
-    document.getElementById('discount_percentage').value = roundedPercentage;
-    document.getElementById('discount_percentage_hidden').value = roundedPercentage;
-    document.getElementById('discount_amount_hidden').value = roundedAmount;
-    amountInput.value = formatPrice(roundedAmount);
-    
+    document.getElementById('discount_percentage').value = percentage;
+    document.getElementById('discount_percentage_hidden').value = percentage;
+    document.getElementById('discount_amount_hidden').value = amount;
     calculateTotalAfterDiscount();
 }
 
@@ -670,37 +666,46 @@ function loadRegions() {
         });
 }
 
-// Print Receipt Function
+// Print Receipt Function - Full version matching registration page
 async function printReceipt(patientId) {
     try {
+        // 1. Load saved design
         const designResponse = await fetch('/api/print-template/load/receipt');
         const designResult = await designResponse.json();
         
         if (!designResult.success || !designResult.template) {
-            showPopup('❌ No saved receipt design found', 'error');
+            showPopup('❌ No saved receipt design found. Please design receipt first in Receipt Designer.', 'error');
             return;
         }
         
+        // 2. Fetch patient data
         const patientResponse = await fetch(`/api/patient/${patientId}`);
         const patient = await patientResponse.json();
         
         if (patient.error) {
-            showPopup('❌ Error loading patient data', 'error');
+            showPopup('❌ Error loading patient data: ' + patient.error, 'error');
             return;
         }
         
+        // 3. Fetch lab info (with currency)
         const labResponse = await fetch('/api/lab-info');
         const labResult = await labResponse.json();
-        const labInfo = labResult.success ? labResult.lab_info : {};
+        const labInfo = labResult.success ? labResult.lab_info : {
+            lab_name: 'NexLab Medical Center', lab_title: 'Medical Laboratory', lab_address: '', lab_phone_1: '', lab_phone_2: '', lab_email: '', lab_website: '', lab_currency: '$', first_doctor_name: '', second_doctor_name: '', lab_note_1: '', lab_note_2: '', lab_logo: '', lab_qr_1: '', lab_qr_2: '', lab_stamp_1: '', lab_stamp_2: '', lab_signature_1: '', lab_signature_2: ''
+        };
+        const currency = labInfo.lab_currency || '$';
         
+        // 4. Fetch barcode
         const barcodeResponse = await fetch(`/api/barcode/${patientId}`);
         const barcodeResult = await barcodeResponse.json();
         const barcodeData = barcodeResult.barcode_data;
         
+        // 5. Fetch orders with price snapshot
         const ordersResponse = await fetch(`/api/patient-orders/${patientId}`);
         const ordersResult = await ordersResponse.json();
         const orders = ordersResult.success ? ordersResult.orders : [];
         
+        // 6. Create print container
         const printContainer = document.getElementById('printContainer');
         printContainer.innerHTML = '';
         
@@ -713,7 +718,9 @@ async function printReceipt(patientId) {
         printArea.style.fontFamily = 'Arial, sans-serif';
         printArea.style.fontSize = '11px';
         
+        // 7. Parse and render all saved elements
         const elements = JSON.parse(designResult.template.elements || '[]');
+        
         elements.forEach(el => {
             const clone = document.createElement('div');
             clone.style.position = 'absolute';
@@ -725,156 +732,245 @@ async function printReceipt(patientId) {
             clone.style.fontWeight = el.fontWeight || 'normal';
             clone.style.color = el.color || '#000000';
             clone.style.textAlign = el.align || 'left';
+            clone.style.backgroundColor = el.bgColor || 'transparent';
+            clone.style.padding = '2px 4px';
             
-            if (el.type === 'lab_name') {
-                clone.innerHTML = `<div style="font-weight: bold; font-size: 14px; text-align: center;">${labInfo.lab_name || ''}</div>`;
-            } else if (el.type === 'patient_name') {
-                clone.innerHTML = `<div><strong>Name:</strong> ${patient.full_name || ''}</div>`;
-            } else if (el.type === 'patient_id') {
-                clone.innerHTML = `<div><strong>ID:</strong> ${patient.patient_id || ''}</div>`;
-            } else if (el.type === 'barcode_image') {
-                clone.innerHTML = `<div style="text-align: center;"><img src="${barcodeData}" style="max-width: 100%;"></div>`;
-            } else if (el.type === 'total_amount') {
-                clone.innerHTML = `<div><strong>Total:</strong> ${formatPrice(patient.total_amount || 0)}</div>`;
-            } else if (el.type === 'test_list_with_price') {
-                const testsHtml = orders.map(o => 
-                    `<div style="border-bottom: 1px dotted #ccc; padding: 3px 0;">
-                        <span>${o.test_name}</span>
-                        <span style="float: right;">${formatPrice(o.final_price || 0)}</span>
-                    </div>`
-                ).join('');
-                clone.innerHTML = `<div><strong>Tests:</strong><br>${testsHtml}</div>`;
+            let isEmpty = false;
+            
+            switch(el.type) {
+                case 'lab_name': const labNameVal = labInfo.lab_name || ''; isEmpty = !labNameVal; clone.innerHTML = `<div style="font-weight: bold; font-size: 14px; text-align: center;">${labNameVal}</div>`; break;
+                case 'lab_title': const labTitleVal = labInfo.lab_title || ''; isEmpty = !labTitleVal; clone.innerHTML = `<div style="font-size: 10px; text-align: center;">${labTitleVal}</div>`; break;
+                case 'lab_address': const labAddressVal = labInfo.lab_address || ''; isEmpty = !labAddressVal; clone.innerHTML = `<div style="font-size: 10px; text-align: center;">${labAddressVal}</div>`; break;
+                case 'lab_phone_1': const labPhone1Val = labInfo.lab_phone_1 || ''; isEmpty = !labPhone1Val; clone.innerHTML = `<div style="font-size: 10px;">📞 ${labPhone1Val}</div>`; break;
+                case 'lab_phone_2': const labPhone2Val = labInfo.lab_phone_2 || ''; isEmpty = !labPhone2Val; clone.innerHTML = `<div style="font-size: 10px;">${labPhone2Val}</div>`; break;
+                case 'lab_email': const labEmailVal = labInfo.lab_email || ''; isEmpty = !labEmailVal; clone.innerHTML = `<div style="font-size: 10px;">✉️ ${labEmailVal}</div>`; break;
+                case 'lab_website': const labWebsiteVal = labInfo.lab_website || ''; isEmpty = !labWebsiteVal; clone.innerHTML = `<div style="font-size: 10px;">🌐 ${labWebsiteVal}</div>`; break;
+                case 'first_doctor_name': const doctor1Val = labInfo.first_doctor_name || ''; isEmpty = !doctor1Val; clone.innerHTML = `<div style="font-size: 10px;">${doctor1Val}</div>`; break;
+                case 'second_doctor_name': const doctor2Val = labInfo.second_doctor_name || ''; isEmpty = !doctor2Val; clone.innerHTML = `<div style="font-size: 10px;">${doctor2Val}</div>`; break;
+                case 'lab_note_1': const note1Val = labInfo.lab_note_1 || ''; isEmpty = !note1Val; clone.innerHTML = `<div style="font-size: 9px; font-style: italic;">${note1Val}</div>`; break;
+                case 'lab_note_2': const note2Val = labInfo.lab_note_2 || ''; isEmpty = !note2Val; clone.innerHTML = `<div style="font-size: 9px; font-style: italic;">${note2Val}</div>`; break;
+                case 'lab_logo': const logoUrl = el.imageUrl || labInfo.lab_logo; isEmpty = !logoUrl; if (logoUrl) { clone.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="/uploads/${logoUrl}" style="max-width: 100%; max-height: 60px;"></div>`; } else { clone.style.display = 'none'; } break;
+                case 'lab_qr_1': const qr1Url = el.imageUrl || labInfo.lab_qr_1; isEmpty = !qr1Url; if (qr1Url) { clone.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="/uploads/${qr1Url}" style="max-width: 80px; max-height: 80px;"></div>`; } else { clone.style.display = 'none'; } break;
+                case 'lab_qr_2': const qr2Url = el.imageUrl || labInfo.lab_qr_2; isEmpty = !qr2Url; if (qr2Url) { clone.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="/uploads/${qr2Url}" style="max-width: 80px; max-height: 80px;"></div>`; } else { clone.style.display = 'none'; } break;
+                case 'lab_stamp_1': const stamp1Url = el.imageUrl || labInfo.lab_stamp_1; isEmpty = !stamp1Url; if (stamp1Url) { clone.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="/uploads/${stamp1Url}" style="max-width: 100px; max-height: 100px;"></div>`; } else { clone.style.display = 'none'; } break;
+                case 'lab_stamp_2': const stamp2Url = el.imageUrl || labInfo.lab_stamp_2; isEmpty = !stamp2Url; if (stamp2Url) { clone.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="/uploads/${stamp2Url}" style="max-width: 100px; max-height: 100px;"></div>`; } else { clone.style.display = 'none'; } break;
+                case 'lab_signature_1': const sig1Url = el.imageUrl || labInfo.lab_signature_1; isEmpty = !sig1Url; if (sig1Url) { clone.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="/uploads/${sig1Url}" style="max-width: 120px; max-height: 50px;"></div>`; } else { clone.style.display = 'none'; } break;
+                case 'lab_signature_2': const sig2Url = el.imageUrl || labInfo.lab_signature_2; isEmpty = !sig2Url; if (sig2Url) { clone.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="/uploads/${sig2Url}" style="max-width: 120px; max-height: 50px;"></div>`; } else { clone.style.display = 'none'; } break;
+                case 'patient_name': const patientNameVal = patient.full_name || ''; isEmpty = !patientNameVal; clone.innerHTML = `<div><strong>Name:</strong> ${patientNameVal}</div>`; break;
+                case 'patient_id': const patientIdVal = patient.patient_id || ''; isEmpty = !patientIdVal; clone.innerHTML = `<div><strong>ID:</strong> ${patientIdVal}</div>`; break;
+                case 'visit_id': const visitIdVal = patient.visit_id || ''; isEmpty = !visitIdVal; clone.innerHTML = `<div><strong>Visit:</strong> ${visitIdVal}</div>`; break;
+                case 'visit_date': const visitDateVal = patient.visit_date ? new Date(patient.visit_date).toLocaleDateString('en-GB') + ' ' + new Date(patient.visit_date).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'}) : ''; isEmpty = !visitDateVal; clone.innerHTML = `<div><strong>Date:</strong> ${visitDateVal}</div>`; break;
+                case 'patient_age': const ageVal = patient.age ? `${patient.age} ${patient.age_unit || 'year'}${(patient.age||1) > 1 ? 's' : ''}` : ''; isEmpty = !ageVal; clone.innerHTML = `<div><strong>Age:</strong> ${ageVal}</div>`; break;
+                case 'patient_gender': const genderVal = patient.gender ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1) : ''; isEmpty = !genderVal; clone.innerHTML = `<div><strong>Gender:</strong> ${genderVal}</div>`; break;
+                case 'patient_phone': const phoneVal = `${patient.phone_key || ''} ${patient.phone_number || ''}`.trim(); isEmpty = !phoneVal; clone.innerHTML = `<div><strong>Phone:</strong> ${phoneVal}</div>`; break;
+                case 'sample_type': const sampleVal = patient.sample_type || ''; isEmpty = !sampleVal; clone.innerHTML = `<div><strong>Sample:</strong> ${sampleVal}</div>`; break;
+                case 'test_list_with_price':
+                    if (orders.length > 0) {
+                        // Group orders by package_name
+                        const groupedOrders = {};
+                        orders.forEach(o => {
+                            const key = o.package_name ? `pkg_${o.package_name}` : `test_${o.test_id}`;
+                            if (!groupedOrders[key]) {
+                                groupedOrders[key] = {
+                                    name: o.package_name || o.test_name,
+                                    price: 0,
+                                    isPackage: !!o.package_name
+                                };
+                            }
+                            groupedOrders[key].price += (o.final_price || o.unit_price || o.price || 0);
+                        });
+                        // Render grouped orders
+                        const testsHtml = Object.values(groupedOrders).map(o =>
+                            `<div style="border-bottom: 1px dotted #ccc; padding: 3px 0; display: flex; justify-content: space-between;">
+                                <span>${o.isPackage ? '📦 ' : ''}${o.name}</span>
+                                <span>${formatPrice(o.price)}</span>
+                            </div>`
+                        ).join('');
+                        clone.innerHTML = `<div><strong>Tests:</strong><br>${testsHtml}</div>`;
+                    } else {
+                        clone.innerHTML = `<div><strong>Tests:</strong><br><em>No tests ordered</em></div>`;
+                    }
+                    break;
+                case 'test_name': const firstTest = patient.tests?.[0] || ''; isEmpty = !firstTest; clone.innerHTML = `<div>${firstTest}</div>`; break;
+                case 'barcode_image': clone.innerHTML = `<div style="text-align: center; padding: 5px 0;"><img src="${barcodeData}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;"></div>`; break;
+                case 'total_amount': const totalVal = patient.total_amount || 0; isEmpty = totalVal === 0; clone.innerHTML = `<div style="display: flex; justify-content: space-between; font-weight: bold;"><span>Total:</span><span>${formatPrice(totalVal)}</span></div>`; break;
+                case 'discount': const discountVal = patient.discount_amount || 0; isEmpty = false; clone.innerHTML = `<div style="display: flex; justify-content: space-between;"><span>Discount:</span><span>${formatPrice(discountVal)}</span></div>`; break;
+                case 'paid_amount': const paidVal = patient.paid_amount || 0; isEmpty = paidVal === 0; clone.innerHTML = `<div style="display: flex; justify-content: space-between;"><span>Paid:</span><span>${formatPrice(paidVal)}</span></div>`; break;
+                case 'remain_amount': const remainVal = patient.remain_amount || 0; isEmpty = remainVal === 0; const remainClass = remainVal > 0 ? 'color: #dc2626; font-weight: bold;' : ''; clone.innerHTML = `<div style="display: flex; justify-content: space-between; border-top: 2px solid #000; padding-top: 5px; ${remainClass}"><span>Remaining:</span><span>${formatPrice(remainVal)}</span></div>`; break;
+                case 'shape_line': clone.className = ''; clone.style.height = (el.shapeWidth || 2) + 'px'; clone.style.background = el.shapeColor || '#000000'; clone.style.border = 'none'; clone.innerHTML = ''; break;
+                case 'shape_box': clone.className = ''; clone.style.border = (el.shapeWidth || 2) + 'px solid ' + (el.shapeColor || '#000000'); clone.style.background = 'transparent'; clone.innerHTML = ''; break;
+                case 'shape_circle': clone.className = ''; clone.style.border = (el.shapeWidth || 2) + 'px solid ' + (el.shapeColor || '#000000'); clone.style.borderRadius = '50%'; clone.style.background = 'transparent'; clone.innerHTML = ''; break;
+                case 'custom_text': const customTextVal = el.customText || ''; isEmpty = !customTextVal; clone.innerHTML = `<div>${customTextVal}</div>`; break;
+                case 'thank_you_message': const thankYouVal = el.customText || 'Thank you for choosing our services!'; isEmpty = !thankYouVal; clone.innerHTML = `<div style="text-align: center; font-style: italic; margin-top: 10px;">${thankYouVal}</div>`; break;
+                case 'footer_notes': const footerVal = labInfo.lab_note_1 || 'Results are valid for 30 days. Please consult your doctor for interpretation.'; isEmpty = !footerVal; clone.innerHTML = `<div style="font-size: 9px; text-align: center; padding-top: 10px; border-top: 1px dashed #ccc;">${footerVal}</div>`; break;
+                default: const defaultVal = el.label || ''; isEmpty = !defaultVal; clone.innerHTML = `<div>${defaultVal}</div>`;
             }
+            
+            if (el.hideIfEmpty && isEmpty) { clone.style.display = 'none'; }
+            
             printArea.appendChild(clone);
         });
         
         printContainer.appendChild(printArea);
         
+        // 8. Print
         const printContent = printContainer.innerHTML;
         const printWindow = window.open('', '_blank', 'width=400,height=600');
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Print Receipt - ${patientId}</title>
-                <style>
-                    @media print { body { margin: 0; padding: 0; } }
-                    body { font-family: Arial, sans-serif; margin: 0; padding: 10px; }
-                </style>
-            </head>
-            <body>${printContent}
-            <script>
-                window.onload = function() {
-                    setTimeout(function() {
-                        window.print();
-                        window.onafterprint = function() {
-                            setTimeout(function() { window.close(); }, 500);
-                        };
-                    }, 300);
-                };
-            <\/script>
-            </body>
-            </html>
-        `);
+        printWindow.document.write(`<!DOCTYPE html><html><head><title>Print Receipt - ${patient.patient_id}</title><style>@media print { body { margin: 0; padding: 0; } .no-print { display: none !important; } } body { font-family: Arial, sans-serif; margin: 0; padding: 10px; }</style></head><body>${printContent}<script>window.onload = function() { setTimeout(function() { window.print(); window.onafterprint = function() { setTimeout(function() { window.close(); }, 500); }; }, 300); };<\/script></body></html>`);
         printWindow.document.close();
+        
     } catch (error) {
         console.error('Error printing receipt:', error);
         showPopup('❌ Error printing receipt: ' + error.message, 'error');
     }
 }
 
-// Print Barcode Function
+// Print Barcode Function - MULTIPLE BARCODES BY SAMPLE TYPE
 async function printBarcode(patientId) {
     try {
-        const designResponse = await fetch('/api/print-template/load/barcode');
-        const designResult = await designResponse.json();
+        // Load saved design
+        const response = await fetch('/api/print-template/load/barcode');
+        const result = await response.json();
         
-        if (!designResult.success || !designResult.template) {
-            showPopup('❌ No saved barcode design found', 'error');
-            return;
-        }
-        
+        // Get patient data
         const patientResponse = await fetch(`/api/patient/${patientId}`);
         const patient = await patientResponse.json();
         
+        // Check if patient data has error
         if (patient.error) {
-            showPopup('❌ Error loading patient data', 'error');
+            showPopup('❌ Error loading patient data: ' + patient.error, 'error');
             return;
         }
         
-        const barcodeResponse = await fetch(`/api/barcode/${patientId}`);
-        const barcodeResult = await barcodeResponse.json();
-        const barcodeData = barcodeResult.barcode_data;
+        if (!result.success || !result.template) {
+            showPopup('❌ No saved barcode design found. Please design barcode first.', 'error');
+            return;
+        }
         
+        // Ensure patient.tests is an array
+        if (!patient.tests) {
+            patient.tests = [];
+        }
+        
+        // Ensure patient.tests_by_sample_type exists
+        if (!patient.tests_by_sample_type) {
+            patient.tests_by_sample_type = {
+                'Unknown': patient.tests || []
+            };
+        }
+        
+        if (!patient.tests || patient.tests.length === 0) {
+            console.warn('⚠️ No tests found for this patient, but continuing with barcode print');
+        }
+        
+        // Create print content
         const printContainer = document.getElementById('printContainer');
         printContainer.innerHTML = '';
         
-        const elements = JSON.parse(designResult.template.elements || '[]');
+        // Get design elements
+        const elements = JSON.parse(result.template.elements || '[]');
         
-        const printArea = document.createElement('div');
-        printArea.style.width = designResult.template.paper_width || '4in';
-        printArea.style.height = designResult.template.paper_height || '2in';
-        printArea.style.position = 'relative';
-        printArea.style.background = 'white';
-        printArea.style.border = '1px solid #000';
-        
-        elements.forEach(el => {
-            const clone = document.createElement('div');
-            clone.style.position = 'absolute';
-            clone.style.left = el.x + 'px';
-            clone.style.top = el.y + 'px';
-            clone.style.width = el.width + 'px';
-            clone.style.height = el.height + 'px';
-            clone.style.fontSize = el.fontSize + 'px';
-            clone.style.fontWeight = el.fontWeight;
-            clone.style.color = el.color;
-            clone.style.textAlign = el.align;
-            clone.style.backgroundColor = el.bgColor;
+        // Print one barcode per sample type
+        for (const [sampleType, testNames] of Object.entries(patient.tests_by_sample_type)) {
+            const printArea = document.createElement('div');
+            printArea.style.width = result.template.paper_width || '4in';
+            printArea.style.height = result.template.paper_height || '2in';
+            printArea.style.position = 'relative';
+            printArea.style.background = 'white';
+            printArea.style.border = '1px solid #000';
+            printArea.style.marginBottom = '10px';
+            printArea.style.pageBreakAfter = 'always';
             
-            if (el.type === 'barcode_image') {
-                clone.innerHTML = `<div style="text-align: center; padding: 5px;">
-                    <img src="${barcodeData}" style="max-width: 100%; height: auto; display: block;">
-                </div>`;
-            } else if (el.type === 'patient_id') {
-                clone.innerHTML = `<div style="padding: 5px;">${patient.patient_id}</div>`;
-            } else if (el.type === 'patient_name') {
-                clone.innerHTML = `<div style="padding: 5px;">${patient.full_name}</div>`;
-            } else if (el.type === 'test_list') {
-                const testsArray = patient.tests || [];
-                clone.innerHTML = `<div style="padding: 5px; font-size: 11px;">${testsArray.join(', ') || 'No tests'}</div>`;
-            } else if (el.type === 'sample_type') {
-                clone.innerHTML = `<div style="padding: 5px;">${patient.sample_type || 'Unknown'}</div>`;
-            } else {
-                clone.innerHTML = `<div style="padding: 5px;">${el.label || ''}</div>`;
-            }
+            // Parse and render saved elements
+            elements.forEach(el => {
+                const clone = document.createElement('div');
+                clone.style.position = 'absolute';
+                clone.style.left = el.x + 'px';
+                clone.style.top = el.y + 'px';
+                clone.style.width = el.width + 'px';
+                clone.style.height = el.height + 'px';
+                clone.style.fontSize = el.fontSize + 'px';
+                clone.style.fontWeight = el.fontWeight;
+                clone.style.color = el.color;
+                clone.style.textAlign = el.align;
+                clone.style.backgroundColor = el.bgColor;
+                
+                if (el.type === 'barcode_image') {
+                    clone.innerHTML = `
+                        <div style="text-align: center; padding: 5px;">
+                            <img src="https://bwipjs-api.metafloor.com/?bcid=code128&text=${patient.patient_id}&scale=3&height=10&includetext" style="max-width: 100%; height: auto; display: block;">
+                        </div>
+                    `;
+                } else if (el.type === 'patient_id') {
+                    clone.innerHTML = `
+                        <div style="padding: 5px;">
+                            ${patient.patient_id}
+                        </div>
+                    `;
+                } else if (el.type === 'patient_name') {
+                    clone.innerHTML = `
+                        <div style="padding: 5px;">
+                            ${patient.full_name}
+                        </div>
+                    `;
+                } else if (el.type === 'test_list') {
+                    const testsArray = testNames || [];
+                    const testsHtml = testsArray.length > 0
+                        ? testsArray.join(', ')
+                        : 'No tests';
+                    clone.innerHTML = `
+                        <div style="padding: 5px; font-size: 11px;">
+                            ${testsHtml}
+                        </div>
+                    `;
+                } else if (el.type === 'sample_type') {
+                    clone.innerHTML = `
+                        <div style="padding: 5px;">
+                            ${sampleType}
+                        </div>
+                    `;
+                } else {
+                    clone.innerHTML = `<div style="padding: 5px;">${el.label || ''}</div>`;
+                }
+                
+                printArea.appendChild(clone);
+            });
             
-            printArea.appendChild(clone);
-        });
+            printContainer.appendChild(printArea);
+        }
         
-        printContainer.appendChild(printArea);
-        
+        // Print
         const printContent = printContainer.innerHTML;
         const printWindow = window.open('', '_blank');
         printWindow.document.write(`
             <html>
             <head>
-                <title>Print Barcode - ${patientId}</title>
-                <style>
-                    @media print { body { margin: 0; padding: 0; } }
-                    body { font-family: Arial, sans-serif; }
-                </style>
+            <title>Print Barcodes - ${patient.patient_id}</title>
+            <style>
+            @media print {
+                body { margin: 0; padding: 0; }
+                .no-print { display: none; }
+                .barcode-page { page-break-after: always; }
+            }
+            .barcode-page {
+                margin-bottom: 20px;
+            }
+            </style>
             </head>
             <body>${printContent}
             <script>
-                window.onload = function() {
-                    window.print();
-                    window.onafterprint = function() { window.close(); };
+            window.onload = function() {
+                window.print();
+                window.onafterprint = function() {
+                    window.close();
                 };
+            };
             <\/script>
             </body>
             </html>
         `);
         printWindow.document.close();
+        
     } catch (error) {
         console.error('Error printing barcode:', error);
         showPopup('❌ Error printing barcode: ' + error.message, 'error');

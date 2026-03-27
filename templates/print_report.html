@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print Report - {{ patient.patient_id }}</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Tajawal:wght@400;500;700&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        /* LOAD YOUR CUSTOM ARABIC FONT */
+        @font-face {
+            font-family: 'FormaDJRArabic';
+            src: url('/uploads/alfont_com_FormaDJRArabicDeck-Bold-Testing.otf') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: #e2e8f0;
+            display: flex;
+            justify-content: center;
+            font-family: 'FormaDJRArabic', 'Inter', sans-serif;
+        }
+
+        #reportCanvas {
+            background: white;
+            position: relative;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            margin: 20px 0;
+            overflow: hidden;
+        }
+
+        .size-a4 {
+            width: 210mm;
+            height: 297mm;
+            min-width: 210mm;
+            min-height: 297mm;
+        }
+
+        .size-a5 {
+            width: 148mm;
+            height: 210mm;
+            min-width: 148mm;
+            min-height: 210mm;
+        }
+
+        .design-element {
+            position: absolute;
+            word-wrap: break-word;
+            overflow: hidden;
+            min-width: 20px;
+            min-height: 10px;
+        }
+
+        @page {
+            size: auto;
+            margin: 0;
+        }
+
+        @media print {
+            body {
+                background: white;
+                margin: 0;
+                padding: 0;
+                display: block;
+            }
+
+            #reportCanvas {
+                box-shadow: none;
+                margin: 0;
+                page-break-after: always;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="no-print fixed top-4 right-4 flex gap-2 z-50">
+        <button onclick="window.print()"
+            class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-bold shadow-lg transition">
+            <i class="fas fa-print mr-2"></i> Print Report
+        </button>
+        <button onclick="window.close()"
+            class="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-bold shadow-lg transition">
+            Close
+        </button>
+    </div>
+
+    <div id="reportCanvas" class="size-a4"></div>
+
+    <script>
+        const rawTemplate = {{ template.elements | default ('{}') | safe }};
+        const patient = {{ patient | tojson | safe }};
+        const visit = {{ visit | tojson | safe }};
+        const labInfo = {{ lab_info | default ('{}') | tojson | safe }};
+        const barcodeData = "{{ barcode_data }}";
+
+        let designElements = [];
+        let paperSize = 'A4';
+        let testResults = [];
+
+        try {
+            const parsed = typeof rawTemplate === 'string' ? JSON.parse(rawTemplate) : rawTemplate;
+            designElements = parsed.elements || [];
+            paperSize = parsed.paperSize || 'A4';
+        } catch (e) { console.error("Template parse error", e); }
+
+        const canvas = document.getElementById('reportCanvas');
+        canvas.className = `size-${paperSize.toLowerCase()}`;
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            return isNaN(d) ? dateStr : d.toISOString().split('T')[0];
+        }
+
+        async function fetchResultsAndRender() {
+            try {
+                const response = await fetch(`/api/double-authorized-tests/${patient.patient_id}`);
+                const data = await response.json();
+                if (data.success) testResults = data.results || [];
+            } catch (e) { console.error("Failed to fetch results", e); }
+            renderCanvas();
+        }
+
+        function renderCanvas() {
+            canvas.innerHTML = '';
+
+            designElements.forEach(el => {
+                const div = document.createElement('div');
+                div.className = 'design-element';
+
+                div.style.left = el.x + 'px';
+                div.style.top = el.y + 'px';
+                div.style.width = el.width + 'px';
+                div.style.height = el.height + 'px';
+                div.style.fontSize = el.fontSize + 'px';
+                div.style.fontWeight = el.fontWeight || 'normal';
+                div.style.fontFamily = el.fontFamily || "'FormaDJRArabic', sans-serif";
+                div.style.textAlign = el.align || 'left';
+                div.style.color = el.color || '#0f172a';
+                div.style.zIndex = el.zIndex || 10;
+                div.style.opacity = el.opacity || 1.0;
+
+                div.innerHTML = `<div style="width:100%; height:100%;">${getElementHtml(el)}</div>`;
+                canvas.appendChild(div);
+            });
+        }
+
+        function getElementHtml(el) {
+            const labelHtml = el.label ? `<span style="font-weight: 600; margin-right: 6px; opacity: 0.8;">${el.label}</span>` : '';
+
+            if (el.type === 'patient_name') return `${labelHtml}<span>${patient.full_name || ''}</span>`;
+            if (el.type === 'patient_id') return `${labelHtml}<span>${patient.patient_id || ''}</span>`;
+            if (el.type === 'patient_age') {
+                const ageUnit = patient.age_unit ? (patient.age_unit === 'day' ? 'day' : patient.age_unit.charAt(0).toUpperCase()) : '';
+                return `${labelHtml}<span>${patient.age || '-'} ${ageUnit} / ${patient.gender ? patient.gender.toUpperCase() : ''}</span>`;
+            }
+            if (el.type === 'visit_id') return `${labelHtml}<span>${visit ? visit.visit_id : ''}</span>`;
+            if (el.type === 'visit_date') return `${labelHtml}<span>${visit ? formatDate(visit.visit_date) : formatDate(patient.created_at)}</span>`;
+            if (el.type === 'doctor_name') return `${labelHtml}<span>${patient.doctor || ''}</span>`;
+            if (el.type === 'agent_name') return `${labelHtml}<span>${patient.agent_name || ''}</span>`;
+
+            if (el.type === 'lab_name') return `<div style="font-weight:bold; font-size:1.5em;">${labInfo.lab_name || ''}</div>`;
+            if (el.type === 'lab_title') return `${labelHtml}<span>${labInfo.lab_title || ''}</span>`;
+            if (el.type === 'lab_address') return `<div>${labInfo.lab_address || ''}</div>`;
+            if (el.type === 'lab_phone_1') return `${labelHtml}<span>${labInfo.lab_phone_1 || ''}</span>`;
+            if (el.type === 'lab_phone_2') return `${labelHtml}<span>${labInfo.lab_phone_2 || ''}</span>`;
+            if (el.type === 'lab_email') return `${labelHtml}<span>${labInfo.lab_email || ''}</span>`;
+            if (el.type === 'lab_website') return `${labelHtml}<span>${labInfo.lab_website || ''}</span>`;
+            if (el.type === 'lab_currency') return `${labelHtml}<span>${labInfo.lab_currency || ''}</span>`;
+            if (el.type === 'first_doctor_name') return `${labelHtml}<span>${labInfo.first_doctor_name || ''}</span>`;
+            if (el.type === 'second_doctor_name') return `${labelHtml}<span>${labInfo.second_doctor_name || ''}</span>`;
+
+            if (['lab_logo', 'lab_stamp_1', 'lab_stamp_2', 'lab_signature_1', 'lab_signature_2', 'lab_image_1', 'lab_image_2', 'lab_qr_1', 'lab_qr_2'].includes(el.type)) {
+                const imgVal = labInfo[el.type];
+                if (imgVal) return `<img src="/uploads/${imgVal}" style="width:100%; height:100%; object-fit:contain;">`;
+                return '';
+            }
+
+            if (el.type === 'barcode_image') {
+                return `<div class="bg-white p-1 w-full h-full flex flex-col items-center justify-center">
+                            <img src="data:image/png;base64,${barcodeData}" style="max-width:100%; max-height:80%; object-fit:contain; display:block;">
+                            <span style="font-size:10px; font-family:monospace; margin-top:2px; display:block;">${patient.patient_id}</span>
+                        </div>`;
+            }
+
+            if (el.type === 'shape_line') return `<div style="width:100%; height:100%; background-color:${el.color || el.borderColor || '#334155'};"></div>`;
+            if (el.type === 'custom_text') return el.content || '';
+
+            if (el.type === 'watermark') {
+                if (el.image) return `<div style="width:100%; height:100%; background-image:url('/uploads/${el.image}'); background-size:contain; background-repeat:no-repeat; background-position:center;"></div>`;
+                return '';
+            }
+
+            if (el.type === 'result_table') return buildResultTable(el);
+
+            return '';
+        }
+
+        function buildResultTable(el) {
+            const cols = (el.columns || ['test', 'result', 'flag', 'range', 'unit']).filter(c => c.trim() !== '');
+            if (cols.length === 0) return '';
+
+            // Apply EXCEL properties
+            let tableStyle = `width: 100%; border-collapse: collapse; table-layout: ${el.tableLayout || 'auto'};`;
+
+            let colGroupHtml = '';
+            if (el.tableLayout === 'fixed' && el.colWidths) {
+                const widths = el.colWidths.split(',').map(s => s.trim());
+                colGroupHtml = '<colgroup>' + widths.map(w => `<col style="width: ${w};">`).join('') + '</colgroup>';
+            }
+
+            // Cell Styles (Padding, Borders, Word Wrap)
+            const bWidth = el.borderWidth !== undefined ? el.borderWidth : 1;
+            let cellStyle = `padding: ${el.cellPadding !== undefined ? el.cellPadding : 8}px; border: ${bWidth}px solid ${el.borderColor || '#e2e8f0'};`;
+
+            if (el.wordWrap === false) {
+                cellStyle += ` white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
+            } else {
+                cellStyle += ` white-space: normal; word-break: break-word;`;
+            }
+
+            let html = `<table style="${tableStyle}">${colGroupHtml}`;
+
+            html += `<thead style="background:${el.headerBg || '#f8fafc'}; color:${el.headerColor || '#1e293b'}"><tr>`;
+            const headers = { test: 'Test Name', result: 'Result', flag: 'Flag', range: 'Ref. Range', unit: 'Unit' };
+
+            cols.forEach(c => {
+                html += `<th style="${cellStyle} font-size: ${el.headerFontSize || 12}px; font-weight: bold; text-align: left;">
+                            ${headers[c.toLowerCase()] || c.toUpperCase()}
+                         </th>`;
+            });
+            html += `</tr></thead><tbody style="color:${el.rowTextColor || '#334155'}">`;
+
+            if (testResults.length === 0) {
+                html += `<tr><td colspan="${cols.length}" style="text-align:center; ${cellStyle}">No results found</td></tr>`;
+            } else {
+                testResults.forEach((row, index) => {
+                    let trBg = (el.zebraStripes && index % 2 !== 0) ? `background-color: ${el.zebraColor || '#f8fafc'};` : '';
+                    html += `<tr style="${trBg}">`;
+
+                    if (row.type === 'parent') {
+                        html += `<td colspan="${cols.length}" style="${cellStyle} font-size: ${el.rowFontSize || 12}px; font-weight: 700; background: rgba(0,0,0,0.04); color: #000;">
+                                    ${row.test_name}
+                                 </td>`;
+                    } else {
+                        cols.forEach(c => {
+                            let val = '';
+                            let styleAdd = '';
+
+                            if (c === 'test') {
+                                val = row.type === 'child' ? `<span style="padding-left: 15px;">${row.parameter_name}</span>` : row.test_name;
+                            } else if (c === 'result') {
+                                val = row.result_value || '-';
+                                if (row.flag && row.flag !== 'N') {
+                                    styleAdd = 'font-weight: bold; color: #dc2626;';
+                                }
+                            } else if (c === 'flag') { val = row.flag || ''; }
+                            else if (c === 'range') { val = row.range || ''; }
+                            else if (c === 'unit') { val = row.unit || ''; }
+
+                            html += `<td style="${cellStyle} font-size: ${el.rowFontSize || 12}px; ${styleAdd}">${val}</td>`;
+                        });
+                    }
+                    html += `</tr>`;
+                });
+            }
+            html += `</tbody></table>`;
+            return html;
+        }
+
+        window.onload = () => { fetchResultsAndRender(); };
+    </script>
+</body>
+
+</html>

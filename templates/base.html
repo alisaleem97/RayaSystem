@@ -103,6 +103,7 @@
             </div>
             
             <nav class="flex-1 overflow-y-auto py-4">
+                <!-- Main -->
                 <ul class="space-y-1">
                     <li>
                         <a href="/" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/' %}active{% endif %}">
@@ -110,6 +111,13 @@
                             Dashboard
                         </a>
                     </li>
+                </ul>
+
+                <!-- Patient Management -->
+                <div class="px-6 pt-5 pb-2">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Patient Management</p>
+                </div>
+                <ul class="space-y-1">
                     <li>
                         <a href="/patient-registration" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/patient-registration' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
@@ -117,17 +125,98 @@
                         </a>
                     </li>
                     <li>
-                        <a href="/print-barcode" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path.startswith('/print-barcode') %}active{% endif %}">
+                        <a href="/patients" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/patients' or request.url.path.startswith('/patients/edit') %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                            Patients
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/patients/deleted" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path.startswith('/patients/deleted') or request.url.path.startswith('/patients/view-deleted') %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            Deleted Patients
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- Result Entry -->
+                <div class="px-6 pt-5 pb-2">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Results</p>
+                </div>
+                <ul class="space-y-1">
+                    <li>
+                        <a href="/result-entry" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path.startswith('/result-entry') %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                            Result Entry
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/double-auth" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path.startswith('/double-auth') %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Double Authorisation
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/no-sample" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path.startswith('/no-sample') %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+                            No Sample
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- Printing & Design -->
+                <div class="px-6 pt-5 pb-2">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Printing & Design</p>
+                </div>
+                <ul class="space-y-1">
+                    <li>
+                        <a href="/print-barcode" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/print-barcode' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
                             Print Barcode
                         </a>
                     </li>
                     <li>
-                        <a href="/print-receipt" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path.startswith('/print-receipt') %}active{% endif %}">
+                        <a href="/print-barcode-designer" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/print-barcode-designer' %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            Barcode Designer
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/print-receipt" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/print-receipt' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                             Print Receipt
                         </a>
                     </li>
+                    <li>
+                        <a href="/print-receipt-designer" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/print-receipt-designer' %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            Receipt Designer
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/print-results" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/print-results' %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            Print Results
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/call-centre" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/call-centre' %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+                            Call Centre
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/print-result-designer" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/print-result-designer' %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            Result Designer
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- Lab Setup -->
+                <div class="px-6 pt-5 pb-2">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Lab Setup</p>
+                </div>
+                <ul class="space-y-1">
                     <li>
                         <a href="/departments" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/departments' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
@@ -148,7 +237,7 @@
                     </li>
                     <li>
                         <a href="/parameters" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/parameters' %}active{% endif %}">
-                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
                             Parameters
                         </a>
                     </li>
@@ -158,6 +247,13 @@
                             Report Notes
                         </a>
                     </li>
+                </ul>
+
+                <!-- Tests & Packages -->
+                <div class="px-6 pt-5 pb-2">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Tests & Packages</p>
+                </div>
+                <ul class="space-y-1">
                     <li>
                         <a href="/tests" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/tests' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
@@ -188,6 +284,13 @@
                             Packages
                         </a>
                     </li>
+                </ul>
+
+                <!-- Geography & Partners -->
+                <div class="px-6 pt-5 pb-2">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Geography & Partners</p>
+                </div>
+                <ul class="space-y-1">
                     <li>
                         <a href="/partners" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/partners' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
@@ -206,6 +309,13 @@
                             Regions
                         </a>
                     </li>
+                </ul>
+
+                <!-- Settings -->
+                <div class="px-6 pt-5 pb-2">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Settings</p>
+                </div>
+                <ul class="space-y-1">
                     <li>
                         <a href="/lab-info" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/lab-info' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
@@ -360,7 +470,12 @@
         // Replace confirm() with modal
         function confirmDelete(url) {
             showConfirmModal('Are you sure you want to delete this item? This action cannot be undone.', function() {
-                window.location.href = url;
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = url;
+                form.style.display = 'none';
+                document.body.appendChild(form);
+                form.submit();
             });
         }
     </script>

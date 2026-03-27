@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Result Designer - NexLab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Tajawal:wght@400;500;700&display=swap"
+        rel="stylesheet">
+    <style>
+        /* LOAD YOUR CUSTOM ARABIC FONT */
+        @font-face {
+            font-family: 'FormaDJRArabic';
+            src: url('/uploads/alfont_com_FormaDJRArabicDeck-Bold-Testing.otf') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Set custom font as default for the whole body */
+        body {
+            font-family: 'FormaDJRArabic', 'Inter', sans-serif;
+            background: #f3f4f6;
+            user-select: none;
+        }
+
+        .designer-container {
+            display: grid;
+            grid-template-columns: 320px 1fr 320px;
+            gap: 20px;
+            padding: 20px;
+            height: calc(100vh - 80px);
+        }
+
+        .panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .category-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #f1f5f9;
+            padding-bottom: 6px;
+            display: flex;
+            align-items: center;
+        }
+
+        .element-item {
+            padding: 10px 14px;
+            margin: 6px 0;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border-radius: 8px;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .element-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+
+        .element-item:active {
+            cursor: grabbing;
+        }
+
+        .element-item.graphic-item {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        }
+
+        .element-item.special-item {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        }
+
+        .element-item.shape-item {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+
+        .canvas-container {
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+            overflow: auto;
+            background: #e2e8f0;
+            border-radius: 12px;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .canvas {
+            background: white;
+            position: relative;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            transition: background 0.3s;
+        }
+
+        .canvas.show-grid {
+            background-image: linear-gradient(to right, #f1f5f9 1px, transparent 1px), linear-gradient(to bottom, #f1f5f9 1px, transparent 1px);
+            background-size: 10px 10px;
+        }
+
+        .canvas.size-a4 {
+            width: 210mm;
+            height: 297mm;
+            min-width: 210mm;
+            min-height: 297mm;
+        }
+
+        .canvas.size-a5 {
+            width: 148mm;
+            height: 210mm;
+            min-width: 148mm;
+            min-height: 210mm;
+        }
+
+        .design-element {
+            position: absolute;
+            cursor: move;
+            user-select: none;
+            border: 1px solid transparent;
+            min-width: 20px;
+            min-height: 10px;
+            transition: box-shadow 0.2s;
+        }
+
+        .design-element:hover {
+            border: 1px dashed #10b981;
+        }
+
+        .design-element.selected {
+            border: 2px solid #3b82f6;
+            z-index: 1000 !important;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+
+        .design-element.dragging {
+            opacity: 0.6;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            transition: none;
+        }
+
+        .resize-handle {
+            position: absolute;
+            bottom: -5px;
+            right: -5px;
+            width: 12px;
+            height: 12px;
+            background: #3b82f6;
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: se-resize;
+            display: none;
+            z-index: 1001;
+        }
+
+        .design-element.selected .resize-handle {
+            display: block;
+        }
+
+        .delete-btn {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            width: 20px;
+            height: 20px;
+            background: #ef4444;
+            color: white;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            z-index: 1001;
+            transition: transform 0.2s;
+        }
+
+        .delete-btn:hover {
+            transform: scale(1.15);
+            background: #dc2626;
+        }
+
+        .design-element.selected .delete-btn {
+            display: flex;
+        }
+
+        .property-group {
+            margin-bottom: 12px;
+        }
+
+        .property-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            color: #64748b;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+
+        .property-group input[type="text"],
+        .property-group input[type="number"],
+        .property-group select,
+        .property-group textarea {
+            width: 100%;
+            padding: 6px 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 12px;
+            outline: none;
+            transition: border-color 0.2s;
+            background: white;
+        }
+
+        .property-group input:focus,
+        .property-group select:focus,
+        .property-group textarea:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .property-group input[type="color"] {
+            height: 34px;
+            padding: 2px;
+            cursor: pointer;
+            width: 100%;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+        }
+
+        .btn-danger {
+            background: #fee2e2;
+            color: #ef4444;
+        }
+
+        .tool-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .tool-btn.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        .no-print {
+            display: flex;
+        }
+
+        @page {
+            size: A4;
+            margin: 0;
+        }
+
+        @media print {
+            body {
+                background: white;
+                margin: 0;
+                padding: 0;
+            }
+
+            .no-print,
+            header,
+            .panel {
+                display: none !important;
+            }
+
+            .designer-container {
+                display: block;
+                padding: 0;
+                height: auto;
+            }
+
+            .canvas-container {
+                padding: 0;
+                background: transparent;
+                overflow: visible;
+                display: block;
+                box-shadow: none;
+            }
+
+            .canvas {
+                box-shadow: none;
+                border: none;
+                width: 100% !important;
+                height: 100% !important;
+                page-break-after: always;
+                background-image: none !important;
+            }
+
+            .design-element {
+                border: none !important;
+            }
+
+            .design-element.selected {
+                border: none !important;
+                box-shadow: none !important;
+            }
+
+            .resize-handle,
+            .delete-btn {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header
+        class="bg-white shadow-sm px-6 py-4 flex justify-between items-center no-print border-b sticky top-0 z-[2000]">
+        <div class="flex items-center gap-4">
+            <div class="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-file-invoice text-emerald-600"></i>
+            </div>
+            <h1 class="text-xl font-bold text-slate-800 border-r pr-4 border-slate-200">Result Designer</h1>
+            <div class="flex bg-slate-100 p-1 rounded-lg gap-1 border border-slate-200 ml-2">
+                <button class="tool-btn active" data-size="A4" onclick="setPaperSize('A4')">A4</button>
+                <button class="tool-btn" data-size="A5" onclick="setPaperSize('A5')">A5</button>
+            </div>
+            <div class="flex gap-1 ml-2">
+                <button class="tool-btn active" onclick="toggleGrid()" id="gridToggleBtn" title="Snap to Grid (10px)"><i
+                        class="fas fa-border-all"></i> Grid</button>
+                <button class="tool-btn" onclick="undo()" title="Undo (Ctrl+Z)"><i class="fas fa-undo"></i></button>
+                <button class="tool-btn" onclick="redo()" title="Redo (Ctrl+Y)"><i class="fas fa-redo"></i></button>
+            </div>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="resetDesign()" class="btn btn-danger"><i class="fas fa-trash-alt"></i> Clear All</button>
+            <button onclick="loadDesign()" class="btn btn-secondary"><i class="fas fa-download"></i> Load Saved</button>
+            <button onclick="saveDesign()" class="btn btn-primary"><i class="fas fa-save"></i> Save Design</button>
+            <a href="/print-results" class="btn btn-secondary"><i class="fas fa-chevron-left"></i> Back</a>
+        </div>
+    </header>
+
+    <div class="designer-container no-print">
+        <div class="panel">
+            <h2 class="text-sm font-bold text-slate-800 mb-6 flex items-center"><i
+                    class="fas fa-cubes text-emerald-500 mr-2"></i> Components</h2>
+
+            <div class="mb-6">
+                <div class="category-title"><i class="fas fa-user-injured mr-2"></i> Patient Data</div>
+                <div class="element-item" data-type="patient_name"><i class="fas fa-user mr-2"></i> Patient Name</div>
+                <div class="element-item" data-type="patient_id"><i class="fas fa-id-card mr-2"></i> Patient ID</div>
+                <div class="element-item" data-type="visit_id"><i class="fas fa-hashtag mr-2"></i> Visit ID</div>
+                <div class="element-item" data-type="patient_age"><i class="fas fa-birthday-cake mr-2"></i> Age / Gender
+                </div>
+                <div class="element-item" data-type="visit_date"><i class="fas fa-calendar mr-2"></i> Visit Date</div>
+                <div class="element-item" data-type="doctor_name"><i class="fas fa-user-md mr-2"></i> Physician</div>
+                <div class="element-item" data-type="agent_name"><i class="fas fa-hospital mr-2"></i> Department</div>
+            </div>
+
+            <div class="mb-6">
+                <div class="category-title"><i class="fas fa-clinic-medical mr-2"></i> Laboratory Info</div>
+                <div class="element-item" data-type="lab_name"><i class="fas fa-heading mr-2"></i> Lab Name</div>
+                <div class="element-item" data-type="lab_title"><i class="fas fa-certificate mr-2"></i> Lab Title</div>
+                <div class="element-item" data-type="lab_address"><i class="fas fa-map-marker-alt mr-2"></i> Address
+                </div>
+                <div class="element-item" data-type="lab_phone_1"><i class="fas fa-phone mr-2"></i> Phone 1</div>
+                <div class="element-item" data-type="lab_phone_2"><i class="fas fa-phone-alt mr-2"></i> Phone 2</div>
+                <div class="element-item" data-type="lab_email"><i class="fas fa-envelope mr-2"></i> Email</div>
+                <div class="element-item" data-type="lab_website"><i class="fas fa-globe mr-2"></i> Website</div>
+                <div class="element-item" data-type="lab_currency"><i class="fas fa-dollar-sign mr-2"></i> Currency
+                </div>
+                <div class="element-item" data-type="first_doctor_name"><i class="fas fa-user-tie mr-2"></i> Doctor 1
+                </div>
+                <div class="element-item" data-type="second_doctor_name"><i class="fas fa-user-tie mr-2"></i> Doctor 2
+                </div>
+                <div class="element-item" data-type="lab_note_1"><i class="fas fa-sticky-note mr-2"></i> Lab Note 1
+                </div>
+                <div class="element-item" data-type="lab_note_2"><i class="fas fa-sticky-note mr-2"></i> Lab Note 2
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <div class="category-title"><i class="fas fa-images mr-2"></i> Graphics & Assets</div>
+                <div class="element-item graphic-item" data-type="lab_logo"><i class="fas fa-image mr-2"></i> Lab Logo
+                </div>
+                <div class="element-item graphic-item" data-type="lab_stamp_1"><i class="fas fa-stamp mr-2"></i> Stamp 1
+                </div>
+                <div class="element-item graphic-item" data-type="lab_stamp_2"><i class="fas fa-stamp mr-2"></i> Stamp 2
+                </div>
+                <div class="element-item graphic-item" data-type="lab_signature_1"><i class="fas fa-signature mr-2"></i>
+                    Signature 1</div>
+                <div class="element-item graphic-item" data-type="lab_signature_2"><i class="fas fa-signature mr-2"></i>
+                    Signature 2</div>
+                <div class="element-item graphic-item" data-type="lab_image_1"><i class="fas fa-camera mr-2"></i> Custom
+                    Image 1</div>
+                <div class="element-item graphic-item" data-type="lab_image_2"><i class="fas fa-camera mr-2"></i> Custom
+                    Image 2</div>
+                <div class="element-item graphic-item" data-type="lab_qr_1"><i class="fas fa-qrcode mr-2"></i> QR Code 1
+                </div>
+                <div class="element-item graphic-item" data-type="lab_qr_2"><i class="fas fa-qrcode mr-2"></i> QR Code 2
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <div class="category-title"><i class="fas fa-file-medical-alt mr-2"></i> Report Elements</div>
+                <div class="element-item special-item" data-type="result_table"><i class="fas fa-table mr-2"></i>
+                    Dynamic Result Table</div>
+                <div class="element-item special-item" data-type="custom_text"><i class="fas fa-font mr-2"></i> Custom
+                    Text Block</div>
+                <div class="element-item special-item" data-type="watermark"><i class="fas fa-tint mr-2"></i> Background
+                    Watermark</div>
+                <div class="element-item special-item" data-type="barcode_image"><i class="fas fa-barcode mr-2"></i>
+                    Barcode</div>
+            </div>
+
+            <div class="mb-2">
+                <div class="category-title"><i class="fas fa-shapes mr-2"></i> Shapes</div>
+                <div class="element-item shape-item" data-type="shape_line"><i class="fas fa-minus mr-2"></i> Decorative
+                    Line</div>
+            </div>
+        </div>
+
+        <div class="canvas-container" id="scrollArea">
+            <div id="paperPreview" class="canvas size-a4 show-grid" onclick="deselectAll()">
+                <div class="absolute inset-0 flex flex-col items-center justify-center opacity-10 pointer-events-none"
+                    id="emptyHint">
+                    <i class="fas fa-vial text-[120px] mb-4"></i>
+                    <p class="text-2xl font-bold tracking-widest uppercase">Drag Elements Here</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2 class="text-sm font-bold text-slate-800 mb-6 flex items-center"><i
+                    class="fas fa-sliders-h text-emerald-500 mr-2"></i> Properties</h2>
+
+            <div id="propertiesPanel" class="hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <div id="propSelectionName"
+                        class="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100 tracking-wider">
+                        ELEMENT</div>
+                    <button onclick="duplicateSelected()"
+                        class="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg font-bold text-slate-600 transition"
+                        title="Duplicate (Ctrl+D)"><i class="fas fa-copy mr-1"></i> Clone</button>
+                </div>
+
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100 mb-4">
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div class="property-group !mb-0"><label>X Pos (px)</label><input type="number" id="propX"
+                                onchange="updateElementProperty('x', this.value)"></div>
+                        <div class="property-group !mb-0"><label>Y Pos (px)</label><input type="number" id="propY"
+                                onchange="updateElementProperty('y', this.value)"></div>
+                        <div class="property-group !mb-0"><label>Width</label><input type="number" id="propW" min="10"
+                                onchange="updateElementProperty('width', this.value)"></div>
+                        <div class="property-group !mb-0"><label>Height</label><input type="number" id="propH" min="2"
+                                onchange="updateElementProperty('height', this.value)"></div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="centerElement('horizontal')" class="flex-1 tool-btn"><i
+                                class="fas fa-align-center"></i> Center X</button>
+                        <button onclick="centerElement('vertical')" class="flex-1 tool-btn"><i
+                                class="fas fa-align-justify" style="transform: rotate(90deg)"></i> Center Y</button>
+                    </div>
+                </div>
+
+                <div class="property-group mb-4">
+                    <label>Font Family</label>
+                    <select id="propFontFamily" onchange="updateElementProperty('fontFamily', this.value)">
+                        <option value="'FormaDJRArabic', sans-serif">Forma DJR Arabic (Default)</option>
+                        <option value="'Cairo', sans-serif">Cairo (Arabic)</option>
+                        <option value="'Tajawal', sans-serif">Tajawal (Arabic)</option>
+                        <option value="'Inter', sans-serif">Inter</option>
+                        <option value="Arial, sans-serif">Arial</option>
+                        <option value="'Times New Roman', serif">Times New Roman</option>
+                    </select>
+                </div>
+
+                <div id="basicProps" class="space-y-2">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="property-group !mb-0"><label>Font Size</label><input type="number" id="propFontSize"
+                                onchange="updateElementProperty('fontSize', this.value)"></div>
+                        <div class="property-group !mb-0">
+                            <label>Weight</label>
+                            <select id="propFontWeight" onchange="updateElementProperty('fontWeight', this.value)">
+                                <option value="normal">Normal</option>
+                                <option value="600">Semi-Bold</option>
+                                <option value="bold">Bold</option>
+                            </select>
+                        </div>
+                        <div class="property-group !mb-0">
+                            <label>Align</label>
+                            <select id="propAlign" onchange="updateElementProperty('align', this.value)">
+                                <option value="left">Left</option>
+                                <option value="center">Center</option>
+                                <option value="right">Right</option>
+                            </select>
+                        </div>
+                        <div class="property-group !mb-0"><label>Color</label><input type="color" id="propColor"
+                                onchange="updateElementProperty('color', this.value)"></div>
+                    </div>
+                </div>
+
+                <div id="labelGroup" class="hidden border-t border-slate-200 pt-3 mt-3">
+                    <div class="property-group !mb-0"><label>Label Text</label><input type="text" id="propLabel"
+                            onchange="updateElementProperty('label', this.value)"></div>
+                </div>
+
+                <div id="customTextGroup" class="hidden border-t border-slate-200 pt-3 mt-3">
+                    <div class="property-group !mb-0"><label>Content</label><textarea id="propContent" rows="3"
+                            onchange="updateElementProperty('content', this.value)"></textarea></div>
+                </div>
+
+                <div id="imageGroup" class="hidden border-t border-slate-200 pt-3 mt-3">
+                    <div class="property-group flex items-center justify-between !mb-0">
+                        <label class="mb-0">Opacity</label><input type="range" min="0" max="1" step="0.1"
+                            id="propOpacity" class="w-2/3" onchange="updateElementProperty('opacity', this.value)">
+                    </div>
+                </div>
+
+                <div id="watermarkGroup" class="hidden border-t border-slate-200 pt-3 mt-3">
+                    <div class="property-group !mb-0">
+                        <label>Upload Watermark</label>
+                        <input type="file" id="watermarkFile" accept="image/*"
+                            class="text-[10px] file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-emerald-50 file:text-emerald-700"
+                            onchange="uploadWatermark(this)">
+                    </div>
+                </div>
+
+                <div id="tableProps" class="hidden border-t border-slate-300 pt-4 mt-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <label class="font-bold text-indigo-700 uppercase text-[10px] tracking-wider"><i
+                                class="fas fa-table mr-1"></i> Table Settings</label>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div class="property-group !mb-0">
+                            <label>Layout Mode</label>
+                            <select id="propTableLayout" onchange="updateElementProperty('tableLayout', this.value)">
+                                <option value="auto">Auto Fit Content</option>
+                                <option value="fixed">Fixed Widths</option>
+                            </select>
+                        </div>
+                        <div class="property-group !mb-0">
+                            <label>Col Widths <span class="lowercase font-normal">(if Fixed)</span></label>
+                            <input type="text" id="propColWidths"
+                                onchange="updateElementProperty('colWidths', this.value)"
+                                placeholder="e.g. 40%, 20%, 20%...">
+                        </div>
+                    </div>
+
+                    <div class="property-group mb-2">
+                        <label>Visible Columns <span class="lowercase font-normal">(comma separated)</span></label>
+                        <input type="text" id="propTableCols"
+                            onchange="updateElementProperty('columns', this.value.split(',').map(s=>s.trim()))"
+                            placeholder="test,result,flag,range,unit">
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 mb-2">
+                        <div class="property-group !mb-0"><label>Padding</label><input type="number"
+                                id="propCellPadding" onchange="updateElementProperty('cellPadding', this.value)"></div>
+                        <div class="property-group !mb-0"><label>Borders</label><input type="number"
+                                id="propBorderWidth" onchange="updateElementProperty('borderWidth', this.value)"></div>
+                        <div class="property-group !mb-0 flex flex-col justify-end pb-1">
+                            <label class="flex items-center gap-2 cursor-pointer lowercase text-[10px] font-bold">
+                                <input type="checkbox" id="propWordWrap"
+                                    onchange="updateElementProperty('wordWrap', this.checked)"> Wrap Text
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div class="property-group !mb-0"><label>Header Font (px)</label><input type="number"
+                                id="propHeaderFontSize" onchange="updateElementProperty('headerFontSize', this.value)">
+                        </div>
+                        <div class="property-group !mb-0"><label>Row Font (px)</label><input type="number"
+                                id="propRowFontSize" onchange="updateElementProperty('rowFontSize', this.value)"></div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 mt-3 p-2 bg-slate-50 rounded border border-slate-200">
+                        <div class="property-group !mb-0"><label>Header BG</label><input type="color" id="propHeaderBg"
+                                onchange="updateElementProperty('headerBg', this.value)"></div>
+                        <div class="property-group !mb-0"><label>Header Txt</label><input type="color"
+                                id="propHeaderColor" onchange="updateElementProperty('headerColor', this.value)"></div>
+                        <div class="property-group !mb-0"><label>Border</label><input type="color" id="propBorderColor"
+                                onchange="updateElementProperty('borderColor', this.value)"></div>
+                    </div>
+
+                    <div class="flex items-center justify-between p-2 mt-2 bg-slate-50 rounded border border-slate-200">
+                        <label
+                            class="flex items-center gap-2 cursor-pointer font-bold text-[11px] text-slate-600 uppercase tracking-wide">
+                            <input type="checkbox" id="propZebraStripes"
+                                onchange="updateElementProperty('zebraStripes', this.checked)"> Zebra Stripes
+                        </label>
+                        <div class="property-group !mb-0 flex items-center gap-2">
+                            <label class="!mb-0">Stripe Color</label>
+                            <input type="color" id="propZebraColor" class="!w-8 !h-6 !p-0 border-0"
+                                onchange="updateElementProperty('zebraColor', this.value)">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="noSelectionHint" class="text-center py-24 text-slate-300 flex flex-col items-center">
+                <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4"><i
+                        class="fas fa-hand-pointer text-2xl"></i></div>
+                <p class="text-sm font-medium text-slate-400">Select an element to edit</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast"
+        class="fixed top-6 right-6 bg-slate-800 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 opacity-0 transition-all duration-300 z-[9999] pointer-events-none transform translate-y-[-20px]">
+        <div class="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center"><i
+                class="fas fa-check text-white"></i></div>
+        <span id="toastMsg" class="font-bold text-sm">Action Successful!</span>
+    </div>
+
+    <script>
+        let designElements = [];
+        let selectedElementId = null;
+        let elementIdCounter = 0;
+        let paperSize = 'A4';
+        let labInfo = {};
+
+        let historyStack = [];
+        let historyIndex = -1;
+        let isGridEnabled = true;
+        const GRID_SIZE = 10;
+
+        let dragState = { isDragging: false, isResizing: false, draggedElement: null, dragOffset: { x: 0, y: 0 }, startX: 0, startY: 0, startWidth: 0, startHeight: 0 };
+        const paper = document.getElementById('paperPreview');
+        const emptyHint = document.getElementById('emptyHint');
+
+        function setPaperSize(size) {
+            paperSize = size;
+            document.querySelectorAll('.tool-btn[data-size]').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.querySelector(`.tool-btn[data-size="${size}"]`);
+            if (activeBtn) activeBtn.classList.add('active');
+            paper.className = `canvas size-${size.toLowerCase()} ${isGridEnabled ? 'show-grid' : ''}`;
+            saveLocal();
+        }
+
+        function saveState() {
+            if (historyIndex < historyStack.length - 1) historyStack = historyStack.slice(0, historyIndex + 1);
+            historyStack.push(JSON.parse(JSON.stringify(designElements)));
+            historyIndex++; saveLocal();
+        }
+
+        function undo() { if (historyIndex > 0) { historyIndex--; designElements = JSON.parse(JSON.stringify(historyStack[historyIndex])); rebuildCanvas(); } }
+        function redo() { if (historyIndex < historyStack.length - 1) { historyIndex++; designElements = JSON.parse(JSON.stringify(historyStack[historyIndex])); rebuildCanvas(); } }
+
+        function rebuildCanvas() {
+            emptyHint.style.display = designElements.length === 0 ? 'flex' : 'none';
+            document.querySelectorAll('.design-element').forEach(el => el.remove());
+            designElements.forEach(renderElement);
+            if (selectedElementId && designElements.find(e => e.id === selectedElementId)) selectElement(selectedElementId);
+            else selectElement(null);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            const isInput = ['input', 'textarea', 'select'].includes(e.target.tagName.toLowerCase());
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+                if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
+                if (e.key === 'd' && selectedElementId && !isInput) { e.preventDefault(); duplicateSelected(); }
+                return;
+            }
+            if (!selectedElementId || isInput) return;
+            if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteElement(selectedElementId); }
+            else if (e.key.startsWith('Arrow')) {
+                e.preventDefault(); const step = isGridEnabled ? GRID_SIZE : 1;
+                if (e.key === 'ArrowUp') nudgeElement(0, -step);
+                if (e.key === 'ArrowDown') nudgeElement(0, step);
+                if (e.key === 'ArrowLeft') nudgeElement(-step, 0);
+                if (e.key === 'ArrowRight') nudgeElement(step, 0);
+            }
+        });
+
+        function toggleGrid() {
+            isGridEnabled = !isGridEnabled;
+            document.getElementById('gridToggleBtn').classList.toggle('active', isGridEnabled);
+            paper.classList.toggle('show-grid', isGridEnabled);
+        }
+
+        function snap(value) { return isGridEnabled ? Math.round(value / GRID_SIZE) * GRID_SIZE : value; }
+
+        function nudgeElement(dx, dy) {
+            const el = designElements.find(item => item.id === selectedElementId);
+            if (!el) return;
+            const rect = paper.getBoundingClientRect();
+            el.x = Math.max(0, Math.min(rect.width - el.width, el.x + dx));
+            el.y = Math.max(0, Math.min(rect.height - el.height, el.y + dy));
+            document.getElementById(el.id).style.left = el.x + 'px';
+            document.getElementById(el.id).style.top = el.y + 'px';
+            syncPropertiesPanel(el); saveState();
+        }
+
+        function centerElement(axis) {
+            if (!selectedElementId) return;
+            const el = designElements.find(item => item.id === selectedElementId);
+            const rect = paper.getBoundingClientRect();
+            if (axis === 'horizontal') el.x = snap((rect.width - el.width) / 2);
+            if (axis === 'vertical') el.y = snap((rect.height - el.height) / 2);
+            updateElementProperty(axis === 'horizontal' ? 'x' : 'y', axis === 'horizontal' ? el.x : el.y);
+        }
+
+        document.querySelectorAll('.element-item').forEach(item => {
+            item.setAttribute('draggable', 'true');
+            item.addEventListener('dragstart', e => e.dataTransfer.setData('type', item.dataset.type));
+            item.addEventListener('click', () => addElement(item.dataset.type, snap(50), snap(50 + (designElements.length * 10))));
+        });
+
+        paper.addEventListener('dragover', e => e.preventDefault());
+        paper.addEventListener('drop', e => {
+            e.preventDefault(); const type = e.dataTransfer.getData('type'); if (!type) return;
+            const rect = paper.getBoundingClientRect();
+            addElement(type, snap(Math.max(0, e.clientX - rect.left - 40)), snap(Math.max(0, e.clientY - rect.top - 20)));
+        });
+
+        function addElement(type, x, y) {
+            emptyHint.style.display = 'none';
+            const id = 'el_' + (++elementIdCounter);
+
+            let w = 200, h = 35;
+            if (type === 'result_table') { w = 600; h = 250; }
+            if (type === 'shape_line') { w = 700; h = 2; }
+            if (type === 'watermark') { w = 400; h = 400; }
+            if (['lab_logo', 'lab_stamp_1', 'lab_stamp_2', 'lab_signature_1', 'lab_signature_2', 'lab_image_1', 'lab_image_2', 'lab_qr_1', 'lab_qr_2'].includes(type)) { w = 120; h = 120; }
+
+            const el = {
+                id, type, x, y, width: w, height: h, fontSize: 14, fontWeight: 'normal', align: 'left', color: '#0f172a',
+                fontFamily: "'FormaDJRArabic', sans-serif", // Apply Default Arabic Font
+                content: type === 'custom_text' ? 'Double click to edit this text.' : '', label: getDefaultLabel(type),
+                opacity: type === 'watermark' ? 0.2 : 1.0, zIndex: type === 'watermark' ? 0 : 10, image: '',
+                // Enhanced Table Properties
+                tableLayout: 'auto', colWidths: '', cellPadding: 8, wordWrap: true, zebraStripes: false, zebraColor: '#f8fafc',
+                headerFontSize: 12, rowFontSize: 12, headerBg: '#f8fafc', headerColor: '#1e293b', borderColor: '#e2e8f0',
+                columns: ['test', 'result', 'flag', 'range', 'unit']
+            };
+
+            designElements.push(el); renderElement(el); selectElement(id); saveState();
+        }
+
+        function duplicateSelected() {
+            if (!selectedElementId) return;
+            const original = designElements.find(e => e.id === selectedElementId);
+            if (!original) return;
+            const clone = JSON.parse(JSON.stringify(original));
+            clone.id = 'el_' + (++elementIdCounter);
+            clone.x = snap(clone.x + 20); clone.y = snap(clone.y + 20);
+            designElements.push(clone); renderElement(clone); selectElement(clone.id); saveState();
+            showToast('Element Cloned');
+        }
+
+        function getDefaultLabel(type) {
+            const labels = { patient_name: 'Patient Name:', patient_id: 'ID:', visit_id: 'Visit:', patient_age: 'Age/Sex:', visit_date: 'Date:', doctor_name: 'Dr:', lab_phone_1: 'Tel:' };
+            return labels[type] || '';
+        }
+
+        function renderElement(element) {
+            let div = document.getElementById(element.id);
+            if (!div) {
+                div = document.createElement('div');
+                div.id = element.id; div.className = 'design-element';
+                div.innerHTML = `<div class="content-wrapper w-full h-full"></div><div class="resize-handle"></div><div class="delete-btn" onclick="deleteElement('${element.id}')"><i class="fas fa-times"></i></div>`;
+                div.addEventListener('mousedown', handleElementMouseDown);
+                div.addEventListener('click', (e) => { e.stopPropagation(); selectElement(element.id); });
+                paper.appendChild(div);
+            }
+            div.style.left = element.x + 'px'; div.style.top = element.y + 'px';
+            div.style.width = element.width + 'px'; div.style.height = element.height + 'px';
+            div.style.fontSize = element.fontSize + 'px'; div.style.fontWeight = element.fontWeight;
+            div.style.fontFamily = element.fontFamily || "'FormaDJRArabic', sans-serif";
+            div.style.textAlign = element.align; div.style.color = element.color || '#0f172a';
+            div.style.zIndex = element.zIndex; div.style.opacity = element.opacity;
+
+            div.querySelector('.content-wrapper').innerHTML = getDisplayContent(element);
+        }
+
+        function getDisplayContent(el) {
+            const label = el.label ? `<span style="font-weight: 600; margin-right: 6px; opacity: 0.8;">${el.label}</span>` : '';
+            if (el.type === 'lab_name') return `<div style="font-weight:bold; font-size:1.5em;">${labInfo.lab_name || 'LABORATORY NAME'}</div>`;
+            if (el.type === 'lab_phone_1') return `${label}<span>${labInfo.lab_phone_1 || '+000-000-000'}</span>`;
+            if (['lab_logo', 'lab_stamp_1', 'lab_signature_1'].some(t => el.type.includes(t))) {
+                const imgVal = labInfo[el.type];
+                if (imgVal) return `<img src="/uploads/${imgVal}" style="width:100%; height:100%; object-fit:contain; pointer-events:none;">`;
+                return `<div class="w-full h-full bg-slate-50 border border-slate-200 flex items-center justify-center text-[10px] text-slate-400 italic rounded">${el.type.replace('lab_', '')}</div>`;
+            }
+            if (el.type === 'result_table') return renderResultTableMock(el);
+            if (el.type === 'shape_line') return `<div style="width:100%; height:100%; background:${el.color || el.borderColor || '#334155'};"></div>`;
+            if (el.type === 'barcode_image') return `<div class="bg-white border p-1 w-full h-full flex flex-col items-center"><div class="w-full flex-grow bg-[repeating-linear-gradient(90deg,#000,#000_2px,#fff_2px,#fff_4px)] transition-all"></div><span class="text-[10px] mt-1 font-mono">1234567890</span></div>`;
+            if (el.type === 'custom_text') return el.content || 'Double click to edit text';
+            return `${label}<span>Placeholder</span>`;
+        }
+
+        function renderResultTableMock(data) {
+            const cols = (data.columns || []).filter(c => c.trim() !== '');
+            if (cols.length === 0) return `<div class="p-4 border text-red-500 bg-red-50 text-center">Table Error: No columns specified</div>`;
+
+            let tableStyle = `width: 100%; border-collapse: collapse; table-layout: ${data.tableLayout || 'auto'};`;
+
+            let colGroupHtml = '';
+            if (data.tableLayout === 'fixed' && data.colWidths) {
+                const widths = data.colWidths.split(',').map(s => s.trim());
+                colGroupHtml = '<colgroup>' + widths.map(w => `<col style="width: ${w};">`).join('') + '</colgroup>';
+            }
+
+            const bWidth = data.borderWidth !== undefined ? data.borderWidth : 1;
+            let cellStyle = `padding: ${data.cellPadding !== undefined ? data.cellPadding : 8}px; border: ${bWidth}px solid ${data.borderColor || '#e2e8f0'};`;
+            if (data.wordWrap === false) { cellStyle += ` white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`; }
+            else { cellStyle += ` white-space: normal; word-break: break-word;`; }
+
+            let html = `<table style="${tableStyle}">${colGroupHtml}`;
+            html += `<thead style="background:${data.headerBg || '#f8fafc'}; color:${data.headerColor || '#1e293b'};"><tr>`;
+
+            cols.forEach(c => { html += `<th style="${cellStyle} font-size:${data.headerFontSize || 12}px; text-align:left;">${c.toUpperCase()}</th>`; });
+            html += `</tr></thead><tbody>`;
+
+            const mockData = [{ test: 'Hemoglobin', result: '14.5' }, { test: 'WBC Count', result: '8.2' }];
+
+            mockData.forEach((row, index) => {
+                let trBg = (data.zebraStripes && index % 2 !== 0) ? `background-color: ${data.zebraColor || '#f8fafc'};` : '';
+                html += `<tr style="${trBg}">`;
+                cols.forEach(c => { html += `<td style="${cellStyle} font-size:${data.rowFontSize || 12}px;">${row[c.toLowerCase()] || '-'}</td>`; });
+                html += `</tr>`;
+            });
+            html += `</tbody></table>`;
+            return html;
+        }
+
+        // --- Mouse Interaction ---
+        function handleElementMouseDown(e) {
+            if (e.target.closest('.delete-btn') || e.target.classList.contains('resize-handle')) return;
+            const elementId = e.currentTarget.id; selectElement(elementId);
+            const el = designElements.find(i => i.id === elementId);
+            dragState = { isDragging: true, draggedElement: el, dragOffset: { x: e.clientX - paper.getBoundingClientRect().left - el.x, y: e.clientY - paper.getBoundingClientRect().top - el.y } };
+            e.currentTarget.classList.add('dragging');
+            document.addEventListener('mousemove', handleMouseMove); document.addEventListener('mouseup', handleMouseUp);
+        }
+        function handleMouseMove(e) {
+            if (!dragState.isDragging) return;
+            const rect = paper.getBoundingClientRect();
+            let newX = snap(Math.max(0, Math.min(rect.width - dragState.draggedElement.width, e.clientX - rect.left - dragState.dragOffset.x)));
+            let newY = snap(Math.max(0, Math.min(rect.height - dragState.draggedElement.height, e.clientY - rect.top - dragState.dragOffset.y)));
+            dragState.draggedElement.x = newX; dragState.draggedElement.y = newY;
+            document.getElementById(dragState.draggedElement.id).style.left = newX + 'px';
+            document.getElementById(dragState.draggedElement.id).style.top = newY + 'px';
+            document.getElementById('propX').value = newX; document.getElementById('propY').value = newY;
+        }
+        function handleMouseUp() {
+            if (dragState.isDragging) { document.getElementById(dragState.draggedElement.id).classList.remove('dragging'); dragState.isDragging = false; saveState(); }
+            document.removeEventListener('mousemove', handleMouseMove); document.removeEventListener('mouseup', handleMouseUp);
+        }
+
+        paper.addEventListener('mousedown', e => {
+            if (e.target.classList.contains('resize-handle')) {
+                const el = designElements.find(i => i.id === e.target.parentElement.id);
+                dragState = { isResizing: true, draggedElement: el, startX: e.clientX, startY: e.clientY, startWidth: el.width, startHeight: el.height };
+                document.addEventListener('mousemove', handleResizeMove); document.addEventListener('mouseup', handleResizeEnd);
+            }
+        });
+        function handleResizeMove(e) {
+            if (!dragState.isResizing) return;
+            const rect = paper.getBoundingClientRect();
+            let newWidth = snap(Math.max(20, Math.min(rect.width - dragState.draggedElement.x, dragState.startWidth + (e.clientX - dragState.startX))));
+            let newHeight = snap(Math.max(2, Math.min(rect.height - dragState.draggedElement.y, dragState.startHeight + (e.clientY - dragState.startY))));
+            dragState.draggedElement.width = newWidth; dragState.draggedElement.height = newHeight;
+            const dom = document.getElementById(dragState.draggedElement.id);
+            dom.style.width = newWidth + 'px'; dom.style.height = newHeight + 'px';
+            if (['result_table', 'custom_text'].includes(dragState.draggedElement.type)) dom.querySelector('.content-wrapper').innerHTML = getDisplayContent(dragState.draggedElement);
+            document.getElementById('propW').value = newWidth; document.getElementById('propH').value = newHeight;
+        }
+        function handleResizeEnd() {
+            dragState.isResizing = false; document.removeEventListener('mousemove', handleResizeMove); document.removeEventListener('mouseup', handleResizeEnd); saveState();
+        }
+
+        function selectElement(id) {
+            selectedElementId = id;
+            document.querySelectorAll('.design-element').forEach(el => el.classList.remove('selected'));
+            if (!id) { document.getElementById('propertiesPanel').classList.add('hidden'); document.getElementById('noSelectionHint').classList.remove('hidden'); return; }
+            document.getElementById(id).classList.add('selected');
+            document.getElementById('propertiesPanel').classList.remove('hidden'); document.getElementById('noSelectionHint').classList.add('hidden');
+            syncPropertiesPanel(designElements.find(item => item.id === id));
+        }
+
+        function syncPropertiesPanel(el) {
+            if (!el) return;
+            document.getElementById('propSelectionName').innerText = el.type.replace(/_/g, ' ').toUpperCase();
+
+            // Sync all standard properties
+            ['x', 'y', 'width', 'height', 'fontSize', 'fontWeight', 'align', 'color', 'fontFamily'].forEach(p => {
+                if (document.getElementById('prop' + p.charAt(0).toUpperCase() + p.slice(1))) {
+                    document.getElementById('prop' + p.charAt(0).toUpperCase() + p.slice(1)).value = el[p];
+                }
+            });
+
+            document.getElementById('basicProps').classList.toggle('hidden', el.type === 'result_table');
+
+            document.getElementById('tableProps').classList.toggle('hidden', el.type !== 'result_table');
+            if (el.type === 'result_table') {
+                document.getElementById('propTableLayout').value = el.tableLayout || 'auto';
+                document.getElementById('propColWidths').value = el.colWidths || '';
+                document.getElementById('propCellPadding').value = el.cellPadding !== undefined ? el.cellPadding : 8;
+                document.getElementById('propBorderWidth').value = el.borderWidth !== undefined ? el.borderWidth : 1;
+                document.getElementById('propWordWrap').checked = el.wordWrap !== false;
+                document.getElementById('propZebraStripes').checked = el.zebraStripes || false;
+                document.getElementById('propZebraColor').value = el.zebraColor || '#f8fafc';
+                document.getElementById('propHeaderFontSize').value = el.headerFontSize || 12;
+                document.getElementById('propRowFontSize').value = el.rowFontSize || 12;
+                document.getElementById('propTableCols').value = (el.columns || []).join(',');
+                document.getElementById('propHeaderBg').value = el.headerBg || '#f8fafc';
+                document.getElementById('propHeaderColor').value = el.headerColor || '#1e293b';
+                document.getElementById('propBorderColor').value = el.borderColor || '#e2e8f0';
+                document.getElementById('propRowTextColor').value = el.rowTextColor || '#334155';
+            }
+        }
+
+        function updateElementProperty(prop, val) {
+            if (!selectedElementId) return;
+            const el = designElements.find(item => item.id === selectedElementId);
+
+            let value = val;
+            if (['x', 'y', 'width', 'height', 'fontSize', 'cellPadding', 'borderWidth', 'headerFontSize', 'rowFontSize'].includes(prop)) value = parseInt(val) || 0;
+            if (['wordWrap', 'zebraStripes'].includes(prop)) value = val;
+            if (prop === 'columns') value = val.map(v => v.trim()).filter(v => v !== '');
+
+            el[prop] = value; renderElement(el); saveState();
+        }
+
+        function deleteElement(id) {
+            designElements = designElements.filter(el => el.id !== id);
+            document.getElementById(id)?.remove();
+            if (selectedElementId === id) selectElement(null);
+            if (designElements.length === 0) emptyHint.style.display = 'flex';
+            saveState();
+        }
+
+        function deselectAll() { selectElement(null); }
+
+        async function loadLabInfoForPreview() {
+            try {
+                const response = await fetch('/api/lab-info'); const result = await response.json(); if (result.success && result.lab_info) { labInfo = result.lab_info; designElements.forEach(el => renderElement(el)); }
+            } catch (error) { labInfo = { lab_name: ' NexLab Center', lab_currency: '$' }; }
+        }
+
+        function saveLocal() { localStorage.setItem('lab_result_design_v6', JSON.stringify({ elements: designElements, paperSize, counter: elementIdCounter })); }
+
+        function loadLocal() {
+            const saved = localStorage.getItem('lab_result_design_v6');
+            if (saved) {
+                const data = JSON.parse(saved); designElements = data.elements || []; paperSize = data.paperSize || 'A4'; elementIdCounter = data.counter || 0;
+                setPaperSize(paperSize); if (designElements.length > 0) emptyHint.style.display = 'none';
+                designElements.forEach(renderElement);
+                historyStack = [JSON.parse(JSON.stringify(designElements))]; historyIndex = 0;
+            }
+        }
+
+        function resetDesign() {
+            if (confirm('⚠️ Are you sure you want to clear the entire canvas?')) {
+                designElements = []; elementIdCounter = 0;
+                paper.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center opacity-10 pointer-events-none" id="emptyHint"><i class="fas fa-vial text-[120px] mb-4"></i><p class="text-2xl font-bold tracking-widest uppercase">Drag Elements Here</p></div>`;
+                document.getElementById('emptyHint').style.display = 'flex';
+                selectElement(null); saveState(); showToast('Canvas Cleared');
+            }
+        }
+
+        async function saveDesign() {
+            const safeElements = JSON.parse(JSON.stringify(designElements));
+            const data = { template_name: 'result_report', template_type: 'result_report', paper_width: paperSize === 'A4' ? '210mm' : '148mm', paper_height: paperSize === 'A4' ? '297mm' : '210mm', margin: '0', elements: JSON.stringify({ elements: safeElements, paperSize: paperSize }) };
+            try {
+                const res = await fetch('/api/print-template/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+                if (!res.ok) throw new Error(`Server returned status ${res.status}`);
+                const result = await res.json();
+                if (result.success) { showToast('Template Saved Successfully!'); saveLocal(); } else alert('Backend rejected the save: ' + (result.error || 'Unknown error'));
+            } catch (err) { alert('Failed to save to database. Check console (F12).\n\nDetails: ' + err.message); }
+        }
+
+        async function loadDesign() {
+            try {
+                const res = await fetch('/api/print-template/load/result_report');
+                if (!res.ok) throw new Error(`Server returned status ${res.status}`);
+                const result = await res.json();
+                if (result.success && result.template) {
+                    const loaded = result.template; let parsedData;
+                    try {
+                        parsedData = JSON.parse(loaded.elements && loaded.elements.trim() !== '' && loaded.elements !== 'None' ? loaded.elements : '{"elements":[], "paperSize":"A4"}');
+                    } catch (parseErr) { alert('The template data in the database is corrupted. Loading a fresh canvas.'); parsedData = { elements: [], paperSize: 'A4' }; }
+                    designElements = parsedData.elements || []; paperSize = parsedData.paperSize || (loaded.paper_width === '148mm' ? 'A5' : 'A4');
+                    elementIdCounter = designElements.reduce((max, el) => Math.max(max, isNaN(parseInt(el.id.split('_')[1])) ? 0 : parseInt(el.id.split('_')[1])), 0);
+                    setPaperSize(paperSize);
+                    paper.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center opacity-10 pointer-events-none" id="emptyHint"><i class="fas fa-vial text-[120px] mb-4"></i><p class="text-2xl font-bold tracking-widest uppercase">Drag Elements Here</p></div>`;
+                    if (designElements.length > 0) document.getElementById('emptyHint').style.display = 'none';
+                    designElements.forEach(renderElement);
+                    historyStack = [JSON.parse(JSON.stringify(designElements))]; historyIndex = 0; saveLocal(); showToast('Template Loaded from Database!');
+                } else alert('No saved template found on the server.');
+            } catch (err) { alert('Error loading from database. Check console (F12).\n\nDetails: ' + err.message); }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateY(0)';
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-20px)';
+            }, 3000);
+        }
+
+        window.addEventListener('load', async () => { await loadLabInfoForPreview(); loadLocal(); if (designElements.length === 0) loadDesign(); });
+    </script>
+</body>
+
+</html>

@@ -52,6 +52,7 @@
                     <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Name</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Phone</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Deleted Date</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Deletion Reason</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Actions</th>
                 </tr>
             </thead>
@@ -62,6 +63,7 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{{ patient.full_name }}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{{ patient.phone_key }} {{ patient.phone_number }}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ patient.deleted_at.strftime('%Y-%m-%d %H:%M') if patient.deleted_at else 'N/A' }}</td>
+                    <td class="px-6 py-4 text-sm text-red-600 max-w-xs truncate" title="{{ patient.deleted_reason or '' }}">{{ patient.deleted_reason or '—' }}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div class="flex gap-2">
                             <a href="/patients/view-deleted/{{ patient.patient_id }}" class="text-blue-600 hover:text-blue-900">👁️ View</a>
@@ -71,7 +73,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="5" class="px-6 py-8 text-center text-slate-500">No deleted patients found</td>
+                    <td colspan="6" class="px-6 py-8 text-center text-slate-500">No deleted patients found</td>
                 </tr>
                 {% endfor %}
             </tbody>

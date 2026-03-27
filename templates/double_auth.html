@@ -1,0 +1,810 @@
+<!-- templates/result_entry.html -->
+{% extends "base.html" %}
+{% block title %}Double Authorisation - NexLab{% endblock %}
+{% block page_title %}Double Authorisation{% endblock %}
+{% block content %}
+<style>
+    .result-grid { font-size: 13px; border-collapse: collapse; }
+    .result-grid th { position: sticky; top: 0; z-index: 10; background: #e2e8f0; border: 1px solid #cbd5e1; }
+    .result-grid td, .result-grid th { padding: 3px 5px; white-space: nowrap; vertical-align: middle; text-align: center; border: 1px solid #cbd5e1; }
+    .result-grid input, .result-grid select { font-size: 13px; padding: 4px 6px; }
+    .row-parent { background: #eef2ff !important; font-weight: 600; }
+    .row-parent td { border-bottom: 1px solid #c7d2fe; }
+    .row-child .test-name { padding-left: 32px !important; font-weight: 400; color: #475569; }
+    .row-header .test-name { padding-left: 32px !important; font-weight: 600; color: #334155; font-style: italic; }
+    .row-standalone { font-weight: 500; }
+    .result-input { width: 120px; border: 1px solid #cbd5e1; border-radius: 6px; transition: all 0.2s; }
+    .result-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.2); }
+    .bg-high { background-color: #fef3c7 !important; border-color: #f59e0b !important; }
+    .bg-low { background-color: #dbeafe !important; border-color: #3b82f6 !important; }
+    .bg-panic { background-color: #fee2e2 !important; border-color: #ef4444 !important; }
+    .status-high { color: #d97706; font-weight: 700; }
+    .status-low { color: #2563eb; font-weight: 700; }
+    .status-normal { color: #16a34a; font-weight: 500; }
+    .status-panic { color: #dc2626; font-weight: 700; }
+    .device-select { width: 130px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    .remark-input { width: 100px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    .save-footer { position: sticky; bottom: 0; z-index: 20; }
+    .action-btn { padding: 4px 10px; font-size: 16px; border-radius: 4px; border: 1px solid #e2e8f0; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; justify-content: center; }
+    .action-btn:hover { background: #f1f5f9; }
+    .authorize-cb { width: 16px; height: 16px; accent-color: #4f46e5; cursor: pointer; }
+    .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.8); display: flex; align-items: center; justify-content: center; z-index: 50; }
+    .spinner { width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+<!-- Patient Header -->
+<div class="bg-white rounded-3xl shadow-sm border border-slate-200 mb-4 p-5 relative overflow-hidden">
+    <div class="absolute top-4 right-4">
+        <a href="/patients/edit/{{ patient.patient_id }}" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition">← Back to Patient</a>
+    </div>
+    
+    <div class="flex items-start gap-4">
+        <div class="w-14 h-14 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-2xl font-bold flex-shrink-0 mt-1">
+            {{ patient.full_name[0] if patient.full_name else '?' }}
+        </div>
+        
+        <div class="flex-1 min-w-0 pr-24">
+            <h3 class="text-xl font-bold text-slate-800 mb-3"><span class="text-slate-500 text-sm font-semibold mr-1">Name:</span>{{ patient.full_name }}</h3>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-y-2 gap-x-4 text-sm text-slate-700 mb-4">
+                <div class="truncate" title="ID: {{ patient.patient_id }}"><span class="font-semibold text-slate-500">ID:</span> <span class="font-mono font-bold bg-slate-100 px-1 rounded">{{ patient.patient_id }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Gender:</span> 
+                    <span class="px-1.5 py-0.5 rounded text-xs font-bold {{ 'bg-blue-100 text-blue-800' if patient.gender == 'male' else 'bg-pink-100 text-pink-800' }}">
+                        {{ patient.gender|capitalize }}
+                    </span>
+                </div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Age:</span> <span class="font-bold">{{ patient.age }} {{ patient.age_unit or 'year' }}{{ 's' if patient.age and patient.age > 1 else '' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Weight:</span> <span class="font-bold">{{ patient.weight or 'N/A' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Height:</span> <span class="font-bold">{{ patient.height or 'N/A' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Phone:</span> <span class="font-bold">{{ patient.phone_number or 'N/A' }}</span></div>
+
+                {% if visit %}
+                <div class="truncate"><span class="font-semibold text-slate-500">Visit:</span> <span class="font-mono font-bold text-xs">{{ visit.visit_id }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Date:</span> <span class="font-bold">{{ visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit.visit_date else 'N/A' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">User:</span> <span class="font-bold">{{ visit_user_name or 'System' }}</span></div>
+                {% endif %}
+                <div class="truncate"><span class="font-semibold text-slate-500">Fasting Time:</span> <span class="font-bold">{{ patient.fasting_time if patient.fasting_time else 'N/A' }}</span></div>
+            </div>
+
+            <!-- Medical Details -->
+            <div class="bg-amber-50 rounded-lg p-3 border border-amber-100">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-slate-700">
+                    <div><span class="font-semibold text-slate-500 block text-xs">Disease/Diagnosis</span><div class="truncate font-bold text-blue-600">{{ patient.diagnosis or '' }}</div></div>
+                    <div><span class="font-semibold text-slate-500 block text-xs">Symptoms</span><div class="truncate font-bold text-blue-600">{{ patient.symptoms or '' }}</div></div>
+                    <div><span class="font-semibold text-slate-500 block text-xs">Therapy</span><div class="truncate font-bold text-blue-600">{{ patient.therapy or '' }}</div></div>
+                    <div><span class="font-semibold text-slate-500 block text-xs">Note</span><div class="truncate font-bold text-blue-600" title="{{ patient.note or '' }}">{{ patient.note or '' }}</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Grid Container -->
+<div class="bg-white rounded-3xl shadow-sm border border-slate-200 relative overflow-hidden" id="gridWrapper">
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="text-center">
+            <div class="spinner mx-auto mb-3"></div>
+            <p class="text-slate-500 text-sm">Loading results grid...</p>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="min-w-full result-grid" id="resultGrid">
+            <thead>
+                <tr class="border-b border-slate-200">
+                    <th class="text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Test / Parameter</th>
+                    <th class="text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Result</th>
+                    <th class="text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Unit</th>
+                    <th class="text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Device</th>
+                    <th class="text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Range</th>
+                    <th class="text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">AUTH status</th>
+                    <th class="text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
+                    <th class="text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">ReRun Result</th>
+                    <th class="text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Remark</th>
+                    <th class="text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="gridBody">
+                <!-- Rows will be rendered by JavaScript -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="hidden p-12 text-center text-slate-400">
+        <svg class="w-16 h-16 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+        <p class="text-lg font-medium">No orders found for this patient visit</p>
+        <p class="text-sm mt-1">Register tests for the patient first.</p>
+    </div>
+
+    <!-- Footer with Stats -->
+    <div class="p-4 bg-white border-t border-slate-200 rounded-b-xl flex items-center justify-between">
+        <div class="text-sm text-slate-500">
+            <span id="resultStats"></span>
+        </div>
+    </div>
+</div>
+
+<script>
+// ===========================
+// GLOBAL STATE
+// ===========================
+let gridData = null;
+let allRanges = [];
+const patientId = '{{ patient.patient_id }}';
+const patientGender = '{{ patient.gender }}';
+const patientAge = {{ patient.age or 0 }};
+let currentNoSampleOrderId = null;
+
+// ===========================
+// LOAD DATA
+// ===========================
+async function loadGridData() {
+    try {
+        const resp = await fetch(`/api/result-entry-data/${patientId}`);
+        const data = await resp.json();
+        if (data.error) {
+            document.getElementById('loadingOverlay').innerHTML = `<p class="text-red-500">${data.error}</p>`;
+            return;
+        }
+        gridData = data;
+        allRanges = data.all_ranges || [];
+        renderGrid(data.grid_rows);
+        
+        // Auto-calculate any loaded mathematical formulas immediately mapping variables across rows natively
+        calculateAllFormulas();
+        
+        document.getElementById('loadingOverlay').style.display = 'none';
+        if (data.grid_rows.length > 0) {
+            document.getElementById('saveFooter').style.display = 'flex';
+        } else {
+            document.getElementById('emptyState').classList.remove('hidden');
+        }
+        updateStats();
+    } catch (err) {
+        document.getElementById('loadingOverlay').innerHTML = `<p class="text-red-500">Error: ${err.message}</p>`;
+    }
+}
+
+// ===========================
+// RENDER GRID
+// ===========================
+function renderGrid(rows) {
+    const tbody = document.getElementById('gridBody');
+    tbody.innerHTML = '';
+
+    rows.forEach((row, idx) => {
+        if (row.type === 'parent') {
+            tbody.appendChild(createParentRow(row, idx));
+        } else if (row.type === 'child') {
+            tbody.appendChild(createChildRow(row, idx));
+        } else {
+            tbody.appendChild(createStandaloneRow(row, idx));
+        }
+    });
+}
+
+function createParentRow(row, idx) {
+    const tr = document.createElement('tr');
+    tr.className = 'row-parent';
+    tr.dataset.orderId = row.order_id;
+    tr.dataset.idx = idx;
+    tr.dataset.type = 'parent';
+    const devOptions = buildDeviceOptions(row.devices, row.selected_device_id);
+    tr.innerHTML = `
+        <td class="test-name">
+            <span class="text-indigo-700">📋 ${escHtml(row.test_name)}</span>
+        </td>
+        <td></td><td></td>
+        <td><select class="device-select parent-device-select" data-order-id="${row.order_id}" data-idx="${idx}" disabled>${devOptions}</select></td>
+        <td></td>
+        <td class="text-center">
+            ${row.double_authorized ? '<span class="text-purple-600 font-bold text-lg">✓✓</span>' : (row.authorized ? '<span class="text-green-500 font-bold text-lg">✓</span>' : '')}
+        </td>
+        <td></td>
+        <td class="rerun-result-cell"></td>
+        <td><input type="text" class="remark-input parent-remark" data-order-id="${row.order_id}" value="${escAttr(row.note || '')}" placeholder="Note..." disabled></td>
+        <td class="text-center">
+            ${buildActionButtonsHTML(row)}
+        </td>
+    `;
+    return tr;
+}
+
+function createChildRow(row, idx) {
+    const tr = document.createElement('tr');
+    const isHeader = row.is_header;
+    tr.className = isHeader ? 'row-header hover:bg-slate-50' : 'row-child hover:bg-slate-50';
+    tr.dataset.orderId = row.order_id;
+    tr.dataset.paramId = row.parameter_id;
+    tr.dataset.testId = row.test_id;
+    tr.dataset.idx = idx;
+    tr.dataset.type = 'child';
+
+    if (isHeader) {
+        tr.innerHTML = `
+            <td class="test-name" colspan="10">
+                <span class="text-slate-600">— ${escHtml(row.parameter_name)} —</span>
+            </td>
+        `;
+        return tr;
+    }
+
+    const rng = row.range || {};
+    const rangeDisplay = formatRangeDisplay(rng);
+    const inputHtml = buildInputHtml(row, idx);
+    const unitText = rng.unit || '';
+    const { statusText, statusClass, inputClass } = computeStatus(row.result_value, rng);
+    
+    let deviceName = '—';
+    if (row.selected_device_id && row.devices) {
+        const d = row.devices.find(x => x.id === row.selected_device_id);
+        if (d) deviceName = d.name;
+    }
+
+    tr.innerHTML = `
+        <td class="test-name">${escHtml(row.parameter_name)}</td>
+        <td>${inputHtml}</td>
+        <td class="text-xs text-slate-600 unit-cell" data-idx="${idx}">${escHtml(unitText)}</td>
+        <td class="text-center text-slate-500 text-xs child-device-name" data-idx="${idx}">${escHtml(deviceName)}</td>
+        <td class="text-xs text-slate-500 range-cell" data-idx="${idx}">${rangeDisplay}</td>
+        <td class="text-center">
+            ${row.double_authorized ? '<span class="text-purple-600 font-bold text-lg">✓✓</span>' : (row.authorized ? '<span class="text-green-500 font-bold text-lg">✓</span>' : '')}
+        </td>
+        <td class="text-center status-cell ${statusClass}" data-idx="${idx}">${statusText}</td>
+        <td class="text-center text-sm font-mono text-indigo-500 rerun-result-cell" data-idx="${idx}">${escHtml(row.rerun_result || '')}</td>
+        <td></td>
+        <td></td>
+    `;
+
+    // Apply input class after render
+    setTimeout(() => {
+        const inp = tr.querySelector('.result-input');
+        if (inp && inputClass) inp.classList.add(inputClass);
+    }, 0);
+
+    return tr;
+}
+
+function createStandaloneRow(row, idx) {
+    const tr = document.createElement('tr');
+    tr.className = 'row-standalone hover:bg-slate-50';
+    tr.dataset.orderId = row.order_id;
+    tr.dataset.testId = row.test_id;
+    tr.dataset.idx = idx;
+    tr.dataset.type = 'standalone';
+
+    const rng = row.range || {};
+    const rangeDisplay = formatRangeDisplay(rng);
+    const inputHtml = buildInputHtml(row, idx);
+    const unitText = rng.unit || '';
+    const devOptions = buildDeviceOptions(row.devices, row.selected_device_id);
+    const { statusText, statusClass, inputClass } = computeStatus(row.result_value, rng);
+
+    tr.innerHTML = `
+        <td class="test-name font-semibold text-slate-800">${escHtml(row.test_name)}</td>
+        <td>${inputHtml}</td>
+        <td class="text-xs text-slate-600 unit-cell" data-idx="${idx}">${escHtml(unitText)}</td>
+        <td><select class="device-select" data-idx="${idx}" disabled>${devOptions}</select></td>
+        <td class="text-xs text-slate-500 range-cell" data-idx="${idx}">${rangeDisplay}</td>
+        <td class="text-center">
+            ${row.double_authorized ? '<span class="text-purple-600 font-bold text-lg">✓✓</span>' : (row.authorized ? '<span class="text-green-500 font-bold text-lg">✓</span>' : '')}
+        </td>
+        <td class="text-center status-cell ${statusClass}" data-idx="${idx}">${statusText}</td>
+        <td class="text-center text-sm font-mono text-indigo-500 rerun-result-cell" data-idx="${idx}">${escHtml(row.rerun_result || '')}</td>
+        <td><input type="text" class="remark-input" data-idx="${idx}" value="${escAttr(row.note || '')}" placeholder="Note..." disabled></td>
+        <td class="text-center">
+            ${buildActionButtonsHTML(row)}
+        </td>
+    `;
+
+    setTimeout(() => {
+        const inp = tr.querySelector('.result-input');
+        if (inp && inputClass) inp.classList.add(inputClass);
+    }, 0);
+
+    return tr;
+}
+
+// ===========================
+// BUILD HELPERS
+// ===========================
+function buildActionButtonsHTML(row) {
+    if (row.double_authorized) {
+        return `
+            <div class="flex gap-2 justify-center">
+                <button class="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1 rounded text-xs font-bold transition" onclick="unauthOrder(${row.order_id}, '${escAttr(row.test_name)}')">UnAUTH</button>
+            </div>
+        `;
+    } else if (row.authorized) {
+        return `
+            <div class="flex gap-2 justify-center">
+                <button class="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1 rounded text-xs font-bold transition" onclick="doubleAuthorizeOrder(${row.order_id})">Double Auth</button>
+                <button class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1 rounded text-xs font-bold transition" onclick="rerunOrderDA(${row.order_id})">ReRun</button>
+            </div>
+        `;
+    }
+    return '<span class="text-xs text-slate-400">Pending</span>';
+}
+
+function buildInputHtml(row, idx) {
+    const val = escAttr(row.result_value || '');
+    const rt = row.result_type || 'number';
+    const disabledAttr = 'readonly';
+    
+    // Formula Integration
+    const isFormula = !!row.formula_expression;
+    const formulaAttr = isFormula ? 'readonly title="Auto-calculated from formula"' : '';
+    const extraClass = isFormula ? 'bg-indigo-50 border-indigo-200 shadow-inner' : '';
+
+    if (rt === 'selection' && row.selection_options) {
+        let opts = [];
+        try {
+            if (typeof row.selection_options === 'string' && row.selection_options.trim().startsWith('[')) {
+                opts = JSON.parse(row.selection_options).map(String);
+            } else {
+                opts = String(row.selection_options).split(',').map(o => o.trim());
+            }
+        } catch (e) {
+            opts = String(row.selection_options).split(',').map(o => o.trim());
+        }
+        
+        let html = `<div class="flex items-center"><select class="result-input ${extraClass}" data-idx="${idx}" onchange="onResultChange(this)" ${disabledAttr} ${formulaAttr}>`;
+        html += `<option value="">-- Select --</option>`;
+        opts.forEach(o => {
+            html += `<option value="${escAttr(o)}" ${val === String(o) ? 'selected' : ''}>${escHtml(o)}</option>`;
+        });
+        html += `</select></div>`;
+        return html;
+    } else if (rt === 'upload') {
+        return `<div class="flex items-center"><input type="file" class="result-input text-xs ${extraClass}" data-idx="${idx}" style="width:140px;" ${disabledAttr} ${formulaAttr}></div>`;
+    } else if (rt === 'text') {
+        return `<div class="flex items-center"><input type="text" class="result-input ${extraClass}" data-idx="${idx}" value="${val}" oninput="onResultChange(this)" placeholder="Enter text..." ${disabledAttr} ${formulaAttr}></div>`;
+    } else {
+        // Default: number
+        return `<div class="flex items-center"><input type="number" step="any" class="result-input ${extraClass}" data-idx="${idx}" value="${val}" oninput="onResultChange(this)" placeholder="0.0" ${disabledAttr} ${formulaAttr}></div>`;
+    }
+}
+
+function buildDeviceOptions(devices, selectedId) {
+    if (!devices || devices.length === 0) return '<option value="">No device</option>';
+    let html = '';
+    devices.forEach(d => {
+        html += `<option value="${d.id}" ${d.id === selectedId ? 'selected' : ''}>${escHtml(d.name)}</option>`;
+    });
+    return html;
+}
+
+function formatRangeDisplay(rng) {
+    if (!rng) return '—';
+    if (rng.range_type === 'text' && rng.text_range) return escHtml(rng.text_range);
+    if (rng.normal_from != null && rng.normal_to != null) return `${rng.normal_from} - ${rng.normal_to}`;
+    if (rng.normal_from != null) return `≥ ${rng.normal_from}`;
+    if (rng.normal_to != null) return `≤ ${rng.normal_to}`;
+    return '—';
+}
+
+// ===========================
+// REAL-TIME VALIDATION
+// ===========================
+function computeStatus(value, rng) {
+    if (!value || value === '' || !rng || rng.range_type === 'text') {
+        return { statusText: '', statusClass: '', inputClass: '' };
+    }
+
+    const num = parseFloat(value);
+    if (isNaN(num)) return { statusText: '', statusClass: '', inputClass: '' };
+
+    // Check panic first
+    if (rng.panic_less_than != null && num < rng.panic_less_than) {
+        return { statusText: '⚠ PANIC', statusClass: 'status-panic', inputClass: 'bg-panic' };
+    }
+    if (rng.panic_more_than != null && num > rng.panic_more_than) {
+        return { statusText: '⚠ PANIC', statusClass: 'status-panic', inputClass: 'bg-panic' };
+    }
+
+    // Check normal
+    if (rng.normal_from != null && rng.normal_to != null) {
+        if (num >= rng.normal_from && num <= rng.normal_to) {
+            return { statusText: 'Normal', statusClass: 'status-normal', inputClass: '' };
+        }
+    }
+
+    // Check high
+    if (rng.high_from != null && num >= rng.high_from) {
+        return { statusText: 'High', statusClass: 'status-high', inputClass: 'bg-high' };
+    }
+    if (rng.normal_to != null && num > rng.normal_to) {
+        return { statusText: 'High', statusClass: 'status-high', inputClass: 'bg-high' };
+    }
+
+    // Check low
+    if (rng.low_to != null && num <= rng.low_to) {
+        return { statusText: 'Low', statusClass: 'status-low', inputClass: 'bg-low' };
+    }
+    if (rng.normal_from != null && num < rng.normal_from) {
+        return { statusText: 'Low', statusClass: 'status-low', inputClass: 'bg-low' };
+    }
+
+    // Normal if range exists but no specific match
+    if (rng.normal_from != null || rng.normal_to != null) {
+        return { statusText: 'Normal', statusClass: 'status-normal', inputClass: '' };
+    }
+
+    return { statusText: '', statusClass: '', inputClass: '' };
+}
+
+function onResultChange(el) {
+    const idx = parseInt(el.dataset.idx);
+    const row = gridData.grid_rows[idx];
+    if (!row) return;
+
+    // Persist exact current typing into JS memory so dependent formulas see it!
+    row.result_value = el.value;
+
+    const rng = row.range || {};
+    const value = el.value;
+
+    // Remove old classes
+    el.classList.remove('bg-high', 'bg-low', 'bg-panic');
+
+    const { statusText, statusClass, inputClass } = computeStatus(value, rng);
+
+    // Update status cell
+    const statusCell = document.querySelector(`.status-cell[data-idx="${idx}"]`);
+    if (statusCell) {
+        statusCell.textContent = statusText;
+        statusCell.className = `text-center status-cell ${statusClass}`;
+        statusCell.dataset.idx = idx;
+    }
+
+    // Update input bg
+    if (inputClass) el.classList.add(inputClass);
+
+    updateStats();
+    
+    // Auto Update formulas globally on screen anytime ANY value naturally changes!
+    calculateAllFormulas();
+}
+
+// ===========================
+// FORMULA CALCULATION
+// ===========================
+function calculateAllFormulas() {
+    gridData.grid_rows.forEach((row, i) => {
+        if (!row.formula_expression) return;
+        
+        let expr = row.formula_expression;
+        let isComplete = true;
+        let evalExpression = expr;
+        
+        const varRegex = /\{([^}]+)\}/g;
+        const matches = [...expr.matchAll(varRegex)];
+        
+        for (const m of matches) {
+            const varName = m[1].trim();
+            // Securely find variable value anywhere in gridData (via Standalone Name or Parameter Name!)
+            const sourceRow = gridData.grid_rows.find(r => 
+                (r.test_name === varName && r.type === 'standalone') || 
+                (r.parameter_name === varName && r.type === 'child')
+            );
+            
+            if (!sourceRow || sourceRow.result_value == null || sourceRow.result_value === '') {
+                isComplete = false;
+                break;
+            }
+            
+            const numVal = parseFloat(sourceRow.result_value);
+            if (isNaN(numVal)) {
+                isComplete = false;
+                break;
+            }
+            
+            const safeVarName = m[1].replace(/[.*+?^${}()|[\\]]/g, '\\$&');
+            evalExpression = evalExpression.replace(new RegExp('\\{' + safeVarName + '\\}', 'g'), numVal);
+        }
+        
+        const inputEl = document.querySelector(`.result-input[data-idx="${i}"]`);
+        
+        if (isComplete && inputEl && !row.authorized) {
+            try {
+                const result = Function('"use strict";return (' + evalExpression + ')')();
+                if (!isNaN(result) && isFinite(result)) {
+                    const finalVal = result.toFixed(2);
+                    if (row.result_value !== finalVal) {
+                        row.result_value = finalVal;
+                        inputEl.value = finalVal;
+                        
+                        // Force manual render logic for Status styling to avoid infinite loop
+                        const rng = row.range || {};
+                        inputEl.classList.remove('bg-high', 'bg-low', 'bg-panic');
+                        const { statusText, statusClass, inputClass } = computeStatus(finalVal, rng);
+                        const statusCell = document.querySelector(`.status-cell[data-idx="${i}"]`);
+                        if (statusCell) {
+                            statusCell.textContent = statusText;
+                            statusCell.className = `text-center status-cell ${statusClass}`;
+                        }
+                        if (inputClass) inputEl.classList.add(inputClass);
+                    }
+                }
+            } catch (err) {
+                console.error("Formula error resolving:", evalExpression, err);
+            }
+        } else if (!isComplete && inputEl && !row.authorized && inputEl.value !== '') {
+            // Drop calculation back to zero natively
+            inputEl.value = '';
+            row.result_value = '';
+            inputEl.classList.remove('bg-high', 'bg-low', 'bg-panic');
+            const statusCell = document.querySelector(`.status-cell[data-idx="${i}"]`);
+            if (statusCell) {
+                statusCell.textContent = '';
+                statusCell.className = `text-center status-cell`;
+            }
+        }
+    });
+}
+
+// ===========================
+// DEVICE CHANGE HANDLER
+// ===========================
+async function onParentDeviceChange(selectEl, testId, orderId) {
+    const deviceId = parseInt(selectEl.value);
+    const idx = selectEl.dataset.idx;
+
+    // Update parent's selected device
+    if (gridData.grid_rows[parseInt(idx)]) {
+        gridData.grid_rows[parseInt(idx)].selected_device_id = deviceId;
+    }
+
+    // Find all parameters (children) for this order
+    const childrenNodes = document.querySelectorAll(`tr.row-child[data-order-id="${orderId}"]`);
+    for (const childTr of childrenNodes) {
+        const childIdx = childTr.dataset.idx;
+        const childRow = gridData.grid_rows[parseInt(childIdx)];
+        if (!childRow) continue;
+        childRow.selected_device_id = deviceId;
+        
+        let deviceName = '—';
+        if (childRow.devices) {
+            const d = childRow.devices.find(x => x.id === deviceId);
+            if (d) deviceName = d.name;
+        }
+        const devNameCell = document.querySelector(`.child-device-name[data-idx="${childIdx}"]`);
+        if (devNameCell) devNameCell.textContent = deviceName;
+
+        try {
+            let url = `/api/range-for-device?test_id=${testId}&device_id=${deviceId}&gender=${patientGender}&age=${patientAge}&parameter_id=${childRow.parameter_id}`;
+            const resp = await fetch(url);
+            const rng = await resp.json();
+
+            childRow.range = rng;
+
+            // Update Unit cell
+            const unitCell = document.querySelector(`.unit-cell[data-idx="${childIdx}"]`);
+            if (unitCell) unitCell.textContent = rng.unit || '';
+
+            // Update Range cell
+            const rangeCell = document.querySelector(`.range-cell[data-idx="${childIdx}"]`);
+            if (rangeCell) rangeCell.innerHTML = formatRangeDisplay(rng);
+
+            // Re-validate current result
+            const resultInput = document.querySelector(`.result-input[data-idx="${childIdx}"]`);
+            if (resultInput) onResultChange(resultInput);
+
+        } catch (err) {
+            console.error('Error fetching range for parameter:', err);
+        }
+    }
+}
+
+async function onDeviceChange(selectEl, testId, paramId) {
+    const deviceId = parseInt(selectEl.value);
+    const idx = selectEl.dataset.idx;
+
+    try {
+        let url = `/api/range-for-device?test_id=${testId}&device_id=${deviceId}&gender=${patientGender}&age=${patientAge}`;
+        if (paramId) url += `&parameter_id=${paramId}`;
+
+        const resp = await fetch(url);
+        const rng = await resp.json();
+
+        // Update the range in gridData
+        const rowIdx = parseInt(idx);
+        if (gridData.grid_rows[rowIdx]) {
+            gridData.grid_rows[rowIdx].range = rng;
+            gridData.grid_rows[rowIdx].selected_device_id = deviceId;
+        }
+
+        // Update Unit cell
+        const unitCell = document.querySelector(`.unit-cell[data-idx="${idx}"]`);
+        if (unitCell) unitCell.textContent = rng.unit || '';
+
+        // Update Range cell
+        const rangeCell = document.querySelector(`.range-cell[data-idx="${idx}"]`);
+        if (rangeCell) rangeCell.innerHTML = formatRangeDisplay(rng);
+
+        // Re-validate current result
+        const resultInput = document.querySelector(`.result-input[data-idx="${idx}"]`);
+        if (resultInput) onResultChange(resultInput);
+
+    } catch (err) {
+        console.error('Error fetching range:', err);
+    }
+}
+
+// ===========================
+// DOUBLE AUTH ACTIONS
+// ===========================
+function doubleAuthorizeOrder(orderId) {
+    showNotification('Processing...', 'info');
+    fetch(`/api/double-auth/authorize/${orderId}`, { method: 'POST' })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(data.message, 'success');
+            loadGridData();
+        } else showNotification(data.error || data.message, 'error');
+    }).catch(e => showNotification('Error communicating with server', 'error'));
+}
+
+function rerunOrderDA(orderId) {
+    showNotification('Processing...', 'info');
+    fetch(`/api/double-auth/rerun/${orderId}`, { method: 'POST' })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(data.message, 'success');
+            loadGridData();
+        } else showNotification(data.error || data.message, 'error');
+    }).catch(e => showNotification('Error communicating with server', 'error'));
+}
+
+let currentUnauthOrderId = null;
+
+function unauthOrder(orderId, testName) {
+    currentUnauthOrderId = orderId;
+    document.getElementById('unauthTestName').textContent = 'Test: ' + (testName || 'Unknown');
+    document.getElementById('unauthReasonInput').value = '';
+    document.getElementById('unauthError').classList.add('hidden');
+    document.getElementById('btnSubmitUnauth').textContent = 'Submit UnAUTH';
+    document.getElementById('btnSubmitUnauth').disabled = false;
+    
+    const modal = document.getElementById('unauthReasonModal');
+    const content = document.getElementById('unauthModalContent');
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+        document.getElementById('unauthReasonInput').focus();
+    }, 10);
+}
+
+function closeUnauthModal() {
+    const modal = document.getElementById('unauthReasonModal');
+    const content = document.getElementById('unauthModalContent');
+    content.classList.remove('scale-100', 'opacity-100');
+    content.classList.add('scale-95', 'opacity-0');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+    }, 200);
+}
+
+function submitUnauth() {
+    const reason = document.getElementById('unauthReasonInput').value.trim();
+    if(!reason) {
+        document.getElementById('unauthError').classList.remove('hidden');
+        document.getElementById('unauthReasonInput').focus();
+        return;
+    }
+    
+    document.getElementById('btnSubmitUnauth').textContent = 'Processing...';
+    document.getElementById('btnSubmitUnauth').disabled = true;
+    
+    fetch(`/api/double-auth/unauth/${currentUnauthOrderId}`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(data.success) {
+            showNotification(data.message, 'success');
+            closeUnauthModal();
+            loadGridData();
+        } else {
+            showNotification('Error: ' + data.message, 'error');
+            document.getElementById('btnSubmitUnauth').disabled = false;
+            document.getElementById('btnSubmitUnauth').textContent = 'Submit UnAUTH';
+        }
+    })
+    .catch(e => {
+        showNotification('Error communicating with server', 'error');
+        document.getElementById('btnSubmitUnauth').disabled = false;
+        document.getElementById('btnSubmitUnauth').textContent = 'Submit UnAUTH';
+    });
+}
+
+// ===========================
+// STATS
+// ===========================
+function updateStats() {
+    const inputs = document.querySelectorAll('.result-input');
+    let filled = 0, total = 0;
+    inputs.forEach(inp => {
+        if (inp.type === 'file') return;
+        total++;
+        if (inp.value && inp.value.trim()) filled++;
+    });
+    const el = document.getElementById('resultStats');
+    if (el) el.textContent = `${filled} / ${total} results entered`;
+}
+
+// ===========================
+// NOTIFICATION
+// ===========================
+function showNotification(msg, type) {
+    const div = document.createElement('div');
+    div.className = `fixed top-5 right-5 z-50 px-5 py-3 rounded-lg shadow-lg text-white text-sm font-medium transition-all`;
+    div.style.animation = 'slideIn 0.3s ease-out';
+    if (type === 'success') div.classList.add('bg-green-600');
+    else if (type === 'error') div.classList.add('bg-red-600');
+    else div.classList.add('bg-indigo-600');
+    div.textContent = msg;
+    document.body.appendChild(div);
+    setTimeout(() => { div.style.opacity = '0'; setTimeout(() => div.remove(), 300); }, 3000);
+}
+
+// ===========================
+// UTILITIES
+// ===========================
+function escHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+function escAttr(str) {
+    if (!str) return '';
+    return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ===========================
+// INIT
+// ===========================
+document.addEventListener('DOMContentLoaded', loadGridData);
+</script>
+
+<!-- UnAUTH Reason Modal -->
+<div id="unauthReasonModal" class="hidden fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity">
+    <div class="bg-white rounded-[20px] shadow-2xl w-full max-w-md overflow-hidden transform scale-95 opacity-0 transition-all duration-200" id="unauthModalContent">
+        <!-- Header -->
+        <div class="bg-red-50/70 px-6 py-5 border-b border-red-100 flex flex-col">
+            <div class="flex items-center gap-2 text-red-800 font-bold text-lg tracking-tight">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                UnAUTHORISE Test
+            </div>
+            <div class="text-[#dc2626] text-[13px] font-semibold mt-1" id="unauthTestName">Test: </div>
+        </div>
+        
+        <!-- Body -->
+        <div class="p-6 pb-4">
+            <label class="block text-slate-700 text-sm font-semibold mb-2">Reason for UnAUTHORISATION <span class="text-red-500">*</span></label>
+            <textarea id="unauthReasonInput" rows="3" class="w-full border-[1.5px] border-red-500 rounded-lg p-3 text-slate-700 focus:outline-none focus:ring-[3px] focus:ring-red-100 transition-all resize-none shadow-sm" placeholder="Please enter the reason for un-authorising this test..."></textarea>
+            <p id="unauthError" class="text-red-500 text-xs font-semibold mt-1.5 hidden">Reason is required</p>
+        </div>
+        
+        <!-- Footer -->
+        <div class="px-6 py-4 bg-white border-t border-slate-100 flex justify-end gap-3 flex-row-reverse pb-6">
+            <button onclick="submitUnauth()" id="btnSubmitUnauth" class="px-5 py-2.5 bg-[#ec7c7c] hover:bg-[#e06b6b] text-white font-bold rounded-lg shadow-sm transition-colors text-sm">
+                Submit UnAUTH
+            </button>
+            <button onclick="closeUnauthModal()" class="px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-lg shadow-sm transition-colors text-sm">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

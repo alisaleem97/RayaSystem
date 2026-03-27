@@ -1,0 +1,227 @@
+<!-- templates/call_centre_view.html -->
+{% extends "base.html" %}
+{% block title %}Call Centre View - NexLab{% endblock %}
+{% block page_title %}Patient Communication & Results{% endblock %}
+{% block content %}
+<style>
+    .result-grid { font-size: 13px; border-collapse: collapse; }
+    .result-grid th { position: sticky; top: 0; z-index: 10; background: #f8fafc; border: 1px solid #cbd5e1; }
+    .result-grid td, .result-grid th { padding: 12px 15px; white-space: nowrap; vertical-align: middle; text-align: center !important; border: 1px solid #cbd5e1; }
+    .row-parent { background: #f8fafc !important; font-weight: 700; color: #1e293b; }
+    .row-child td.test-name, .row-standalone td.test-name, .row-parent td.test-name { text-align: center !important; font-weight: 500; }
+    .row-child { color: #475569; }
+    .status-high { color: #dc2626; font-weight: 700; }
+    .status-low { color: #2563eb; font-weight: 700; }
+    .status-normal { color: #16a34a; font-weight: 500; }
+    .action-footer { position: sticky; bottom: 0; z-index: 20; background: white; border-top: 1px solid #e2e8f0; }
+</style>
+
+<!-- Patient Header -->
+<div class="bg-white rounded-3xl shadow-sm border border-slate-200 mb-4 p-5 relative overflow-hidden">
+    <div class="absolute top-4 right-4">
+        <a href="/call-centre" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition">← Back to List</a>
+    </div>
+    
+    <div class="flex items-start gap-4">
+        <div class="w-14 h-14 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-2xl font-bold flex-shrink-0 mt-1">
+            {{ patient.full_name[0] if patient.full_name else '?' }}
+        </div>
+        
+        <div class="flex-1 min-w-0 pr-24">
+            <h3 class="text-xl font-bold text-slate-800 mb-3"><span class="text-slate-500 text-sm font-semibold mr-1">Name:</span>{{ patient.full_name }}</h3>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-y-2 gap-x-4 text-sm text-slate-700 mb-4">
+                <div class="truncate" title="ID: {{ patient.patient_id }}"><span class="font-semibold text-slate-500">ID:</span> <span class="font-mono font-bold bg-slate-100 px-1 rounded">{{ patient.patient_id }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Gender:</span> 
+                    <span class="px-1.5 py-0.5 rounded text-xs font-bold {{ 'bg-blue-100 text-blue-800' if patient.gender == 'male' else 'bg-pink-100 text-pink-800' }}">
+                        {{ patient.gender|capitalize }}
+                    </span>
+                </div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Age:</span> <span class="font-bold">{{ patient.age }} {{ patient.age_unit or 'year' }}{{ 's' if patient.age and patient.age > 1 else '' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Weight:</span> <span class="font-bold">{{ patient.weight or 'N/A' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Height:</span> <span class="font-bold">{{ patient.height or 'N/A' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Phone:</span> <span class="font-bold">{{ patient.phone_number or 'N/A' }}</span></div>
+
+                {% if visit %}
+                <div class="truncate"><span class="font-semibold text-slate-500">Visit:</span> <span class="font-mono font-bold text-xs">{{ visit.visit_id }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Date:</span> <span class="font-bold">{{ visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit.visit_date else 'N/A' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">User:</span> <span class="font-bold">{{ visit_user_name or 'System' }}</span></div>
+                {% endif %}
+                <div class="truncate"><span class="font-semibold text-slate-500">Fasting Time:</span> <span class="font-bold">{{ patient.fasting_time if patient.fasting_time else 'N/A' }}</span></div>
+            </div>
+
+            <!-- Medical Details -->
+            <div class="bg-amber-50 rounded-lg p-3 border border-amber-100">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-slate-700">
+                    <div><span class="font-semibold text-slate-500 block text-xs">Disease/Diagnosis</span><div class="truncate font-bold text-blue-600">{{ patient.diagnosis or '' }}</div></div>
+                    <div><span class="font-semibold text-slate-500 block text-xs">Symptoms</span><div class="truncate font-bold text-blue-600">{{ patient.symptoms or '' }}</div></div>
+                    <div><span class="font-semibold text-slate-500 block text-xs">Therapy</span><div class="truncate font-bold text-blue-600">{{ patient.therapy or '' }}</div></div>
+                    <div><span class="font-semibold text-slate-500 block text-xs">Note</span><div class="truncate font-bold text-blue-600" title="{{ patient.note or '' }}">{{ patient.note or '' }}</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Results Grid -->
+<div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden mb-24">
+    <div class="overflow-x-auto">
+        <table class="w-full result-grid" id="resultGrid">
+            <thead>
+                <tr class="bg-slate-50">
+                    <th class="text-center">Test / Parameter</th>
+                    <th>Result</th>
+                    <th>Unit</th>
+                    <th>Range</th>
+                    <th>Remark</th>
+                </tr>
+            </thead>
+            <tbody id="gridBody">
+                <tr id="loadingRow">
+                    <td colspan="5" class="py-20 text-center text-slate-400">
+                        <i class="fas fa-spinner fa-spin fa-2x mb-2 text-indigo-400"></i>
+                        <p class="font-medium">Fetching patient results...</p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Footer Actions -->
+<div class="fixed bottom-10 left-[calc(50%+128px)] -translate-x-1/2 px-6 py-3 bg-white/90 backdrop-blur-md shadow-2xl rounded-3xl border border-slate-200 flex items-center gap-4 z-50 transition-all hover:scale-[1.02]">
+    <button onclick="analyseResults()" class="px-5 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition flex items-center gap-2 shadow-md active:scale-95 transform duration-200">
+        <i class="fas fa-microscope text-xs"></i> Analyse
+    </button>
+    <button onclick="markAsCalled()" class="px-5 py-2 bg-slate-800 text-white text-sm font-bold rounded-xl hover:bg-slate-900 transition flex items-center gap-2 shadow-md active:scale-95 transform duration-200">
+        <i class="fas fa-phone-alt text-xs"></i> Called
+    </button>
+    <button onclick="sendWhatsApp()" class="px-5 py-2 bg-[#25D366] text-white text-sm font-bold rounded-xl hover:bg-[#128C7E] transition flex items-center gap-2 shadow-md active:scale-95 transform duration-200">
+        <i class="fab fa-whatsapp text-base"></i> WhatsApp
+    </button>
+</div>
+
+<script>
+    const patientId = "{{ patient.patient_id }}";
+    
+    async function loadResults() {
+        try {
+            const resp = await fetch(`/api/double-authorized-tests/${patientId}`);
+            const data = await resp.json();
+            if (data.success) {
+                renderGrid(data.results);
+            } else {
+                console.error('Error:', data.error);
+                document.getElementById('gridBody').innerHTML = `<tr><td colspan="5" class="py-10 text-center text-red-500">Error loading results: ${data.error}</td></tr>`;
+            }
+        } catch (err) {
+            console.error(err);
+            document.getElementById('gridBody').innerHTML = `<tr><td colspan="5" class="py-10 text-center text-red-500">Failed to load results</td></tr>`;
+        }
+    }
+
+    function renderGrid(rows) {
+        const tbody = document.getElementById('gridBody');
+        tbody.innerHTML = '';
+
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="py-10 text-center text-slate-400">No results found for this patient.</td></tr>';
+            return;
+        }
+
+        rows.forEach((row) => {
+            const tr = document.createElement('tr');
+            if (row.type === 'parent') {
+                tr.className = 'row-parent';
+                tr.innerHTML = `
+                    <td class="test-name">${row.test_name}</td>
+                    <td></td><td></td><td></td><td></td>
+                `;
+            } else if (row.type === 'child') {
+                tr.className = 'row-child';
+                const flagClass = getFlagClass(row.flag);
+                tr.innerHTML = `
+                    <td class="test-name">${row.parameter_name}</td>
+                    <td class="font-bold ${flagClass} text-base">${row.result_value}</td>
+                    <td class="text-slate-500 font-medium">${row.unit || ''}</td>
+                    <td class="text-slate-500 font-medium">${row.range || ''}</td>
+                    <td class="text-xs italic text-slate-400">${row.remark || ''}</td>
+                `;
+            } else {
+                tr.className = 'row-standalone';
+                const flagClass = getFlagClass(row.flag);
+                tr.innerHTML = `
+                    <td class="test-name">${row.test_name}</td>
+                    <td class="font-bold ${flagClass} text-base">${row.result_value}</td>
+                    <td class="text-slate-500 font-medium">${row.unit || ''}</td>
+                    <td class="text-slate-500 font-medium">${row.range || ''}</td>
+                    <td class="text-xs italic text-slate-400">${row.remark || ''}</td>
+                `;
+            }
+            tbody.appendChild(tr);
+        });
+    }
+
+    function getFlagClass(flag) {
+        if (!flag) return '';
+        const f = flag.toUpperCase();
+        if (f.includes('H')) return 'status-high';
+        if (f.includes('L')) return 'status-low';
+        return 'status-normal';
+    }
+
+    function analyseResults() {
+        alert("Action: Analyse Results (Logic to be implemented)");
+    }
+
+    async function markAsCalled() {
+        const visitId = "{{ visit.visit_id if visit else '' }}";
+        if (!visitId) {
+            showModal('error', 'Error', 'No visit record found for this patient.');
+            return;
+        }
+
+        try {
+            const resp = await fetch(`/api/mark-called/${visitId}`, { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) {
+                showModal('success', 'Patient Called', 'The patient has been marked as called successfully.', () => {
+                    // Optional: You could refresh or just close
+                });
+            } else {
+                showModal('error', 'Error', 'Failed to update status: ' + (data.detail || 'Unknown error'));
+            }
+        } catch (err) {
+            console.error(err);
+            showModal('error', 'Error', 'An unexpected error occurred while communicating with the server.');
+        }
+    }
+
+    async function sendWhatsApp() {
+        const visitId = "{{ visit.visit_id if visit else '' }}";
+        if (!visitId) {
+            showModal('error', 'Error', 'No visit record found for this patient.');
+            return;
+        }
+
+        // Show loading state
+        showModal('info', 'Sending WhatsApp', 'Please wait while we generate the PDF and send it to the patient...');
+
+        try {
+            const resp = await fetch(`/api/send-whatsapp/${visitId}`, { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) {
+                showModal('success', 'WhatsApp Sent', 'The patient result has been sent successfully via WhatsApp.');
+            } else {
+                showModal('error', 'WhatsApp Failed', 'Error: ' + (data.error || 'Unknown error from API'));
+            }
+        } catch (err) {
+            console.error(err);
+            showModal('error', 'Network Error', 'An error occurred while connecting to the WhatsApp service.');
+        }
+    }
+
+    window.onload = loadResults;
+</script>
+{% endblock %}

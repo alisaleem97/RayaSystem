@@ -108,19 +108,24 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                 </svg>
                             </a>
-                            <a href="/print-receipt/{{ patient.patient_id }}" 
-                                class="text-purple-600 hover:text-purple-900" title="Print Receipt">
+                            <button onclick="printBarcode('{{ patient.patient_id }}')" 
+                                class="text-blue-600 hover:text-blue-900" title="Print Barcode">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+                                </svg>
+                            </button>
+                            <a href="/result-entry/{{ patient.patient_id }}" 
+                                class="text-green-600 hover:text-green-900" title="Result Entry">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
                                 </svg>
                             </a>
-                            <a href="/patients/deactivate/{{ patient.patient_id }}" 
-                                class="text-red-600 hover:text-red-900" title="Deactivate"
-                                onclick="return confirm('Are you sure you want to deactivate this patient?')">
+                            <button onclick="openDeleteModal('{{ patient.patient_id }}', '{{ patient.full_name }}')" 
+                                class="text-red-600 hover:text-red-900" title="Delete">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                                 </svg>
-                            </a>
+                            </button>
                         </div>
                     </td>
                 </tr>
@@ -145,4 +150,204 @@
         </p>
     </div>
 </div>
+
+<!-- Delete Reason Modal -->
+<div id="deleteModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <div class="bg-red-50 px-6 py-4 border-b border-red-100">
+            <h3 class="text-lg font-semibold text-red-800 flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+                Delete Patient
+            </h3>
+            <p class="text-sm text-red-600 mt-1">Patient: <strong id="deletePatientName"></strong></p>
+        </div>
+        <form id="deleteForm" method="POST" action="">
+            <div class="px-6 py-5">
+                <label class="block text-sm font-medium text-slate-700 mb-2">Deletion Reason <span class="text-red-500">*</span></label>
+                <textarea id="deleteReason" name="deleted_reason" rows="3" required
+                    class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500 focus:outline-none resize-none"
+                    placeholder="Please enter the reason for deleting this patient..."></textarea>
+                <p id="deleteReasonError" class="text-xs text-red-500 mt-1 hidden">Deletion reason is required.</p>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 flex justify-end gap-3 border-t border-slate-200">
+                <button type="button" onclick="closeDeleteModal()"
+                    class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition">
+                    Cancel
+                </button>
+                <button type="submit" id="deleteConfirmBtn"
+                    class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    Delete Patient
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Hidden Print Container -->
+<div id="printContainer" style="display: none;"></div>
+
+<script>
+function formatPrice(amount) {
+    return Math.round(amount).toLocaleString('en-US');
+}
+
+// Delete Modal Functions
+function openDeleteModal(patientId, patientName) {
+    document.getElementById('deletePatientName').textContent = patientName;
+    document.getElementById('deleteForm').action = `/patients/delete/${patientId}`;
+    document.getElementById('deleteReason').value = '';
+    document.getElementById('deleteConfirmBtn').disabled = true;
+    document.getElementById('deleteReasonError').classList.add('hidden');
+    const modal = document.getElementById('deleteModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.getElementById('deleteReason').focus();
+}
+
+function closeDeleteModal() {
+    const modal = document.getElementById('deleteModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+// Enable/disable confirm button based on reason input
+document.getElementById('deleteReason').addEventListener('input', function() {
+    const btn = document.getElementById('deleteConfirmBtn');
+    const error = document.getElementById('deleteReasonError');
+    if (this.value.trim().length > 0) {
+        btn.disabled = false;
+        error.classList.add('hidden');
+    } else {
+        btn.disabled = true;
+    }
+});
+
+// Validate on submit
+document.getElementById('deleteForm').addEventListener('submit', function(e) {
+    const reason = document.getElementById('deleteReason').value.trim();
+    if (!reason) {
+        e.preventDefault();
+        document.getElementById('deleteReasonError').classList.remove('hidden');
+        document.getElementById('deleteReason').focus();
+    }
+});
+
+// Close modal on backdrop click
+document.getElementById('deleteModal').addEventListener('click', function(e) {
+    if (e.target === this) closeDeleteModal();
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeDeleteModal();
+});
+
+// Print Barcode Function - MULTIPLE BARCODES BY SAMPLE TYPE
+async function printBarcode(patientId) {
+    try {
+        const response = await fetch('/api/print-template/load/barcode');
+        const result = await response.json();
+
+        const patientResponse = await fetch(`/api/patient/${patientId}`);
+        const patient = await patientResponse.json();
+
+        if (patient.error) {
+            alert('❌ Error loading patient data: ' + patient.error);
+            return;
+        }
+
+        if (!result.success || !result.template) {
+            alert('❌ No saved barcode design found. Please design barcode first.');
+            return;
+        }
+
+        if (!patient.tests) patient.tests = [];
+        if (!patient.tests_by_sample_type) {
+            patient.tests_by_sample_type = { 'Unknown': patient.tests || [] };
+        }
+
+        const printContainer = document.getElementById('printContainer');
+        printContainer.innerHTML = '';
+
+        const elements = JSON.parse(result.template.elements || '[]');
+
+        for (const [sampleType, testNames] of Object.entries(patient.tests_by_sample_type)) {
+            const printArea = document.createElement('div');
+            printArea.style.width = result.template.paper_width || '4in';
+            printArea.style.height = result.template.paper_height || '2in';
+            printArea.style.position = 'relative';
+            printArea.style.background = 'white';
+            printArea.style.border = '1px solid #000';
+            printArea.style.marginBottom = '10px';
+            printArea.style.pageBreakAfter = 'always';
+
+            elements.forEach(el => {
+                const clone = document.createElement('div');
+                clone.style.position = 'absolute';
+                clone.style.left = el.x + 'px';
+                clone.style.top = el.y + 'px';
+                clone.style.width = el.width + 'px';
+                clone.style.height = el.height + 'px';
+                clone.style.fontSize = el.fontSize + 'px';
+                clone.style.fontWeight = el.fontWeight;
+                clone.style.color = el.color;
+                clone.style.textAlign = el.align;
+                clone.style.backgroundColor = el.bgColor;
+
+                if (el.type === 'barcode_image') {
+                    clone.innerHTML = `<div style="text-align: center; padding: 5px;">
+                        <img src="https://bwipjs-api.metafloor.com/?bcid=code128&text=${patient.patient_id}&scale=3&height=10&includetext" style="max-width: 100%; height: auto; display: block;">
+                    </div>`;
+                } else if (el.type === 'patient_id') {
+                    clone.innerHTML = `<div style="padding: 5px;">${patient.patient_id}</div>`;
+                } else if (el.type === 'patient_name') {
+                    clone.innerHTML = `<div style="padding: 5px;">${patient.full_name}</div>`;
+                } else if (el.type === 'test_list') {
+                    const testsArray = testNames || [];
+                    clone.innerHTML = `<div style="padding: 5px; font-size: 11px;">${testsArray.length > 0 ? testsArray.join(', ') : 'No tests'}</div>`;
+                } else if (el.type === 'sample_type') {
+                    clone.innerHTML = `<div style="padding: 5px;">${sampleType}</div>`;
+                } else {
+                    clone.innerHTML = `<div style="padding: 5px;">${el.label || ''}</div>`;
+                }
+
+                printArea.appendChild(clone);
+            });
+
+            printContainer.appendChild(printArea);
+        }
+
+        const printContent = printContainer.innerHTML;
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+            <head>
+            <title>Print Barcodes - ${patient.patient_id}</title>
+            <style>
+            @media print {
+                body { margin: 0; padding: 0; }
+                .no-print { display: none; }
+            }
+            </style>
+            </head>
+            <body>${printContent}
+            <script>
+            window.onload = function() {
+                window.print();
+                window.onafterprint = function() { window.close(); };
+            };
+            <\/script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+
+    } catch (error) {
+        console.error('Error printing barcode:', error);
+        alert('❌ Error printing barcode: ' + error.message);
+    }
+}
+</script>
 {% endblock %}

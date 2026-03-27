@@ -65,6 +65,7 @@ class Patient(SQLModel, table=True):
     edited_at: Optional[datetime] = None
     deleted_by: Optional[int] = Field(default=None, foreign_key="user.id")
     deleted_at: Optional[datetime] = None
+    deleted_reason: Optional[str] = Field(default=None)
     
     # Relationships
     visits: List["PatientVisit"] = Relationship(back_populates="patient", cascade_delete=True)
@@ -291,6 +292,7 @@ class Order(SQLModel, table=True):
     unit_price: float = Field(default=0.0)
     discount_amount: float = Field(default=0.0)
     final_price: float = Field(default=0.0)
+    no_sample_reason: Optional[str] = Field(default=None)
     
     # Relationships
     patient: Patient = Relationship(back_populates="orders")
@@ -304,12 +306,39 @@ class Order(SQLModel, table=True):
 class Result(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     order_id: int = Field(foreign_key="order.id", unique=True)
-    result_value: str
+    result_value: Optional[str] = Field(default=None)
+    rerun_result: Optional[str] = Field(default=None)
     flag: Optional[str] = None
     note: Optional[str] = None
+    device_id: Optional[int] = Field(default=None, foreign_key="device.id")
     entered_by: int = Field(foreign_key="user.id")
     entered_at: datetime = Field(default_factory=datetime.utcnow)
+    authorized: bool = Field(default=False)
+    authorized_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    authorized_at: Optional[datetime] = None
+    double_authorized: bool = Field(default=False)
+    double_authorized_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    double_authorized_at: Optional[datetime] = None
+    unauth_reason: Optional[str] = Field(default=None)
+    
     order: Order = Relationship(back_populates="result")
+    details: List["ResultDetail"] = Relationship(back_populates="result")
+
+# ===========================
+# 15b. RESULT DETAIL (Per-Parameter Results)
+# ===========================
+class ResultDetail(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    result_id: int = Field(foreign_key="result.id")
+    parameter_id: int = Field(foreign_key="parameter.id")
+    result_value: Optional[str] = Field(default=None)
+    rerun_result: Optional[str] = Field(default=None)
+    flag: Optional[str] = None
+    device_id: Optional[int] = Field(default=None, foreign_key="device.id")
+    remark: Optional[str] = Field(default=None)
+    
+    result: Result = Relationship(back_populates="details")
+    parameter: Parameter = Relationship()
 
 # ===========================
 # 16. TEST RANGE
@@ -519,7 +548,12 @@ class PatientVisit(SQLModel, table=True):
     # Payment fields
     received_amount: float = Field(default=0.0)
     discount_amount: float = Field(default=0.0)
+    discount_percentage: float = Field(default=0.0)
+    discount_note: Optional[str] = Field(default=None)
     remaining_amount: float = Field(default=0.0)
+    
+    # Call Centre fields
+    is_called: bool = Field(default=False)
     
     # Relationships
     patient: Optional["Patient"] = Relationship(back_populates="visits")
