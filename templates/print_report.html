@@ -10,7 +10,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Tajawal:wght@400;500;700&display=swap"
         rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="/static/tailwind.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
     <style>
@@ -109,21 +109,32 @@
     <div id="reportCanvas" class="size-a4"></div>
 
     <script>
-        const rawTemplate = {{ template.elements | default ('{}') | safe }};
-        const patient = {{ patient | tojson | safe }};
-        const visit = {{ visit | tojson | safe }};
-        const labInfo = {{ lab_info | default ('{}') | tojson | safe }};
-        const barcodeData = "{{ barcode_data }}";
+        // Safely convert Python dictionaries into JavaScript Objects
+        const rawTemplate = {{ template | default ({}) | tojson | safe }};
+        const patient = {{ patient | default ({}) | tojson | safe }};
+        const visit = {{ visit | default ({}) | tojson | safe }};
+        const labInfo = {{ lab_info | default ({}) | tojson | safe }};
+        const barcodeData = "{{ barcode_data | default('') }}";
+        let testResults = {{ results | default ([]) | tojson | safe }};
 
         let designElements = [];
         let paperSize = 'A4';
-        let testResults = [];
 
         try {
-            const parsed = typeof rawTemplate === 'string' ? JSON.parse(rawTemplate) : rawTemplate;
+            console.log("Parsing template data...");
+            let parsed = typeof rawTemplate === 'string' ? JSON.parse(rawTemplate) : rawTemplate;
+
+            // Handle cases where the database double-nested the JSON string
+            if (parsed.elements && typeof parsed.elements === 'string') {
+                parsed = JSON.parse(parsed.elements);
+            }
+
             designElements = parsed.elements || [];
             paperSize = parsed.paperSize || 'A4';
-        } catch (e) { console.error("Template parse error", e); }
+            console.log(`Loaded ${designElements.length} elements.`);
+        } catch (e) {
+            console.error("Template parse error:", e);
+        }
 
         const canvas = document.getElementById('reportCanvas');
         canvas.className = `size-${paperSize.toLowerCase()}`;
@@ -136,14 +147,18 @@
 
         async function fetchResultsAndRender() {
             try {
+                console.log("Fetching results from API...");
                 const response = await fetch(`/api/double-authorized-tests/${patient.patient_id}`);
                 const data = await response.json();
                 if (data.success) testResults = data.results || [];
-            } catch (e) { console.error("Failed to fetch results", e); }
+            } catch (e) {
+                console.error("Failed to fetch results:", e);
+            }
             renderCanvas();
         }
 
         function renderCanvas() {
+            console.log("Drawing canvas elements...");
             canvas.innerHTML = '';
 
             designElements.forEach(el => {
@@ -165,6 +180,7 @@
                 div.innerHTML = `<div style="width:100%; height:100%;">${getElementHtml(el)}</div>`;
                 canvas.appendChild(div);
             });
+            console.log("Drawing complete!");
         }
 
         function getElementHtml(el) {
@@ -222,16 +238,14 @@
             const cols = (el.columns || ['test', 'result', 'flag', 'range', 'unit']).filter(c => c.trim() !== '');
             if (cols.length === 0) return '';
 
-            // Apply EXCEL properties
             let tableStyle = `width: 100%; border-collapse: collapse; table-layout: ${el.tableLayout || 'auto'};`;
-
             let colGroupHtml = '';
+
             if (el.tableLayout === 'fixed' && el.colWidths) {
                 const widths = el.colWidths.split(',').map(s => s.trim());
                 colGroupHtml = '<colgroup>' + widths.map(w => `<col style="width: ${w};">`).join('') + '</colgroup>';
             }
 
-            // Cell Styles (Padding, Borders, Word Wrap)
             const bWidth = el.borderWidth !== undefined ? el.borderWidth : 1;
             let cellStyle = `padding: ${el.cellPadding !== undefined ? el.cellPadding : 8}px; border: ${bWidth}px solid ${el.borderColor || '#e2e8f0'};`;
 
@@ -242,10 +256,9 @@
             }
 
             let html = `<table style="${tableStyle}">${colGroupHtml}`;
-
             html += `<thead style="background:${el.headerBg || '#f8fafc'}; color:${el.headerColor || '#1e293b'}"><tr>`;
-            const headers = { test: 'Test Name', result: 'Result', flag: 'Flag', range: 'Ref. Range', unit: 'Unit' };
 
+            const headers = { test: 'Test Name', result: 'Result', flag: 'Flag', range: 'Ref. Range', unit: 'Unit' };
             cols.forEach(c => {
                 html += `<th style="${cellStyle} font-size: ${el.headerFontSize || 12}px; font-weight: bold; text-align: left;">
                             ${headers[c.toLowerCase()] || c.toUpperCase()}
@@ -290,7 +303,14 @@
             return html;
         }
 
-        window.onload = () => { fetchResultsAndRender(); };
+        // --- EXECUTE IMMEDIATELY (No window.onload) ---
+        console.log("Executing script...");
+        renderCanvas();
+
+        // If we are missing results (because we are in the web view), fetch them now
+        if (testResults.length === 0 && patient && patient.patient_id) {
+            fetchResultsAndRender();
+        }
     </script>
 </body>
 

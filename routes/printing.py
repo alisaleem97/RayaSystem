@@ -176,12 +176,15 @@ def print_report(patient_id: str, request: Request, session: Session = Depends(g
     encoded_visit = jsonable_encoder(visit) if visit else None
     encoded_lab_info = jsonable_encoder(lab_info) if lab_info else None
     
+    # THIS IS THE CRITICAL LINE THAT WAS MISSING
+    encoded_template = jsonable_encoder(template) if template else {}
+    
     return templates.TemplateResponse("print_report.html", {
         "request": request,
         "patient": encoded_patient,
         "visit": encoded_visit,
         "lab_info": encoded_lab_info,
-        "template": template,
+        "template": encoded_template,
         "barcode_data": barcode_data
     })
 

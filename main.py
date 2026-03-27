@@ -57,8 +57,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="NexLab LIS", lifespan=lifespan)
 
-# Static files
-app.mount("/static", StaticFiles(directory="templates"), name="static")
+# ===========================
+# STATIC FILES
+# ===========================
+# FIXED: Pointed directory="static" so it finds your new tailwind.min.css file!
+app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.mount("/tmp", StaticFiles(directory="tmp"), name="tmp")
 

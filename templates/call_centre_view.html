@@ -1,62 +1,135 @@
-<!-- templates/call_centre_view.html -->
 {% extends "base.html" %}
 {% block title %}Call Centre View - NexLab{% endblock %}
 {% block page_title %}Patient Communication & Results{% endblock %}
 {% block content %}
 <style>
-    .result-grid { font-size: 13px; border-collapse: collapse; }
-    .result-grid th { position: sticky; top: 0; z-index: 10; background: #f8fafc; border: 1px solid #cbd5e1; }
-    .result-grid td, .result-grid th { padding: 12px 15px; white-space: nowrap; vertical-align: middle; text-align: center !important; border: 1px solid #cbd5e1; }
-    .row-parent { background: #f8fafc !important; font-weight: 700; color: #1e293b; }
-    .row-child td.test-name, .row-standalone td.test-name, .row-parent td.test-name { text-align: center !important; font-weight: 500; }
-    .row-child { color: #475569; }
-    .status-high { color: #dc2626; font-weight: 700; }
-    .status-low { color: #2563eb; font-weight: 700; }
-    .status-normal { color: #16a34a; font-weight: 500; }
-    .action-footer { position: sticky; bottom: 0; z-index: 20; background: white; border-top: 1px solid #e2e8f0; }
+    .result-grid {
+        font-size: 13px;
+        border-collapse: collapse;
+    }
+
+    .result-grid th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+    }
+
+    .result-grid td,
+    .result-grid th {
+        padding: 12px 15px;
+        white-space: nowrap;
+        vertical-align: middle;
+        text-align: center !important;
+        border: 1px solid #cbd5e1;
+    }
+
+    .row-parent {
+        background: #f8fafc !important;
+        font-weight: 700;
+        color: #1e293b;
+    }
+
+    .row-child td.test-name,
+    .row-standalone td.test-name,
+    .row-parent td.test-name {
+        text-align: center !important;
+        font-weight: 500;
+    }
+
+    .row-child {
+        color: #475569;
+    }
+
+    .status-high {
+        color: #dc2626;
+        font-weight: 700;
+    }
+
+    .status-low {
+        color: #2563eb;
+        font-weight: 700;
+    }
+
+    .status-normal {
+        color: #16a34a;
+        font-weight: 500;
+    }
+
+    .action-footer {
+        position: sticky;
+        bottom: 0;
+        z-index: 20;
+        background: white;
+        border-top: 1px solid #e2e8f0;
+    }
 </style>
 
-<!-- Patient Header -->
 <div class="bg-white rounded-3xl shadow-sm border border-slate-200 mb-4 p-5 relative overflow-hidden">
     <div class="absolute top-4 right-4">
-        <a href="/call-centre" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition">← Back to List</a>
+        <a href="/call-centre"
+            class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition">←
+            Back to List</a>
     </div>
-    
+
     <div class="flex items-start gap-4">
-        <div class="w-14 h-14 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-2xl font-bold flex-shrink-0 mt-1">
+        <div
+            class="w-14 h-14 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-2xl font-bold flex-shrink-0 mt-1">
             {{ patient.full_name[0] if patient.full_name else '?' }}
         </div>
-        
+
         <div class="flex-1 min-w-0 pr-24">
-            <h3 class="text-xl font-bold text-slate-800 mb-3"><span class="text-slate-500 text-sm font-semibold mr-1">Name:</span>{{ patient.full_name }}</h3>
-            
+            <h3 class="text-xl font-bold text-slate-800 mb-3"><span
+                    class="text-slate-500 text-sm font-semibold mr-1">Name:</span>{{ patient.full_name }}</h3>
+
             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-y-2 gap-x-4 text-sm text-slate-700 mb-4">
-                <div class="truncate" title="ID: {{ patient.patient_id }}"><span class="font-semibold text-slate-500">ID:</span> <span class="font-mono font-bold bg-slate-100 px-1 rounded">{{ patient.patient_id }}</span></div>
-                <div class="truncate"><span class="font-semibold text-slate-500">Gender:</span> 
-                    <span class="px-1.5 py-0.5 rounded text-xs font-bold {{ 'bg-blue-100 text-blue-800' if patient.gender == 'male' else 'bg-pink-100 text-pink-800' }}">
+                <div class="truncate" title="ID: {{ patient.patient_id }}"><span
+                        class="font-semibold text-slate-500">ID:</span> <span
+                        class="font-mono font-bold bg-slate-100 px-1 rounded">{{ patient.patient_id }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Gender:</span>
+                    <span
+                        class="px-1.5 py-0.5 rounded text-xs font-bold {{ 'bg-blue-100 text-blue-800' if patient.gender == 'male' else 'bg-pink-100 text-pink-800' }}">
                         {{ patient.gender|capitalize }}
                     </span>
                 </div>
-                <div class="truncate"><span class="font-semibold text-slate-500">Age:</span> <span class="font-bold">{{ patient.age }} {{ patient.age_unit or 'year' }}{{ 's' if patient.age and patient.age > 1 else '' }}</span></div>
-                <div class="truncate"><span class="font-semibold text-slate-500">Weight:</span> <span class="font-bold">{{ patient.weight or 'N/A' }}</span></div>
-                <div class="truncate"><span class="font-semibold text-slate-500">Height:</span> <span class="font-bold">{{ patient.height or 'N/A' }}</span></div>
-                <div class="truncate"><span class="font-semibold text-slate-500">Phone:</span> <span class="font-bold">{{ patient.phone_number or 'N/A' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Age:</span> <span class="font-bold">{{
+                        patient.age }} {{ patient.age_unit or 'year' }}{{ 's' if patient.age and patient.age > 1 else ''
+                        }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Weight:</span> <span
+                        class="font-bold">{{ patient.weight or 'N/A' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Height:</span> <span
+                        class="font-bold">{{ patient.height or 'N/A' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Phone:</span> <span
+                        class="font-bold">{{ patient.phone_number or 'N/A' }}</span></div>
 
                 {% if visit %}
-                <div class="truncate"><span class="font-semibold text-slate-500">Visit:</span> <span class="font-mono font-bold text-xs">{{ visit.visit_id }}</span></div>
-                <div class="truncate"><span class="font-semibold text-slate-500">Date:</span> <span class="font-bold">{{ visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit.visit_date else 'N/A' }}</span></div>
-                <div class="truncate"><span class="font-semibold text-slate-500">User:</span> <span class="font-bold">{{ visit_user_name or 'System' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Visit:</span> <span
+                        class="font-mono font-bold text-xs">{{ visit.visit_id }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Date:</span> <span class="font-bold">{{
+                        visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit.visit_date else 'N/A' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">User:</span> <span class="font-bold">{{
+                        visit_user_name or 'System' }}</span></div>
                 {% endif %}
-                <div class="truncate"><span class="font-semibold text-slate-500">Fasting Time:</span> <span class="font-bold">{{ patient.fasting_time if patient.fasting_time else 'N/A' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Fasting Time:</span> <span
+                        class="font-bold">{{ patient.fasting_time if patient.fasting_time else 'N/A' }}</span></div>
             </div>
 
-            <!-- Medical Details -->
             <div class="bg-amber-50 rounded-lg p-3 border border-amber-100">
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-slate-700">
-                    <div><span class="font-semibold text-slate-500 block text-xs">Disease/Diagnosis</span><div class="truncate font-bold text-blue-600">{{ patient.diagnosis or '' }}</div></div>
-                    <div><span class="font-semibold text-slate-500 block text-xs">Symptoms</span><div class="truncate font-bold text-blue-600">{{ patient.symptoms or '' }}</div></div>
-                    <div><span class="font-semibold text-slate-500 block text-xs">Therapy</span><div class="truncate font-bold text-blue-600">{{ patient.therapy or '' }}</div></div>
-                    <div><span class="font-semibold text-slate-500 block text-xs">Note</span><div class="truncate font-bold text-blue-600" title="{{ patient.note or '' }}">{{ patient.note or '' }}</div></div>
+                    <div><span class="font-semibold text-slate-500 block text-xs">Disease/Diagnosis</span>
+                        <div class="truncate font-bold text-blue-600">{{ patient.diagnosis or '' }}</div>
+                    </div>
+                    <div><span class="font-semibold text-slate-500 block text-xs">Symptoms</span>
+                        <div class="truncate font-bold text-blue-600">{{ patient.symptoms or '' }}</div>
+                    </div>
+                    <div><span class="font-semibold text-slate-500 block text-xs">Therapy</span>
+                        <div class="truncate font-bold text-blue-600">{{ patient.therapy or '' }}</div>
+                    </div>
+                    <div><span class="font-semibold text-slate-500 block text-xs">Note</span>
+                        <div class="truncate font-bold text-blue-600" title="{{ patient.note or '' }}">{{ patient.note
+                            or '' }}</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -64,7 +137,6 @@
 </div>
 
 
-<!-- Results Grid -->
 <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden mb-24">
     <div class="overflow-x-auto">
         <table class="w-full result-grid" id="resultGrid">
@@ -89,22 +161,50 @@
     </div>
 </div>
 
-<!-- Footer Actions -->
-<div class="fixed bottom-10 left-[calc(50%+128px)] -translate-x-1/2 px-6 py-3 bg-white/90 backdrop-blur-md shadow-2xl rounded-3xl border border-slate-200 flex items-center gap-4 z-50 transition-all hover:scale-[1.02]">
-    <button onclick="analyseResults()" class="px-5 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition flex items-center gap-2 shadow-md active:scale-95 transform duration-200">
+<div id="aiModal"
+    class="fixed inset-0 z-[9999] hidden bg-slate-900/40 backdrop-blur-sm flex items-center justify-center transition-opacity">
+    <div
+        class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col transform scale-95 transition-transform overflow-hidden border border-slate-200">
+        <div class="bg-indigo-600 px-6 py-4 flex justify-between items-center text-white">
+            <h3 class="font-bold text-lg flex items-center gap-2">
+                <i class="fas fa-robot text-indigo-200"></i> AI Lab Analysis
+            </h3>
+            <button onclick="closeAIModal()" class="text-white hover:text-indigo-200 transition">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+
+        <div id="aiModalContent" class="p-6 overflow-y-auto text-slate-700 text-sm leading-relaxed" dir="rtl">
+        </div>
+
+        <div class="bg-slate-50 px-6 py-3 border-t border-slate-200 flex justify-end">
+            <button onclick="closeAIModal()"
+                class="px-5 py-2 bg-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-300 transition">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
+<div
+    class="fixed bottom-10 left-[calc(50%+128px)] -translate-x-1/2 px-6 py-3 bg-white/90 backdrop-blur-md shadow-2xl rounded-3xl border border-slate-200 flex items-center gap-4 z-50 transition-all hover:scale-[1.02]">
+    <button onclick="analyseResults()"
+        class="px-5 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition flex items-center gap-2 shadow-md active:scale-95 transform duration-200">
         <i class="fas fa-microscope text-xs"></i> Analyse
     </button>
-    <button onclick="markAsCalled()" class="px-5 py-2 bg-slate-800 text-white text-sm font-bold rounded-xl hover:bg-slate-900 transition flex items-center gap-2 shadow-md active:scale-95 transform duration-200">
+    <button onclick="markAsCalled()"
+        class="px-5 py-2 bg-slate-800 text-white text-sm font-bold rounded-xl hover:bg-slate-900 transition flex items-center gap-2 shadow-md active:scale-95 transform duration-200">
         <i class="fas fa-phone-alt text-xs"></i> Called
     </button>
-    <button onclick="sendWhatsApp()" class="px-5 py-2 bg-[#25D366] text-white text-sm font-bold rounded-xl hover:bg-[#128C7E] transition flex items-center gap-2 shadow-md active:scale-95 transform duration-200">
+    <button id="whatsappBtn" onclick="sendWhatsApp()"
+        class="px-5 py-2 bg-[#25D366] text-white text-sm font-bold rounded-xl hover:bg-[#128C7E] transition flex items-center gap-2 shadow-md active:scale-95 transform duration-200">
         <i class="fab fa-whatsapp text-base"></i> WhatsApp
     </button>
 </div>
 
 <script>
     const patientId = "{{ patient.patient_id }}";
-    
+
     async function loadResults() {
         try {
             const resp = await fetch(`/api/double-authorized-tests/${patientId}`);
@@ -171,8 +271,84 @@
         return 'status-normal';
     }
 
-    function analyseResults() {
-        alert("Action: Analyse Results (Logic to be implemented)");
+    async function analyseResults() {
+        const age = "{{ patient.age }} {{ patient.age_unit }}";
+        const gender = "{{ patient.gender }}";
+        const height = "{{ patient.height or 'غير متوفر' }}";
+        const weight = "{{ patient.weight or 'غير متوفر' }}";
+        const note = "{{ patient.note or 'لا توجد ملاحظات' }}";
+
+        let resultsText = "";
+        const rows = document.querySelectorAll('#gridBody tr.row-child, #gridBody tr.row-standalone');
+
+        if (rows.length === 0) {
+            showModal('error', 'Error', 'No results available to analyze.');
+            return;
+        }
+
+        rows.forEach(row => {
+            const testName = row.querySelector('.test-name').innerText.trim();
+            const result = row.cells[1].innerText.trim();
+            const unit = row.cells[2].innerText.trim();
+            const range = row.cells[3].innerText.trim();
+            resultsText += `- ${testName}: ${result} ${unit} (المعدل الطبيعي: ${range})\n`;
+        });
+
+        const prompt = `قم بتحليل النتائج 
+العمر: ${age}
+الجنس: ${gender}
+الطول: ${height}
+الوزن: ${weight}
+ملاحظات: ${note}
+
+النتائج:
+${resultsText}`;
+
+        const modalContent = document.getElementById('aiModalContent');
+        const aiModal = document.getElementById('aiModal');
+        const modalContainer = aiModal.firstElementChild;
+
+        modalContent.innerHTML = `
+            <div class="flex flex-col items-center justify-center py-10 text-indigo-600">
+                <i class="fas fa-brain fa-spin fa-3x mb-4"></i>
+                <div class="text-center w-full">
+                    <p class="font-bold text-lg" dir="rtl">الذكاء الاصطناعي يقوم بتحليل النتائج الآن...</p>
+                    <p class="text-slate-400 text-sm mt-2">قد يستغرق هذا بضع ثوانٍ</p>
+                </div>
+            </div>
+        `;
+
+        aiModal.classList.remove('hidden');
+        setTimeout(() => modalContainer.classList.replace('scale-95', 'scale-100'), 10);
+
+        try {
+            const response = await fetch('/api/ai-analyse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: prompt })
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                let formattedText = data.analysis
+                    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-indigo-700">$1</strong>')
+                    .replace(/\n/g, '<br>');
+
+                modalContent.innerHTML = `<div class="p-2">${formattedText}</div>`;
+            } else {
+                modalContent.innerHTML = `<div class="text-red-500 font-bold text-center py-10">حدث خطأ: ${data.error}</div>`;
+            }
+        } catch (e) {
+            modalContent.innerHTML = `<div class="text-red-500 font-bold text-center py-10">فشل الاتصال بالخادم. الرجاء المحاولة مرة أخرى.</div>`;
+        }
+    }
+
+    function closeAIModal() {
+        const aiModal = document.getElementById('aiModal');
+        aiModal.firstElementChild.classList.replace('scale-100', 'scale-95');
+        setTimeout(() => {
+            aiModal.classList.add('hidden');
+        }, 200);
     }
 
     async function markAsCalled() {
@@ -186,9 +362,7 @@
             const resp = await fetch(`/api/mark-called/${visitId}`, { method: 'POST' });
             const data = await resp.json();
             if (data.success) {
-                showModal('success', 'Patient Called', 'The patient has been marked as called successfully.', () => {
-                    // Optional: You could refresh or just close
-                });
+                showModal('success', 'Patient Called', 'The patient has been marked as called successfully.');
             } else {
                 showModal('error', 'Error', 'Failed to update status: ' + (data.detail || 'Unknown error'));
             }
@@ -205,20 +379,29 @@
             return;
         }
 
-        // Show loading state
-        showModal('info', 'Sending WhatsApp', 'Please wait while we generate the PDF and send it to the patient...');
+        const btn = document.getElementById('whatsappBtn');
+        const originalContent = btn.innerHTML;
+
+        btn.innerHTML = `<i class="fas fa-circle-notch fa-spin text-base"></i> Sending...`;
+        btn.disabled = true;
+        btn.classList.add('opacity-75', 'cursor-not-allowed');
 
         try {
             const resp = await fetch(`/api/send-whatsapp/${visitId}`, { method: 'POST' });
             const data = await resp.json();
+
             if (data.success) {
-                showModal('success', 'WhatsApp Sent', 'The patient result has been sent successfully via WhatsApp.');
+                showModal('success', 'WhatsApp Sent', 'The patient result has been sent successfully.');
             } else {
                 showModal('error', 'WhatsApp Failed', 'Error: ' + (data.error || 'Unknown error from API'));
             }
         } catch (err) {
             console.error(err);
             showModal('error', 'Network Error', 'An error occurred while connecting to the WhatsApp service.');
+        } finally {
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+            btn.classList.remove('opacity-75', 'cursor-not-allowed');
         }
     }
 
