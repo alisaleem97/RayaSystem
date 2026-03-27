@@ -20,6 +20,8 @@ from routes.api import router as api_router
 from routes.results import router as results_router
 from routes.double_auth import router as double_auth_router
 from routes.call_centre import router as call_centre_router
+# ✅ NEW: Import the history router
+from routes.history import router as history_router
 
 # ===========================
 # APP LIFESPAN (Startup/Shutdown)
@@ -78,3 +80,5 @@ app.include_router(api_router)
 app.include_router(results_router)
 app.include_router(double_auth_router)
 app.include_router(call_centre_router)
+# ✅ NEW: Register the history router
+app.include_router(history_router)

@@ -61,7 +61,7 @@ def result_entry_patients_page(request: Request, session: Session = Depends(get_
         elif status_q == "received":
             query = query.where(Order.status == "resulted")
         elif status_q == "authorize":
-            query = query.where(Order.status == "authorized")
+            query = query.where(Order.status.in_(["authorized", "double_authorized"]))
             
     if needs_visit_join or not (test_q or status_q != "all"):
         query = query.distinct()
@@ -91,17 +91,25 @@ def result_entry_patients_page(request: Request, session: Session = Depends(get_
             for order in visit.orders:
                 if not order.test or order.status == "no_sample":
                     continue
-                # Determine color based on order status
+                
+                # FIX 1: Explicitly hide tests that don't match the active toggle
+                if status_q == "pending" and order.status != "ordered":
+                    continue
+                elif status_q == "received" and order.status != "resulted":
+                    continue
+                elif status_q == "authorize" and order.status not in ["authorized", "double_authorized"]:
+                    continue
+
+                # FIX 2: Map both auth levels to Green so it never falls back to Red
                 status_color = "red"
                 if order.status == "resulted":
                     status_color = "blue"
-                elif order.status == "authorized":
+                elif order.status in ["authorized", "double_authorized"]:
                     status_color = "green"
                     
                 test_info = {
                     "name": order.test.test_name,
-                    "color": status_color
-                }
+                    "color": status_color}
                 
                 if order.package_name:
                     if order.package_name not in packages:
@@ -700,10 +708,25 @@ def receive_no_sample(order_id: int, request: Request, session: Session = Depend
         if not order:
             return JSONResponse({"success": False, "message": "Order not found"}, status_code=404)
             
+        # Reset order status
         order.status = "ordered"
+        order.no_sample_reason = None # Good practice to clear the reason too
+        
+        # Look for any existing result attached to this order
+        existing_result = session.exec(select(Result).where(Result.order_id == order_id)).first()
+        
+        if existing_result:
+            # 1. Delete all child details (parameters)
+            if existing_result.details:
+                for detail in existing_result.details:
+                    session.delete(detail)
+            
+            # 2. Delete the parent result record entirely
+            session.delete(existing_result)
+            
         session.add(order)
         session.commit()
-        return {"success": True, "message": "Sample Received successfully. Test returned to pending."}
+        return {"success": True, "message": "Sample Received successfully. Test returned to pending clean."}
     except Exception as e:
         session.rollback()
         return JSONResponse({"success": False, "message": str(e)}, status_code=500)
