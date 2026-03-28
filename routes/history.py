@@ -8,7 +8,7 @@ import json
 
 from database import get_session
 from models import Patient, PatientVisit, Order, TestDefinition, AuditLog
-from routes.helpers import templates, get_current_user
+from routes.helpers import templates
 
 router = APIRouter()
 
@@ -104,28 +104,73 @@ def patient_history_detail(patient_id: str, request: Request, session: Session =
     logs_query = select(AuditLog).where(or_(*conditions)).order_by(AuditLog.created_at.desc())
     audit_logs = session.exec(logs_query).all()
 
-    # 4. Format the output for the UI
+    # 4. Smart Formatting for the UI
     formatted_logs = []
     for log in audit_logs:
-        # Create a human-readable action string
-        action_detail = f"Action on {log.table_name.capitalize()} record."
-        
-        # If there are JSON updates, we can extract them to show what changed
+        # Normalize text to avoid case-sensitivity bugs
+        safe_action = str(log.action).upper() if log.action else ""
+        safe_table = str(log.table_name).lower() if log.table_name else ""
+
+        # Default Fallbacks
+        action_type = f"{safe_action} - {safe_table.upper()}"
+        action_detail = f"System action on {safe_table} record."
+
+        # Parse the JSON payload we injected during saves
         if log.new_values:
             try:
-                new_val_dict = json.loads(log.new_values)
-                if "status" in new_val_dict:
-                    action_detail = f"Status changed to: {new_val_dict['status']}"
-                elif "result_value" in new_val_dict:
-                    action_detail = f"Result entered/updated."
-                elif "authorized" in new_val_dict or "double_authorized" in new_val_dict:
-                    action_detail = "Authorization state changed."
-            except:
-                pass # Fallback to default if not JSON
+                new_vals = json.loads(log.new_values)
+                explicit_action = new_vals.get("action")
+                test_name = new_vals.get("test_name")
+
+                # --- TRANSLATE ACTION TYPE ---
+                if safe_action == "PRINT":
+                    action_type = "Document Printed"
+                elif safe_action == "DISPATCH":
+                    action_type = "Communication"
+                elif safe_action == "CREATE" and safe_table == "patient":
+                    action_type = "Registration"
+                elif safe_action == "UPDATE" and safe_table == "patient":
+                    action_type = "Profile Update"
+                elif safe_table == "order":
+                    if explicit_action:
+                        if "Double" in explicit_action:
+                            action_type = "Double Auth"
+                        elif "Authorized" in explicit_action:
+                            action_type = "Authorization"
+                        elif "No Sample" in explicit_action:
+                            action_type = "Sample Issue"
+                        elif "ReRun" in explicit_action:
+                            action_type = "ReRun Request"
+                        else:
+                            action_type = "Result Update"
+                    else:
+                        action_type = "Test Update"
+                elif safe_table == "patientvisit":
+                    action_type = "Visit Update"
+
+                # --- TRANSLATE ACTION DETAIL ---
+                if explicit_action:
+                    action_detail = explicit_action
+                    
+                    if test_name:
+                        action_detail += f": {test_name}"
+                    if "reason" in new_vals and new_vals["reason"]:
+                        action_detail += f" (Reason: {new_vals['reason']})"
+                    if "phone" in new_vals:
+                        action_detail += f" to {new_vals['phone']}"
+                    if "total_tests_ordered" in new_vals:
+                        action_detail += f" with {new_vals['total_tests_ordered']} tests"
+                else:
+                    if "status" in new_vals:
+                        friendly_status = str(new_vals['status']).replace('_', ' ').title()
+                        action_detail = f"Status changed to: {friendly_status}"
+
+            except Exception:
+                pass # Silently fallback to raw data if JSON parsing fails
 
         formatted_logs.append({
             "date": log.created_at,
-            "action_type": f"{log.action.upper()} - {log.table_name.upper()}",
+            "action_type": action_type,
             "username": log.username or "System",
             "detail": action_detail
         })

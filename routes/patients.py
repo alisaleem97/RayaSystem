@@ -165,7 +165,7 @@ async def create_patient_registration(
                     select(PackageTest).where(PackageTest.package_id == item['id'])
                 ).all()
                 num_tests = len(package_tests)
-                price_per_test = package_price / num_tests if num_tests > 0 else 0.
+                price_per_test = package_price / num_tests if num_tests > 0 else 0.0
                 for pt in package_tests:
                     unit_price = price_per_test
                     order_discount = unit_price * discount_ratio
@@ -185,6 +185,20 @@ async def create_patient_registration(
                     session.add(order)
         
         session.commit()
+        
+        # ---------------------------------------------------------
+        # ✅ FIXED: LOG AND COMMIT REGISTRATION
+        # ---------------------------------------------------------
+        create_audit_log(
+            session, 
+            "patient", 
+            new_patient.id, 
+            "create", 
+            current_user, 
+            new_values={"action": "Patient Registered", "total_tests_ordered": len(items), "visit_id": visit_id}
+        )
+        session.commit()
+        # ---------------------------------------------------------
         
         return RedirectResponse(
             url=f"/patient-registration?success=Patient registered successfully!&patient_id={new_patient.patient_id}",
@@ -481,7 +495,21 @@ async def update_patient(
                     session.add(order)
 
         session.commit()
-        create_audit_log(session, "patient", patient.id, "update", current_user, old_values=old_values, new_values=model_to_dict(patient))
+        
+        # ---------------------------------------------------------
+        # ✅ FIXED: LOG AND COMMIT UPDATE
+        # ---------------------------------------------------------
+        create_audit_log(
+            session, 
+            "patient", 
+            patient.id, 
+            "update", 
+            current_user, 
+            old_values=old_values, 
+            new_values={"action": "Patient Profile Updated"}
+        )
+        session.commit()
+        # ---------------------------------------------------------
 
         return RedirectResponse(
             url=f"/patients/edit/{patient_id}?success=Patient updated successfully!",
@@ -515,7 +543,21 @@ def delete_patient(patient_id: str, request: Request, deleted_reason: str = Form
             session.add(patient)
             session.commit()
 
-            create_audit_log(session, "patient", patient.id, "soft_delete", current_user, old_values=old_values)
+            # ---------------------------------------------------------
+            # ✅ FIXED: LOG AND COMMIT DELETE
+            # ---------------------------------------------------------
+            create_audit_log(
+                session, 
+                "patient", 
+                patient.id, 
+                "soft_delete", 
+                current_user, 
+                old_values=old_values,
+                new_values={"action": f"Patient Soft Deleted. Reason: {deleted_reason}"}
+            )
+            session.commit()
+            # ---------------------------------------------------------
+            
             return RedirectResponse(url="/patients?success=Patient deleted successfully!", status_code=status.HTTP_303_SEE_OTHER)
 
         return RedirectResponse(url="/patients?error=Patient not found", status_code=status.HTTP_303_SEE_OTHER)
@@ -593,7 +635,21 @@ def restore_patient(patient_id: str, request: Request, session: Session = Depend
             session.add(patient)
             session.commit()
             
-            create_audit_log(session, "patient", patient.id, "restore", current_user, old_values=old_values)
+            # ---------------------------------------------------------
+            # ✅ FIXED: LOG AND COMMIT RESTORE
+            # ---------------------------------------------------------
+            create_audit_log(
+                session, 
+                "patient", 
+                patient.id, 
+                "restore", 
+                current_user, 
+                old_values=old_values,
+                new_values={"action": "Patient Restored from Deleted Status"}
+            )
+            session.commit()
+            # ---------------------------------------------------------
+            
             return RedirectResponse(url="/patients/deleted?success=Patient restored successfully!", status_code=status.HTTP_303_SEE_OTHER)
         
         return RedirectResponse(url="/patients/deleted?error=Patient not found", status_code=status.HTTP_303_SEE_OTHER)

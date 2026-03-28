@@ -12,7 +12,8 @@ from datetime import datetime
 
 from database import get_session
 from models import Patient, PatientVisit, Order, Result, TestRange, LabInfo, PrintTemplate
-from routes.helpers import get_current_user
+# ✅ NEW: Imported log_audit_action
+from routes.helpers import get_current_user, log_audit_action
 from routes.whatsapp_utils import generate_report_pdf, send_ultramsg_pdf
 
 # --- Google Gemini AI Setup ---
@@ -168,19 +169,37 @@ def view_call_centre_patient(visit_id: str, request: Request, session: Session =
         "visit_user_name": visit_user_name
     })
 
+# ✅ NEW: Added request dependency to track WHO marked the patient as called
 @router.post("/api/mark-called/{visit_id}")
-def mark_called(visit_id: str, session: Session = Depends(get_session)):
+def mark_called(visit_id: str, request: Request, session: Session = Depends(get_session)):
+    current_user = get_current_user(request, session)
     visit = session.exec(select(PatientVisit).where(PatientVisit.visit_id == visit_id)).first()
     if not visit:
         raise HTTPException(status_code=404, detail="Visit not found")
     
     visit.is_called = True
     session.add(visit)
+
+    # ---------------------------------------------------------
+    # ✅ NEW: INJECT AUDIT LOG HERE (Tracking Call Centre mark)
+    # ---------------------------------------------------------
+    log_audit_action(
+        session=session,
+        table_name="patientvisit",
+        record_id=visit.id,
+        action="UPDATE",
+        current_user=current_user,
+        new_values={"action": "Patient marked as Called"}
+    )
+    # ---------------------------------------------------------
+
     session.commit()
     return {"success": True}
 
+# ✅ NEW: Added request dependency to track WHO sent the WhatsApp message
 @router.post("/api/send-whatsapp/{visit_id}")
-def send_whatsapp_results(visit_id: str, session: Session = Depends(get_session)):
+def send_whatsapp_results(visit_id: str, request: Request, session: Session = Depends(get_session)):
+    current_user = get_current_user(request, session)
     visit = session.exec(select(PatientVisit).where(PatientVisit.visit_id == visit_id)).first()
     if not visit:
         raise HTTPException(status_code=404, detail="Visit not found")
@@ -267,6 +286,20 @@ def send_whatsapp_results(visit_id: str, session: Session = Depends(get_session)
         if report.get('sent') == 'true' or report.get('id') or report.get('success'):
             visit.is_whatsapp_sent = True
             session.add(visit)
+
+            # ---------------------------------------------------------
+            # ✅ NEW: INJECT AUDIT LOG HERE (Tracking WhatsApp Dispatch)
+            # ---------------------------------------------------------
+            log_audit_action(
+                session=session,
+                table_name="patientvisit",
+                record_id=visit.id,
+                action="DISPATCH",
+                current_user=current_user,
+                new_values={"action": "Results sent to patient via WhatsApp", "phone": to_phone}
+            )
+            # ---------------------------------------------------------
+
             session.commit()
             return {"success": True, "message": "Result sent successfully"}
         else:

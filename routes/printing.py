@@ -15,7 +15,8 @@ from fastapi.encoders import jsonable_encoder
 from fastapi import File, UploadFile
 import os
 import uuid
-from routes.helpers import templates, get_current_user, generate_barcode_base64, calculate_age
+# ✅ NEW: Imported log_audit_action
+from routes.helpers import templates, get_current_user, generate_barcode_base64, calculate_age, log_audit_action
 
 router = APIRouter()
 
@@ -154,7 +155,9 @@ def print_results_page(request: Request, session: Session = Depends(get_session)
         }
     })
 
-
+# ===========================
+# MEDICAL REPORT PRINTING (Now Audited)
+# ===========================
 @router.get("/print-report/{patient_id}", response_class=HTMLResponse)
 def print_report(patient_id: str, request: Request, session: Session = Depends(get_session)):
     patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
@@ -176,9 +179,24 @@ def print_report(patient_id: str, request: Request, session: Session = Depends(g
     encoded_visit = jsonable_encoder(visit) if visit else None
     encoded_lab_info = jsonable_encoder(lab_info) if lab_info else None
     
-    # THIS IS THE CRITICAL LINE THAT WAS MISSING
     encoded_template = jsonable_encoder(template) if template else {}
     
+    # ---------------------------------------------------------
+    # ✅ NEW: INJECT AUDIT LOG HERE (Tracking the print action)
+    # ---------------------------------------------------------
+    current_user = get_current_user(request, session)
+    if visit:
+        log_audit_action(
+            session=session,
+            table_name="patientvisit",
+            record_id=visit.id,
+            action="PRINT",
+            current_user=current_user,
+            new_values={"action": "Generated Medical Report PDF"}
+        )
+        session.commit() # We must commit here because GET routes normally don't save
+    # ---------------------------------------------------------
+
     return templates.TemplateResponse("print_report.html", {
         "request": request,
         "patient": encoded_patient,

@@ -50,7 +50,7 @@ def get_current_user(request, session: Session) -> Optional[User]:
 
 def create_audit_log(session: Session, table_name: str, record_id: int, action: str,
                      user: User, old_values: dict = None, new_values: dict = None):
-    """Create audit log entry"""
+    """Original audit log entry function"""
     audit_entry = AuditLog(
         table_name=table_name,
         record_id=record_id,
@@ -62,6 +62,40 @@ def create_audit_log(session: Session, table_name: str, record_id: int, action: 
         created_at=datetime.utcnow()
     )
     session.add(audit_entry)
+
+# ---------------------------------------------------------
+# ✅ NEW: Universal Audit Logger (Used by the newer routes)
+# ---------------------------------------------------------
+def log_audit_action(session, table_name: str, record_id: int, action: str, current_user, old_values: dict = None, new_values: dict = None):
+    """
+    Universal Audit Logger used by the newer route files.
+    Inject this before session.commit() in any route.
+    """
+    try:
+        # Resolve username safely
+        username = "System"
+        user_id = None
+        if current_user:
+            user_id = current_user.id
+            username = getattr(current_user, 'full_name', current_user.username)
+
+        # Create the log entry
+        log_entry = AuditLog(
+            table_name=table_name.lower(),
+            record_id=record_id,
+            action=action.upper(),
+            user_id=user_id,
+            username=username,
+            old_values=json.dumps(old_values) if old_values else None,
+            new_values=json.dumps(new_values) if new_values else None,
+            created_at=datetime.utcnow()
+        )
+        
+        session.add(log_entry)
+        
+    except Exception as e:
+        print(f"⚠️ Audit Log Failure: {str(e)}")
+# ---------------------------------------------------------
 
 def save_uploaded_file(file, filename: str) -> str:
     """Save uploaded file and return the filename"""

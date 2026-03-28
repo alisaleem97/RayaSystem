@@ -14,7 +14,8 @@ from models import (
     TestDevice, TestRange, TestResultType, Result, ResultDetail,
     Parameter, Device, SampleType, Formula
 )
-from routes.helpers import templates, get_current_user
+# ✅ NEW: Imported log_audit_action
+from routes.helpers import templates, get_current_user, log_audit_action
 
 router = APIRouter()
 
@@ -92,7 +93,7 @@ def result_entry_patients_page(request: Request, session: Session = Depends(get_
                 if not order.test or order.status == "no_sample":
                     continue
                 
-                # FIX 1: Explicitly hide tests that don't match the active toggle
+                # Explicitly hide tests that don't match the active toggle
                 if status_q == "pending" and order.status != "ordered":
                     continue
                 elif status_q == "received" and order.status != "resulted":
@@ -100,7 +101,7 @@ def result_entry_patients_page(request: Request, session: Session = Depends(get_
                 elif status_q == "authorize" and order.status not in ["authorized", "double_authorized"]:
                     continue
 
-                # FIX 2: Map both auth levels to Green so it never falls back to Red
+                # Map both auth levels to Green so it never falls back to Red
                 status_color = "red"
                 if order.status == "resulted":
                     status_color = "blue"
@@ -498,7 +499,7 @@ async def save_results(request: Request, session: Session = Depends(get_session)
             order_id = row.get("order_id")
             if not order_id:
                 continue
-
+            has_any_value = False
             order = session.get(Order, order_id)
             if not order:
                 continue
@@ -612,6 +613,28 @@ async def save_results(request: Request, session: Session = Depends(get_session)
                 session.add(result)
                 session.add(order)
 
+            # ---------------------------------------------------------
+            # ✅ NEW: INJECT AUDIT LOG HERE (Tracking Result Saves/Auths)
+            # ---------------------------------------------------------
+            log_detail = {
+                "status": order.status,
+                "test_name": order.test.test_name if order.test else "Unknown"
+            }
+            if row.get("result_value") or has_any_value:
+                log_detail["action"] = "Results Updated"
+            if authorized:
+                log_detail["action"] = "Test Authorized"
+
+            log_audit_action(
+                session=session,
+                table_name="order",
+                record_id=order.id,
+                action="UPDATE",
+                current_user=current_user,
+                new_values=log_detail
+            )
+            # ---------------------------------------------------------
+
         session.commit()
         return {"success": True, "message": "Results saved successfully!"}
 
@@ -691,6 +714,24 @@ async def mark_no_sample(order_id: int, request: Request, session: Session = Dep
         order.status = "no_sample"
         order.no_sample_reason = reason
         session.add(order)
+        
+        # ---------------------------------------------------------
+        # ✅ NEW: INJECT AUDIT LOG HERE (Tracking No Sample)
+        # ---------------------------------------------------------
+        log_audit_action(
+            session=session,
+            table_name="order",
+            record_id=order.id,
+            action="UPDATE",
+            current_user=current_user,
+            new_values={
+                "action": "Marked as No Sample", 
+                "test_name": order.test.test_name if order.test else "Unknown",
+                "reason": reason
+            }
+        )
+        # ---------------------------------------------------------
+
         session.commit()
         return {"success": True, "message": "Test moved to No Sample"}
     except Exception as e:
@@ -725,6 +766,24 @@ def receive_no_sample(order_id: int, request: Request, session: Session = Depend
             session.delete(existing_result)
             
         session.add(order)
+        
+        # ---------------------------------------------------------
+        # ✅ NEW: INJECT AUDIT LOG HERE (Tracking Receiving Sample back)
+        # ---------------------------------------------------------
+        log_audit_action(
+            session=session,
+            table_name="order",
+            record_id=order.id,
+            action="UPDATE",
+            current_user=current_user,
+            new_values={
+                "action": "Sample Received from No Sample list", 
+                "test_name": order.test.test_name if order.test else "Unknown",
+                "status": "ordered"
+            }
+        )
+        # ---------------------------------------------------------
+
         session.commit()
         return {"success": True, "message": "Sample Received successfully. Test returned to pending clean."}
     except Exception as e:

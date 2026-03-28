@@ -7,7 +7,8 @@ from datetime import datetime
 
 from database import get_session
 from models import Patient, PatientVisit, Order, TestDefinition, Result, ResultDetail
-from routes.helpers import templates, get_current_user
+# ✅ NEW: Added log_audit_action to imports
+from routes.helpers import templates, get_current_user, log_audit_action
 
 router = APIRouter()
 
@@ -186,6 +187,23 @@ def double_authorize_order(order_id: int, request: Request, session: Session = D
         
         session.add(result)
         session.add(order)
+
+        # ---------------------------------------------------------
+        # ✅ NEW: INJECT AUDIT LOG HERE (Tracking Double Auth)
+        # ---------------------------------------------------------
+        log_audit_action(
+            session=session,
+            table_name="order",
+            record_id=order.id,
+            action="UPDATE",
+            current_user=current_user,
+            new_values={
+                "action": "Test Double Authorized",
+                "status": "double_authorized"
+            }
+        )
+        # ---------------------------------------------------------
+
         session.commit()
         return {"success": True, "message": "Test double authorized"}
     except Exception as e:
@@ -230,6 +248,23 @@ def rerun_order(order_id: int, request: Request, session: Session = Depends(get_
             
         order.status = "ordered"  # pending
         session.add(order)
+
+        # ---------------------------------------------------------
+        # ✅ NEW: INJECT AUDIT LOG HERE (Tracking ReRun)
+        # ---------------------------------------------------------
+        log_audit_action(
+            session=session,
+            table_name="order",
+            record_id=order.id,
+            action="UPDATE",
+            current_user=current_user,
+            new_values={
+                "action": "Test marked for ReRun",
+                "status": "ordered"
+            }
+        )
+        # ---------------------------------------------------------
+
         session.commit()
         return {"success": True, "message": "Test marked for rerun (pending)"}
     except Exception as e:
@@ -263,6 +298,24 @@ async def unauth_order(order_id: int, request: Request, session: Session = Depen
         
         session.add(result)
         session.add(order)
+
+        # ---------------------------------------------------------
+        # ✅ NEW: INJECT AUDIT LOG HERE (Tracking Unauthorize)
+        # ---------------------------------------------------------
+        log_audit_action(
+            session=session,
+            table_name="order",
+            record_id=order.id,
+            action="UPDATE",
+            current_user=current_user,
+            new_values={
+                "action": "Test Unauthorized",
+                "status": "authorized",
+                "reason": reason
+            }
+        )
+        # ---------------------------------------------------------
+
         session.commit()
         return {"success": True, "message": "Test Unauthorized with reason"}
     except Exception as e:
