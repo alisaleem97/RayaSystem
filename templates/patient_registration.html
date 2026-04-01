@@ -350,6 +350,7 @@
                 <p id="emptyTableMessage" class="text-center text-slate-500 py-8">No tests or packages selected</p>
             </div>
             
+            {% if has_button('patient_registration', 'discount') %}
             <!-- Discount Section -->
             <div class="flex justify-end">
                 <button type="button" onclick="toggleDiscount()"
@@ -374,9 +375,10 @@
                         class="w-full border border-green-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:outline-none">
                 </div>
             </div>
+            {% endif %}
             
             <!-- Price Summary -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1">Total Price</label>
                     <input type="text" id="total_price" readonly
@@ -386,6 +388,17 @@
                     <label class="block text-xs font-medium text-slate-500 mb-1">Total After Discount</label>
                     <input type="text" id="total_after_discount" readonly
                         class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-100 font-semibold text-green-600">
+                </div>
+                <div>
+                    <label class="relative flex items-center text-xs font-medium text-amber-600 mb-1 h-4">
+                        <span>Total After Tax</span>
+                        <label class="absolute left-1/2 -translate-x-1/2 inline-flex items-center cursor-pointer" title="Toggle Tax">
+                            <input type="checkbox" id="apply_tax_toggle" name="apply_tax_toggle" checked class="sr-only peer" onchange="calculateTotalAfterDiscount()">
+                            <div class="w-7 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-500"></div>
+                        </label>
+                    </label>
+                    <input type="text" id="total_after_tax" readonly
+                        class="w-full border border-amber-300 rounded-lg px-3 py-2 bg-amber-50 font-semibold text-amber-700">
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1">Received Amount</label>
@@ -470,6 +483,7 @@ let selectedItems = [];
 let itemCounter = 0;
 let packageTestsCache = {}; // ✅ LAZY LOAD CACHE
 let receivedAmountAutoFilled = false;
+let labTaxPercentage = 0; // ✅ Tax percentage from lab info
 
 // ✅ CHANGE 3: DEBOUNCE FUNCTION - Performance Improvement
 function debounce(func, wait) {
@@ -604,6 +618,17 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // ✅ REMOVED: loadAllPackageTests() - Now using lazy loading
+    
+    // ✅ Load lab info for tax percentage
+    fetch('/api/lab-info')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.lab_info) {
+                labTaxPercentage = parseFloat(data.lab_info.tax_percentage) || 0;
+                console.log('✅ Tax percentage loaded:', labTaxPercentage + '%');
+            }
+        })
+        .catch(error => console.error('Error loading lab info:', error));
 });
 
 // Generate Patient ID from server
@@ -888,20 +913,41 @@ function calculateTotal() {
 
 // Calculate total after discount
 function calculateTotalAfterDiscount() {
-    const total = parseFloat(document.getElementById('total_price').value.replace(/,/g, '')) || 0;
-    const discount = parseFloat(document.getElementById('discount_amount').value.replace(/,/g, '')) || 0;
+    const totalEl = document.getElementById('total_price');
+    if (!totalEl) return;
+    
+    const total = parseFloat(totalEl.value.replace(/,/g, '')) || 0;
+    
+    // Safely get discount amount
+    const discountEl = document.getElementById('discount_amount');
+    const discount = discountEl ? (parseFloat(discountEl.value.replace(/,/g, '')) || 0) : 0;
+    
     const afterDiscount = total - discount;
     
-    document.getElementById('total_after_discount').value = formatPrice(afterDiscount);
+    const totalAfterDiscountEl = document.getElementById('total_after_discount');
+    if (totalAfterDiscountEl) {
+        totalAfterDiscountEl.value = formatPrice(afterDiscount);
+    }
     
+    // ✅ Calculate Total After Tax
+    const applyTax = document.getElementById('apply_tax_toggle') ? document.getElementById('apply_tax_toggle').checked : false;
+    const taxAmount = applyTax ? (labTaxPercentage / 100) * afterDiscount : 0;
+    const afterTax = afterDiscount + taxAmount;
+    
+    const totalAfterTaxEl = document.getElementById('total_after_tax');
+    if (totalAfterTaxEl) {
+        totalAfterTaxEl.value = formatPrice(afterTax);
+    }
+    
+    // ✅ Default received amount is now Total After Tax
     const receivedInput = document.getElementById('received_amount');
     const currentReceived = parseFloat(receivedInput.value.replace(/,/g, '')) || 0;
     
     if (!receivedAmountAutoFilled && currentReceived === 0) {
-        receivedInput.value = afterDiscount;
+        receivedInput.value = afterTax;
         receivedAmountAutoFilled = true;
     } else if (receivedAmountAutoFilled) {
-        receivedInput.value = afterDiscount;
+        receivedInput.value = afterTax;
     }
     
     calculateRemaining();
@@ -909,19 +955,19 @@ function calculateTotalAfterDiscount() {
 
 // Calculate remaining amount
 function calculateRemaining() {
-    const afterDiscount = parseFloat(document.getElementById('total_after_discount').value.replace(/,/g, '')) || 0;
+    const afterTax = parseFloat(document.getElementById('total_after_tax').value.replace(/,/g, '')) || 0;
     const received = parseFloat(document.getElementById('received_amount').value.replace(/,/g, '')) || 0;
-    const remaining = afterDiscount - received;
+    const remaining = afterTax - received;
     
     document.getElementById('remaining_amount').value = formatPrice(remaining);
 }
 
 // Detect manual changes to received amount
 document.getElementById('received_amount').addEventListener('input', function() {
-    const totalAfterDiscount = parseFloat(document.getElementById('total_after_discount').value.replace(/,/g, '')) || 0;
+    const totalAfterTax = parseFloat(document.getElementById('total_after_tax').value.replace(/,/g, '')) || 0;
     const currentReceived = parseFloat(this.value.replace(/,/g, '')) || 0;
     
-    if (Math.abs(currentReceived - totalAfterDiscount) > 0.01) {
+    if (Math.abs(currentReceived - totalAfterTax) > 0.01) {
         receivedAmountAutoFilled = false;
     } else {
         receivedAmountAutoFilled = true;
@@ -1223,6 +1269,7 @@ async function printReceipt(patientId) {
                 case 'barcode_image': clone.innerHTML = `<div style="text-align: center; padding: 5px 0;"><img src="${barcodeData}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;"></div>`; break;
                 case 'total_amount': const totalVal = patient.total_amount || 0; isEmpty = totalVal === 0; clone.innerHTML = `<div style="display: flex; justify-content: space-between; font-weight: bold;"><span>Total:</span><span>${formatPrice(totalVal)}</span></div>`; break;
                 case 'discount': const discountVal = patient.discount_amount || 0; isEmpty = false; clone.innerHTML = `<div style="display: flex; justify-content: space-between;"><span>Discount:</span><span>${formatPrice(discountVal)}</span></div>`; break;
+                case 'total_after_tax': const totalTaxVal = patient.total_after_tax || 0; isEmpty = false; clone.innerHTML = `<div style="display: flex; justify-content: space-between; font-weight: bold;"><span>Total After Tax:</span><span>${formatPrice(totalTaxVal)}</span></div>`; break;
                 case 'paid_amount': const paidVal = patient.paid_amount || 0; isEmpty = paidVal === 0; clone.innerHTML = `<div style="display: flex; justify-content: space-between;"><span>Paid:</span><span>${formatPrice(paidVal)}</span></div>`; break;
                 case 'remain_amount': const remainVal = patient.remain_amount || 0; isEmpty = remainVal === 0; const remainClass = remainVal > 0 ? 'color: #dc2626; font-weight: bold;' : ''; clone.innerHTML = `<div style="display: flex; justify-content: space-between; border-top: 2px solid #000; padding-top: 5px; ${remainClass}"><span>Remaining:</span><span>${formatPrice(remainVal)}</span></div>`; break;
                 case 'shape_line': clone.className = ''; clone.style.height = (el.shapeWidth || 2) + 'px'; clone.style.background = el.shapeColor || '#000000'; clone.style.border = 'none'; clone.innerHTML = ''; break;

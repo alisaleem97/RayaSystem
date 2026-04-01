@@ -2,7 +2,7 @@
 # JSON API endpoints — patient data, orders, barcode, lab info, general listings.
 # Includes N+1 fixes with selectinload.
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload
 from database import get_session
@@ -11,7 +11,8 @@ from models import (
     Region, PackageTest, Parameter, Department, Device,
     ReportNote, Formula, LabInfo, AuditLog,
 )
-from routes.helpers import generate_barcode_base64
+from routes.helpers import generate_barcode_base64, get_current_user
+from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
@@ -38,7 +39,7 @@ def generate_patient_id_api(session: Session = Depends(get_session)):
             try:
                 last_number = int(last_patient.patient_id[1:])
                 next_number = last_number + 1
-            except:
+            except Exception:
                 next_number = baseNumber
         else:
             next_number = baseNumber
@@ -101,6 +102,7 @@ def get_lab_info_api(session: Session = Depends(get_session)):
                 "lab_phone_2": lab_info.lab_phone_2 or "",
                 "lab_email": lab_info.lab_email or "",
                 "lab_website": lab_info.lab_website or "",
+                "tax_percentage": lab_info.tax_percentage if lab_info.tax_percentage is not None else 0.0,
                 "lab_currency": lab_info.lab_currency or "$",
                 "first_doctor_name": lab_info.first_doctor_name or "",
                 "second_doctor_name": lab_info.second_doctor_name or "",
@@ -120,7 +122,7 @@ def get_lab_info_api(session: Session = Depends(get_session)):
         "lab_info": {
             "lab_name": "NexLab Medical Center", "lab_title": "Medical Laboratory",
             "lab_address": "", "lab_phone_1": "", "lab_phone_2": "",
-            "lab_email": "", "lab_website": "", "lab_currency": "$",
+            "lab_email": "", "lab_website": "", "lab_currency": "$", "tax_percentage": 0.0,
             "first_doctor_name": "", "second_doctor_name": "",
             "lab_note_1": "", "lab_note_2": "",
             "lab_logo": "", "lab_qr_1": "", "lab_qr_2": "",
@@ -139,10 +141,12 @@ def get_patient_api(patient_id: str, session: Session = Depends(get_session)):
         if not patient:
             return {"error": "Patient not found"}
         
-        # ✅ N+1 FIX: eager-load test relationship
+        # ✅ N+1 FIX: eager-load test + sample_type relationships
         orders = session.exec(
             select(Order)
-            .options(selectinload(Order.test))
+            .options(
+                selectinload(Order.test).selectinload(TestDefinition.sample_type)
+            )
             .where(Order.patient_id == patient.id)
         ).all()
         
@@ -151,11 +155,7 @@ def get_patient_api(patient_id: str, session: Session = Depends(get_session)):
         tests_by_sample_type = {}
         for order in orders:
             if order.test:
-                sample_type_name = "Unknown"
-                if order.test.sample_type_id:
-                    sample_type = session.get(SampleType, order.test.sample_type_id)
-                    if sample_type:
-                        sample_type_name = sample_type.sample_name
+                sample_type_name = order.test.sample_type.sample_name if order.test.sample_type else "Unknown"
                 if sample_type_name not in tests_by_sample_type:
                     tests_by_sample_type[sample_type_name] = []
                 tests_by_sample_type[sample_type_name].append(order.test.test_name)
@@ -165,9 +165,12 @@ def get_patient_api(patient_id: str, session: Session = Depends(get_session)):
         
         received_amount = visits[0].received_amount if visits else 0.0
         discount_amount = visits[0].discount_amount if visits else 0.0
+        tax_amount = visits[0].tax_amount if visits and visits[0].tax_amount else 0.0
         remaining_amount = visits[0].remaining_amount if visits else 0.0
         
         total_amount = sum([float(order.final_price) if order.final_price else 0 for order in orders])
+        
+        total_after_tax = total_amount - discount_amount + tax_amount
         
         return {
             "patient_id": patient.patient_id,
@@ -183,6 +186,8 @@ def get_patient_api(patient_id: str, session: Session = Depends(get_session)):
             "visit_date": visits[0].visit_date.isoformat() if visits and visits[0].visit_date else None,
             "total_amount": round(total_amount, 2),
             "discount_amount": round(discount_amount, 2),
+            "tax_amount": round(tax_amount, 2),
+            "total_after_tax": round(total_after_tax, 2),
             "paid_amount": round(received_amount, 2),
             "remain_amount": round(remaining_amount, 2)
         }
@@ -234,40 +239,65 @@ def check_patient_phone(phone_key: str, phone_number: str, session: Session = De
         return {"exists": False, "error": str(e)}
 
 # ===========================
-# GENERAL LIST ENDPOINTS
+# GENERAL LIST ENDPOINTS (Login Required)
 # ===========================
+def _require_login(request: Request, session: Session):
+    """Quick login check for data APIs. Returns user or None."""
+    user = get_current_user(request, session)
+    if not user:
+        return None
+    return user
+
 @router.get("/api/patients")
-def list_patients_api(session: Session = Depends(get_session)):
+def list_patients_api(request: Request, session: Session = Depends(get_session)):
+    if not _require_login(request, session):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     return session.exec(select(Patient)).all()
 
 @router.get("/api/parameters")
-def list_parameters_api(session: Session = Depends(get_session)):
+def list_parameters_api(request: Request, session: Session = Depends(get_session)):
+    if not _require_login(request, session):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     return session.exec(select(Parameter)).all()
 
 @router.get("/api/departments")
-def list_departments_api(session: Session = Depends(get_session)):
+def list_departments_api(request: Request, session: Session = Depends(get_session)):
+    if not _require_login(request, session):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     return session.exec(select(Department)).all()
 
 @router.get("/api/devices")
-def list_devices_api(session: Session = Depends(get_session)):
+def list_devices_api(request: Request, session: Session = Depends(get_session)):
+    if not _require_login(request, session):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     return session.exec(select(Device)).all()
 
 @router.get("/api/sample-types")
-def list_sample_types_api(session: Session = Depends(get_session)):
+def list_sample_types_api(request: Request, session: Session = Depends(get_session)):
+    if not _require_login(request, session):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     return session.exec(select(SampleType)).all()
 
 @router.get("/api/report-notes")
-def list_report_notes_api(session: Session = Depends(get_session)):
+def list_report_notes_api(request: Request, session: Session = Depends(get_session)):
+    if not _require_login(request, session):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     return session.exec(select(ReportNote)).all()
 
 @router.get("/api/tests")
-def list_tests_api(session: Session = Depends(get_session)):
+def list_tests_api(request: Request, session: Session = Depends(get_session)):
+    if not _require_login(request, session):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     return session.exec(select(TestDefinition)).all()
 
 @router.get("/api/formulas")
-def list_formulas_api(session: Session = Depends(get_session)):
+def list_formulas_api(request: Request, session: Session = Depends(get_session)):
+    if not _require_login(request, session):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     return session.exec(select(Formula)).all()
 
 @router.get("/api/audit-logs")
-def list_audit_logs_api(session: Session = Depends(get_session)):
-    return session.exec(select(AuditLog).order_by(AuditLog.created_at.desc())).all()
+def list_audit_logs_api(request: Request, session: Session = Depends(get_session)):
+    if not _require_login(request, session):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return session.exec(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(500)).all()

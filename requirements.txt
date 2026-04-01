@@ -1,0 +1,41 @@
+# NexLab LIS - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Web Framework
+fastapi==0.133.1
+uvicorn==0.41.0
+python-multipart==0.0.22
+starlette==0.52.1
+
+# Database
+sqlmodel==0.0.37
+SQLAlchemy==2.0.47
+
+# Templates
+Jinja2==3.1.6
+
+# Authentication & Security
+passlib==1.7.4
+bcrypt==3.2.2
+itsdangerous==2.2.0
+python-jose==3.5.0
+
+# Barcode & QR
+python-barcode==0.16.1
+pillow==12.1.1
+qrcode==8.2
+
+# PDF Generation
+playwright==1.58.0
+xhtml2pdf==0.2.17
+reportlab==4.4.10
+
+# WhatsApp / Google AI
+requests==2.33.0
+google-generativeai==0.8.6
+
+# Utilities
+pydantic==2.12.5
+aiofiles==25.1.0
+python-bidi==0.6.7
+arabic-reshaper==3.0.0

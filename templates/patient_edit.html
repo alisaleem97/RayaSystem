@@ -173,6 +173,7 @@
                 </div>
             </div>
 
+            {% if has_button('patient_edit', 'discount') %}
             <!-- Discount Section -->
 <div class="flex justify-end">
     <button type="button" onclick="toggleDiscount()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">💰 Discount</button>
@@ -197,9 +198,10 @@
             class="w-full border border-green-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500">
     </div>
 </div>
+            {% endif %}
 
             <!-- Payment Summary -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1">Total Price</label>
                     <input type="text" id="total_price" readonly class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-100 font-semibold">
@@ -207,6 +209,16 @@
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1">Total After Discount</label>
                     <input type="text" id="total_after_discount" readonly class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-100 font-semibold text-green-600">
+                </div>
+                <div>
+                    <label class="relative flex items-center text-xs font-medium text-amber-600 mb-1 h-4">
+                        <span>Total After Tax</span>
+                        <label class="absolute left-1/2 -translate-x-1/2 inline-flex items-center cursor-pointer" title="Toggle Tax">
+                            <input type="checkbox" id="apply_tax_toggle" name="apply_tax_toggle" class="sr-only peer" onchange="calculateTotalAfterDiscount()">
+                            <div class="w-7 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-500"></div>
+                        </label>
+                    </label>
+                    <input type="text" id="total_after_tax" readonly class="w-full border border-amber-300 rounded-lg px-3 py-2 bg-amber-50 font-semibold text-amber-700">
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1">Received Amount</label>
@@ -218,8 +230,53 @@
                 </div>
             </div>
 
+            <!-- PAYMENT HISTORY SUMMARY -->
+            {% if payments %}
+            <div class="grid grid-cols-1 gap-4 p-4 mt-4 bg-white rounded-lg border border-slate-200 shadow-sm">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-sm font-semibold text-slate-800 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Payment History
+                    </h3>
+                    <button type="button" onclick="showAddPaymentModal()" class="text-xs font-semibold px-3 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 flex items-center transition-colors">
+                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                        Add Payment
+                    </button>
+                </div>
+                <div class="overflow-x-auto text-sm">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 text-xs uppercase border-y border-slate-200">
+                                <th class="py-2 px-3">Date</th>
+                                <th class="py-2 px-3">Type</th>
+                                <th class="py-2 px-3">Method</th>
+                                <th class="py-2 px-3">Amount</th>
+                                <th class="py-2 px-3">Note</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for p in payments %}
+                            <tr>
+                                <td class="py-2 px-3 text-slate-600">{{ p.payment_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td class="py-2 px-3 font-medium {% if p.is_refund %}text-rose-600{% else %}text-emerald-600{% endif %}">
+                                    {% if p.is_refund %}Refund{% else %}Payment{% endif %}
+                                </td>
+                                <td class="py-2 px-3 uppercase text-xs tracking-wider text-slate-500">{{ p.payment_method }}</td>
+                                <td class="py-2 px-3 font-semibold {% if p.is_refund %}text-rose-600{% else %}text-emerald-600{% endif %}">
+                                    {% if p.is_refund %}-{% endif %}{{ "%.2f"|format(p.amount) }}
+                                </td>
+                                <td class="py-2 px-3 text-slate-500 truncate max-w-[150px]">{{ p.note or '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Hidden inputs for form submission -->
             <input type="hidden" id="selected_items" name="selected_items" value="">
+            <input type="hidden" id="deleted_items_hidden" name="deleted_items" value="[]">
             <input type="hidden" id="discount_percentage_hidden" name="discount_percentage" value="">
             <input type="hidden" id="discount_amount_hidden" name="discount_amount" value="">
 
@@ -232,7 +289,174 @@
     </form>
 </div>
 
+<!-- ATTACHMENTS SECTION -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 mt-6 overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+        <h2 class="text-sm font-semibold text-slate-800 flex items-center">
+            <svg class="w-4 h-4 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+            Patient Attachments ({{ attachments|length }})
+        </h2>
+        <button type="button" onclick="document.getElementById('uploadAttachmentModal').classList.remove('hidden')" class="text-xs font-semibold px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 flex items-center transition-colors shadow-sm">
+            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+            Upload File
+        </button>
+    </div>
+    <div class="p-6">
+        {% if attachments %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {% for doc in attachments %}
+            <div class="border border-slate-200 rounded-lg p-3 flex flex-col hover:border-indigo-300 hover:shadow-sm transition-all bg-slate-50 relative group">
+                <div class="flex items-start justify-between mb-2">
+                    <div class="p-2 bg-indigo-100 text-indigo-600 rounded">
+                        {% if doc.file_type == 'pdf' %}
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        {% elif doc.file_type == 'image' %}
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        {% else %}
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        {% endif %}
+                    </div>
+                    
+                    <form action="/attachment/{{ doc.id }}/delete" method="POST" class="opacity-0 group-hover:opacity-100 transition-opacity" onsubmit="return confirm('Are you sure you want to delete this file?');">
+                        <button type="submit" class="text-slate-400 hover:text-red-500 transition-colors p-1" title="Delete">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </form>
+                </div>
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-slate-800 truncate" title="{{ doc.file_name }}">{{ doc.file_name }}</p>
+                    <p class="text-xs text-slate-500 mt-1">{{ doc.uploaded_at.strftime('%b %d, %Y') }}</p>
+                    {% if doc.description %}
+                    <p class="text-xs text-slate-600 mt-2 line-clamp-2">{{ doc.description }}</p>
+                    {% endif %}
+                </div>
+                <div class="mt-3 pt-3 border-t border-slate-200">
+                    <a href="/{{ doc.file_path }}" target="_blank" class="text-xs font-medium text-indigo-600 hover:text-indigo-800 flex items-center justify-center">
+                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                        View / Download
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-6 text-slate-400">
+            <svg class="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path></svg>
+            <p class="text-sm">No files attached to this patient yet.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
 <div id="printContainer" style="display: none;"></div>
+
+<!-- ADD PAYMENT MODAL -->
+<div id="addPaymentModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
+        <div class="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
+            <h3 class="text-lg font-semibold text-slate-800">Record New Payment</h3>
+            <button type="button" onclick="closeAddPaymentModal()" class="text-slate-400 hover:bg-slate-200 hover:text-slate-600 rounded-lg p-1.5 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <form action="/patient/{{ patient.patient_id }}/payment" method="POST" class="p-5">
+            <input type="hidden" name="visit_id" value="{{ latest_visit.id }}">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Amount</label>
+                    <input type="number" name="amount" step="0.01" required value="{{ latest_visit.remaining_amount }}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Payment Method</label>
+                    <select name="payment_method" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700">
+                        <option value="cash">💵 Cash</option>
+                        <option value="card">💳 Card</option>
+                        <option value="transfer">🏦 Bank Transfer</option>
+                        <option value="insurance">🏥 Insurance</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Type</label>
+                    <select name="is_refund" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700">
+                        <option value="False">Income (Payment)</option>
+                        <option value="True">Outcome (Refund)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Note (Optional)</label>
+                    <input type="text" name="note" placeholder="e.g. installment 2" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+            </div>
+            <div class="mt-6 flex gap-3 justify-end">
+                <button type="button" onclick="closeAddPaymentModal()" class="px-5 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">Cancel</button>
+                <button type="submit" class="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">Save Payment</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- UPLOAD ATTACHMENT MODAL -->
+<div id="uploadAttachmentModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
+        <div class="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
+            <h3 class="text-lg font-semibold text-slate-800">Upload Attachment</h3>
+            <button type="button" onclick="document.getElementById('uploadAttachmentModal').classList.add('hidden')" class="text-slate-400 hover:bg-slate-200 hover:text-slate-600 rounded-lg p-1.5 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <form action="/patient/{{ patient.patient_id }}/attachment" method="POST" enctype="multipart/form-data" class="p-5">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Select File <span class="text-red-500">*</span></label>
+                    <input type="file" name="file" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                    <p class="text-xs text-slate-500 mt-1">Accepts PDF, JPG, PNG files</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Description (Optional)</label>
+                    <input type="text" name="description" placeholder="e.g. Identity Document, Referral Letter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+            </div>
+            <div class="mt-6 flex gap-3 justify-end">
+                <button type="button" onclick="document.getElementById('uploadAttachmentModal').classList.add('hidden')" class="px-5 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">Cancel</button>
+                <button type="submit" class="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">Upload File</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Test Reason Modal -->
+<div id="deleteTestModal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transform transition-all duration-300 scale-95 opacity-0" id="deleteTestModalContent">
+        <div class="bg-red-50 px-6 py-4 border-b border-red-100">
+            <h3 class="text-lg font-semibold text-red-800 flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+                Remove Existing Test
+            </h3>
+            <p class="text-sm text-red-600 mt-1">Item: <strong id="deleteTestName"></strong></p>
+        </div>
+        <div class="px-6 py-5">
+            <label class="block text-sm font-medium text-slate-700 mb-2">Removal Reason <span class="text-red-500">*</span></label>
+            <textarea id="deleteTestReasonInput" rows="3" required
+                oninput="document.getElementById('deleteTestConfirmBtn').disabled = !this.value.trim();"
+                class="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-red-500 focus:border-red-500 focus:outline-none resize-none"
+                placeholder="Please enter the reason..."></textarea>
+            <p class="text-xs text-slate-500 mt-2">This reason will be recorded for audit purposes.</p>
+        </div>
+        <div class="px-6 py-4 bg-slate-50 flex justify-end gap-3 border-t border-slate-200">
+            <button type="button" onclick="closeDeleteTestModal()"
+                class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition">
+                Cancel
+            </button>
+            <button type="button" id="deleteTestConfirmBtn" onclick="confirmDeleteTest()"
+                class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                Confirm Remove
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Hidden element to store orders JSON data -->
 <div id="orders_json_data" style="display: none;">{{ orders_json | safe }}</div>
 <!-- Tom Select JS -->
@@ -245,8 +469,10 @@
 // Global Variables
 let testSelect, packageSelect;
 let selectedItems = [];
+let deletedItems = [];
 let itemCounter = 0;
 let receivedAmountAutoFilled = false;
+let labTaxPercentage = 0; // ✅ Tax percentage from lab info
 
 // Format price with comma separator
 function formatPrice(amount) {
@@ -303,7 +529,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     name: order.name,
                     type: order.type || 'test',
                     price: parseFloat(order.price) || 0,
-                    package_name: order.package_name
+                    package_name: order.package_name,
+                    is_existing: true
                 });
             });
             calculateTotal();
@@ -334,9 +561,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Populate hidden fields too
     document.getElementById('discount_percentage_hidden').value = {{ latest_visit.discount_percentage|default(0) }};
     document.getElementById('discount_amount_hidden').value = Math.round({{ latest_visit.discount_amount }});
+    const taxToggle = document.getElementById('apply_tax_toggle');
+    if (taxToggle) {
+        taxToggle.checked = {% if latest_visit.tax_applied != False %}true{% else %}false{% endif %};
+    }
     // Auto-show discount section if discount was applied
     if ({{ latest_visit.discount_amount }} > 0 || {{ latest_visit.discount_percentage|default(0) }} > 0) {
-        document.getElementById('discountSection').classList.remove('hidden');
+        const discountSection = document.getElementById('discountSection');
+        if (discountSection) {
+            discountSection.classList.remove('hidden');
+        }
     }
     receivedAmountAutoFilled = true;
     {% endif %}
@@ -452,8 +686,91 @@ function addItem(item) {
     document.getElementById('emptyTableMessage').style.display = 'none';
 }
 
-// Remove item from selected items
+// Remove item from selected items logic
+let pendingRemoveIndex = null;
+
 function removeItem(index) {
+    const item = selectedItems[index];
+    
+    if (item.is_existing) {
+        pendingRemoveIndex = index;
+        document.getElementById('deleteTestName').textContent = item.name;
+        document.getElementById('deleteTestReasonInput').value = '';
+        document.getElementById('deleteTestConfirmBtn').disabled = true;
+        
+        const modal = document.getElementById('deleteTestModal');
+        const content = document.getElementById('deleteTestModalContent');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        
+        setTimeout(() => {
+            content.classList.remove('scale-95', 'opacity-0');
+            content.classList.add('scale-100', 'opacity-100');
+            document.getElementById('deleteTestReasonInput').focus();
+        }, 10);
+        return; 
+    }
+    
+    executeRemove(index);
+}
+
+function closeDeleteTestModal() {
+    const modal = document.getElementById('deleteTestModal');
+    const content = document.getElementById('deleteTestModalContent');
+    
+    content.classList.remove('scale-100', 'opacity-100');
+    content.classList.add('scale-95', 'opacity-0');
+    
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        pendingRemoveIndex = null;
+    }, 300);
+}
+
+function confirmDeleteTest() {
+    if (pendingRemoveIndex === null) return;
+    
+    const reason = document.getElementById('deleteTestReasonInput').value.trim();
+    if (!reason) return;
+    
+    const item = selectedItems[pendingRemoveIndex];
+    const confirmBtn = document.getElementById('deleteTestConfirmBtn');
+    
+    // Only call API for existing tests (already in database)
+    if (item.is_existing) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Removing...';
+        
+        const patientId = '{{ patient.patient_id }}';
+        const url = `/api/patients/${patientId}/remove-test?test_id=${item.id}&reason=${encodeURIComponent(reason)}`;
+        
+        fetch(url, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showPopup('✅ Test removed successfully', 'success');
+                    executeRemove(pendingRemoveIndex);
+                    closeDeleteTestModal();
+                } else {
+                    showPopup('❌ Failed to remove test: ' + (data.error || 'Unknown error'), 'error');
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Confirm Remove';
+                }
+            })
+            .catch(error => {
+                showPopup('❌ Error: ' + error.message, 'error');
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Confirm Remove';
+            });
+    } else {
+        // New test (not yet saved) — just remove from UI
+        executeRemove(pendingRemoveIndex);
+        closeDeleteTestModal();
+    }
+}
+
+function executeRemove(index) {
     selectedItems.splice(index, 1);
     selectedItems.forEach((item, idx) => {
         item.no = idx + 1;
@@ -473,6 +790,7 @@ function renderSelectedItems() {
     
     if (selectedItems.length === 0) {
         tbody.innerHTML = '';
+        document.getElementById('selected_items').value = '[]';
         return;
     }
     
@@ -487,7 +805,7 @@ function renderSelectedItems() {
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${formatPrice(item.price)}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                <button onclick="removeItem(${index})" class="text-red-600 hover:text-red-900">🗑️ Remove</button>
+                <button type="button" onclick="removeItem(${index})" class="text-red-600 hover:text-red-900">🗑️ Remove</button>
             </td>
         </tr>
     `).join('');
@@ -538,25 +856,36 @@ function calculateTotal() {
 // Calculate total after discount
 function calculateTotalAfterDiscount() {
     const totalEl = document.getElementById('total_price');
-    const discountEl = document.getElementById('discount_amount_display');
     const receivedEl = document.getElementById('received_amount');
     const remainingEl = document.getElementById('remaining_amount');
     const totalAfterDiscountEl = document.getElementById('total_after_discount');
+    const totalAfterTaxEl = document.getElementById('total_after_tax');
     
-    if (!totalEl || !discountEl || !receivedEl || !remainingEl || !totalAfterDiscountEl) return;
+    if (!totalEl || !receivedEl || !remainingEl || !totalAfterDiscountEl) return;
     
     const total = parseFloat(totalEl.value.replace(/,/g, '')) || 0;
-    const discount = parseFloat(discountEl.value.replace(/,/g, '')) || 0;
+    
+    // Safely get discount amount
+    const discountEl = document.getElementById('discount_amount_display');
+    const discount = discountEl ? (parseFloat(discountEl.value.replace(/,/g, '')) || 0) : 0;
+    
     const afterDiscount = total - discount;
     
     totalAfterDiscountEl.value = formatPrice(afterDiscount);
     
+    // ✅ Calculate Total After Tax
+    const applyTax = document.getElementById('apply_tax_toggle') ? document.getElementById('apply_tax_toggle').checked : false;
+    const taxAmount = applyTax ? (labTaxPercentage / 100) * afterDiscount : 0;
+    const afterTax = afterDiscount + taxAmount;
+    if (totalAfterTaxEl) totalAfterTaxEl.value = formatPrice(afterTax);
+    
+    // ✅ Default received amount is now Total After Tax
     const currentReceived = parseFloat(receivedEl.value.replace(/,/g, '')) || 0;
     if (!receivedAmountAutoFilled && currentReceived === 0) {
-        receivedEl.value = afterDiscount;
+        receivedEl.value = afterTax;
         receivedAmountAutoFilled = true;
     } else if (receivedAmountAutoFilled) {
-        receivedEl.value = afterDiscount;
+        receivedEl.value = afterTax;
     }
     
     calculateRemaining();
@@ -564,15 +893,15 @@ function calculateTotalAfterDiscount() {
 
 // Calculate remaining amount
 function calculateRemaining() {
-    const afterDiscountEl = document.getElementById('total_after_discount');
+    const afterTaxEl = document.getElementById('total_after_tax');
     const receivedEl = document.getElementById('received_amount');
     const remainingEl = document.getElementById('remaining_amount');
     
-    if (!afterDiscountEl || !receivedEl || !remainingEl) return;
+    if (!afterTaxEl || !receivedEl || !remainingEl) return;
     
-    const afterDiscount = parseFloat(afterDiscountEl.value.replace(/,/g, '')) || 0;
+    const afterTax = parseFloat(afterTaxEl.value.replace(/,/g, '')) || 0;
     const received = parseFloat(receivedEl.value.replace(/,/g, '')) || 0;
-    const remaining = afterDiscount - received;
+    const remaining = afterTax - received;
     
     remainingEl.value = formatPrice(remaining);
 }
@@ -582,17 +911,30 @@ document.addEventListener('DOMContentLoaded', function() {
     const receivedEl = document.getElementById('received_amount');
     if (receivedEl) {
         receivedEl.addEventListener('input', function() {
-            const totalAfterDiscountEl = document.getElementById('total_after_discount');
-            const totalAfterDiscount = parseFloat(totalAfterDiscountEl.value.replace(/,/g, '')) || 0;
+            const totalAfterTaxEl = document.getElementById('total_after_tax');
+            const totalAfterTax = parseFloat(totalAfterTaxEl.value.replace(/,/g, '')) || 0;
             const currentReceived = parseFloat(this.value.replace(/,/g, '')) || 0;
             
-            if (Math.abs(currentReceived - totalAfterDiscount) > 0.01) {
+            if (Math.abs(currentReceived - totalAfterTax) > 0.01) {
                 receivedAmountAutoFilled = false;
             } else {
                 receivedAmountAutoFilled = true;
             }
         });
     }
+    
+    // ✅ Load lab info for tax percentage
+    fetch('/api/lab-info')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.lab_info) {
+                labTaxPercentage = parseFloat(data.lab_info.tax_percentage) || 0;
+                console.log('✅ Tax percentage loaded:', labTaxPercentage + '%');
+                // Recalculate with tax now that we have the percentage
+                calculateTotalAfterDiscount();
+            }
+        })
+        .catch(error => console.error('Error loading lab info:', error));
 });
 
 // Verify gender vs name
@@ -795,6 +1137,7 @@ async function printReceipt(patientId) {
                 case 'barcode_image': clone.innerHTML = `<div style="text-align: center; padding: 5px 0;"><img src="${barcodeData}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;"></div>`; break;
                 case 'total_amount': const totalVal = patient.total_amount || 0; isEmpty = totalVal === 0; clone.innerHTML = `<div style="display: flex; justify-content: space-between; font-weight: bold;"><span>Total:</span><span>${formatPrice(totalVal)}</span></div>`; break;
                 case 'discount': const discountVal = patient.discount_amount || 0; isEmpty = false; clone.innerHTML = `<div style="display: flex; justify-content: space-between;"><span>Discount:</span><span>${formatPrice(discountVal)}</span></div>`; break;
+                case 'total_after_tax': const totalTaxVal = patient.total_after_tax || 0; isEmpty = false; clone.innerHTML = `<div style="display: flex; justify-content: space-between; font-weight: bold;"><span>Total After Tax:</span><span>${formatPrice(totalTaxVal)}</span></div>`; break;
                 case 'paid_amount': const paidVal = patient.paid_amount || 0; isEmpty = paidVal === 0; clone.innerHTML = `<div style="display: flex; justify-content: space-between;"><span>Paid:</span><span>${formatPrice(paidVal)}</span></div>`; break;
                 case 'remain_amount': const remainVal = patient.remain_amount || 0; isEmpty = remainVal === 0; const remainClass = remainVal > 0 ? 'color: #dc2626; font-weight: bold;' : ''; clone.innerHTML = `<div style="display: flex; justify-content: space-between; border-top: 2px solid #000; padding-top: 5px; ${remainClass}"><span>Remaining:</span><span>${formatPrice(remainVal)}</span></div>`; break;
                 case 'shape_line': clone.className = ''; clone.style.height = (el.shapeWidth || 2) + 'px'; clone.style.background = el.shapeColor || '#000000'; clone.style.border = 'none'; clone.innerHTML = ''; break;
@@ -982,6 +1325,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const editForm = document.getElementById('editForm');
     if (editForm) {
         editForm.addEventListener('submit', function(e) {
+            // ✅ DEBUG: Ensure hidden fields are synced right before submit
+            document.getElementById('selected_items').value = JSON.stringify(selectedItems);
+            document.getElementById('deleted_items_hidden').value = JSON.stringify(deletedItems);
+            
+            console.log('📤 FORM SUBMIT - selectedItems:', JSON.stringify(selectedItems));
+            console.log('📤 FORM SUBMIT - deletedItems:', JSON.stringify(deletedItems));
+            console.log('📤 FORM SUBMIT - hidden selected_items value:', document.getElementById('selected_items').value);
+            console.log('📤 FORM SUBMIT - hidden deleted_items value:', document.getElementById('deleted_items_hidden').value);
+            
             const discountAmount = parseFloat(document.getElementById('discount_amount_hidden').value) || 0;
             const discountPercentage = parseFloat(document.getElementById('discount_percentage_hidden').value) || 0;
             const discountNote = document.getElementById('discount_note').value.trim();

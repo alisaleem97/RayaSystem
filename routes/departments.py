@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 from database import get_session
 from models import Department, SampleType, Device, Parameter, ReportNote
-from routes.helpers import templates, get_current_user, create_audit_log, model_to_dict
+from routes.helpers import templates, get_current_user, create_audit_log, model_to_dict, require_permission
 
 router = APIRouter()
 
@@ -17,6 +17,8 @@ router = APIRouter()
 # ===========================
 @router.get("/departments", response_class=HTMLResponse)
 def departments_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "departments"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     departments = session.exec(select(Department).order_by(Department.id.asc())).all()
     departments_dict = [model_to_dict(d) for d in departments]
     success = request.query_params.get("success")
@@ -29,6 +31,8 @@ def departments_page(request: Request, session: Session = Depends(get_session)):
 @router.post("/departments/create")
 def create_department(department_name: str = Form(...), department_note: Optional[str] = Form(None),
                       request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "departments", "create"):
+        return RedirectResponse(url="/departments?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         new_department = Department(department_name=department_name, department_note=department_note, is_active=True,
@@ -45,6 +49,8 @@ def create_department(department_name: str = Form(...), department_note: Optiona
 @router.post("/departments/update/{dept_id}")
 def update_department(dept_id: int, department_name: str = Form(...), department_note: Optional[str] = Form(None),
                       request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "departments", "edit"):
+        return RedirectResponse(url="/departments?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         dept = session.get(Department, dept_id)
@@ -66,6 +72,8 @@ def update_department(dept_id: int, department_name: str = Form(...), department
 
 @router.post("/departments/delete/{dept_id}")
 def delete_department(dept_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "departments", "delete"):
+        return RedirectResponse(url="/departments?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         dept = session.get(Department, dept_id)
@@ -85,6 +93,8 @@ def delete_department(dept_id: int, request: Request, session: Session = Depends
 # ===========================
 @router.get("/sample-types", response_class=HTMLResponse)
 def sample_types_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "sample_types"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     sample_types = session.exec(select(SampleType).order_by(SampleType.id.asc())).all()
     sample_types_dict = [model_to_dict(s) for s in sample_types]
     success = request.query_params.get("success")
@@ -97,6 +107,8 @@ def sample_types_page(request: Request, session: Session = Depends(get_session))
 @router.post("/sample-types/create")
 def create_sample_type(sample_name: str = Form(...), sample_note: Optional[str] = Form(None),
                        request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "sample_types", "create"):
+        return RedirectResponse(url="/sample-types?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         new_sample_type = SampleType(sample_name=sample_name, sample_note=sample_note, is_active=True,
@@ -113,6 +125,8 @@ def create_sample_type(sample_name: str = Form(...), sample_note: Optional[str] 
 @router.post("/sample-types/update/{sample_id}")
 def update_sample_type(sample_id: int, sample_name: str = Form(...), sample_note: Optional[str] = Form(None),
                        request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "sample_types", "edit"):
+        return RedirectResponse(url="/sample-types?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         sample = session.get(SampleType, sample_id)
@@ -134,6 +148,8 @@ def update_sample_type(sample_id: int, sample_name: str = Form(...), sample_note
 
 @router.post("/sample-types/delete/{sample_id}")
 def delete_sample_type(sample_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "sample_types", "delete"):
+        return RedirectResponse(url="/sample-types?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         sample = session.get(SampleType, sample_id)
@@ -153,6 +169,8 @@ def delete_sample_type(sample_id: int, request: Request, session: Session = Depe
 # ===========================
 @router.get("/devices", response_class=HTMLResponse)
 def devices_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "devices"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     devices = session.exec(select(Device).order_by(Device.id.asc())).all()
     devices_dict = [model_to_dict(d) for d in devices]
     success = request.query_params.get("success")
@@ -166,6 +184,8 @@ def devices_page(request: Request, session: Session = Depends(get_session)):
 def create_device(device_name: str = Form(...), serial_number: str = Form(...), install_date: str = Form(...),
                   installer_name: str = Form(...), installer_phone: str = Form(...), note: Optional[str] = Form(None),
                   request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "devices", "create"):
+        return RedirectResponse(url="/devices?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         install_dt = datetime.strptime(install_date, "%Y-%m-%d")
@@ -185,6 +205,8 @@ def create_device(device_name: str = Form(...), serial_number: str = Form(...), 
 def update_device(device_id: int, device_name: str = Form(...), serial_number: str = Form(...), install_date: str = Form(...),
                   installer_name: str = Form(...), installer_phone: str = Form(...), note: Optional[str] = Form(None),
                   request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "devices", "edit"):
+        return RedirectResponse(url="/devices?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         device = session.get(Device, device_id)
@@ -210,6 +232,8 @@ def update_device(device_id: int, device_name: str = Form(...), serial_number: s
 
 @router.post("/devices/delete/{device_id}")
 def delete_device(device_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "devices", "delete"):
+        return RedirectResponse(url="/devices?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         device = session.get(Device, device_id)
@@ -229,6 +253,8 @@ def delete_device(device_id: int, request: Request, session: Session = Depends(g
 # ===========================
 @router.get("/parameters", response_class=HTMLResponse)
 def parameters_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "parameters"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     parameters = session.exec(select(Parameter).order_by(Parameter.id.asc())).all()
     parameters_dict = [model_to_dict(p) for p in parameters]
     success = request.query_params.get("success")
@@ -241,6 +267,8 @@ def parameters_page(request: Request, session: Session = Depends(get_session)):
 @router.post("/parameters/create")
 def create_parameter(parameter_name: str = Form(...), parameter_short_name: str = Form(...),
                      is_header: str = Form(None), request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "parameters", "create"):
+        return RedirectResponse(url="/parameters?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         is_header_bool = True if is_header == "on" else False
@@ -258,6 +286,8 @@ def create_parameter(parameter_name: str = Form(...), parameter_short_name: str 
 @router.post("/parameters/update/{param_id}")
 def update_parameter(param_id: int, parameter_name: str = Form(...), parameter_short_name: str = Form(...),
                      is_header: str = Form(None), request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "parameters", "edit"):
+        return RedirectResponse(url="/parameters?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         param = session.get(Parameter, param_id)
@@ -280,6 +310,8 @@ def update_parameter(param_id: int, parameter_name: str = Form(...), parameter_s
 
 @router.post("/parameters/delete/{param_id}")
 def delete_parameter(param_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "parameters", "delete"):
+        return RedirectResponse(url="/parameters?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         param = session.get(Parameter, param_id)
@@ -299,6 +331,8 @@ def delete_parameter(param_id: int, request: Request, session: Session = Depends
 # ===========================
 @router.get("/report-notes", response_class=HTMLResponse)
 def report_notes_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "report_notes"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     report_notes = session.exec(select(ReportNote).order_by(ReportNote.id.asc())).all()
     report_notes_dict = [model_to_dict(n) for n in report_notes]
     success = request.query_params.get("success")
@@ -311,6 +345,8 @@ def report_notes_page(request: Request, session: Session = Depends(get_session))
 @router.post("/report-notes/create")
 def create_report_note(note_name: str = Form(...), note_content: str = Form(...),
                        request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "report_notes", "create"):
+        return RedirectResponse(url="/report-notes?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         new_note = ReportNote(note_name=note_name, note_content=note_content, is_active=True,
@@ -327,6 +363,8 @@ def create_report_note(note_name: str = Form(...), note_content: str = Form(...)
 @router.post("/report-notes/update/{note_id}")
 def update_report_note(note_id: int, note_name: str = Form(...), note_content: str = Form(...),
                        request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "report_notes", "edit"):
+        return RedirectResponse(url="/report-notes?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         note = session.get(ReportNote, note_id)
@@ -348,6 +386,8 @@ def update_report_note(note_id: int, note_name: str = Form(...), note_content: s
 
 @router.post("/report-notes/delete/{note_id}")
 def delete_report_note(note_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "report_notes", "delete"):
+        return RedirectResponse(url="/report-notes?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         note = session.get(ReportNote, note_id)

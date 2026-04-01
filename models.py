@@ -16,6 +16,15 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 # ===========================
+# 1b. USER PERMISSION (Granular Page+Button Access)
+# ===========================
+class UserPermission(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    page_key: str = Field(index=True)
+    allowed_buttons: Optional[str] = Field(default=None)  # JSON array of button keys
+
+# ===========================
 # AUDIT LOG (Track all actions)
 # ===========================
 class AuditLog(SQLModel, table=True):
@@ -521,6 +530,7 @@ class LabInfo(SQLModel, table=True):
     lab_note_2: Optional[str] = Field(default=None)
     lab_website: Optional[str] = Field(default=None)
     lab_currency: str = Field(default="$")  # ✅ NEW FIELD
+    tax_percentage: float = Field(default=0.0)  # ✅ Tax Percentage
     
     created_by: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -550,6 +560,8 @@ class PatientVisit(SQLModel, table=True):
     discount_amount: float = Field(default=0.0)
     discount_percentage: float = Field(default=0.0)
     discount_note: Optional[str] = Field(default=None)
+    tax_applied: bool = Field(default=True)
+    tax_amount: float = Field(default=0.0)
     remaining_amount: float = Field(default=0.0)
     
     # Call Centre fields
@@ -577,3 +589,93 @@ class PrintTemplate(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
     edited_at: Optional[datetime] = None
+
+
+# ===========================
+# 26. PAYMENT (New - Partial Payments / History)
+# ===========================
+class Payment(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    visit_id: int = Field(foreign_key="patientvisit.id", index=True)
+    patient_id: int = Field(foreign_key="patient.id", index=True)
+    amount: float
+    payment_method: str = Field(default="cash") # cash, card, transfer
+    payment_date: datetime = Field(default_factory=datetime.utcnow)
+    note: Optional[str] = None
+    
+    recorded_by: int = Field(foreign_key="user.id")
+    is_refund: bool = Field(default=False)
+
+# ===========================
+# 27. DELETED RECORD (New - Archival Snapshot)
+# ===========================
+class DeletedRecord(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    source_table: str = Field(index=True)      # e.g., "patient", "order", "patientvisit"
+    record_id: int                             # Original ID
+    record_data: str                           # Full JSON snapshot
+    deleted_reason: Optional[str] = None
+    
+    deleted_by: int = Field(foreign_key="user.id")
+    deleted_at: datetime = Field(default_factory=datetime.utcnow)
+
+# ===========================
+# 28. ATTACHMENT (New - External Documents)
+# ===========================
+class Attachment(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    patient_id: int = Field(foreign_key="patient.id", index=True)
+    visit_id: Optional[int] = Field(default=None, foreign_key="patientvisit.id", index=True)
+    file_name: str
+    file_path: str
+    file_type: str                             # "image", "pdf", etc.
+    description: Optional[str] = None
+    
+    uploaded_by: int = Field(foreign_key="user.id")
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+
+# ===========================
+# 29. ACTIVITY LOG (New - Operational Monitoring)
+# ===========================
+class ActivityLog(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    action_type: str = Field(index=True)      # e.g., "LOGIN", "PRINT_RECEIPT", "SEND_WHATSAPP"
+    description: str
+    target_type: Optional[str] = None         # e.g., "patient", "visit"
+    target_id: Optional[int] = None
+    
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    username: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# ===========================
+# 30. EXPENSE TYPE (New - Financial Setup)
+# ===========================
+class ExpenseType(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    type_name: str = Field(unique=True, index=True)
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+
+# ===========================
+# 31. EXPENSE (New - Financial Entry)
+# ===========================
+class Expense(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    type_id: int = Field(foreign_key="expensetype.id", index=True)
+    expense_date: datetime = Field(default_factory=datetime.utcnow)
+    amount: float = Field(default=0.0)
+    note: Optional[str] = None
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
+    
+    created_by: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+    
+    # Relationships
+    expense_type: "ExpenseType" = Relationship()

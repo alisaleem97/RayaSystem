@@ -15,8 +15,8 @@ from fastapi.encoders import jsonable_encoder
 from fastapi import File, UploadFile
 import os
 import uuid
-# ✅ NEW: Imported log_audit_action
-from routes.helpers import templates, get_current_user, generate_barcode_base64, calculate_age, log_audit_action
+from routes.helpers import templates, get_current_user, generate_barcode_base64, calculate_age, log_audit_action, log_activity_action, require_permission
+from fastapi.responses import RedirectResponse
 
 router = APIRouter()
 
@@ -24,19 +24,27 @@ router = APIRouter()
 # PRINT DESIGNER ROUTES
 # ===========================
 @router.get("/print-barcode-designer", response_class=HTMLResponse)
-def print_barcode_designer(request: Request):
+def print_barcode_designer(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "print_barcode_designer"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
     return templates.TemplateResponse("print_barcode_designer.html", {"request": request})
 
 @router.get("/print-receipt-designer", response_class=HTMLResponse)
-def print_receipt_designer(request: Request):
+def print_receipt_designer(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "print_receipt_designer"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
     return templates.TemplateResponse("print_receipt_designer.html", {"request": request})
 
 @router.get("/print-result-designer", response_class=HTMLResponse)
-def print_result_designer(request: Request):
+def print_result_designer(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "print_result_designer"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
     return templates.TemplateResponse("print_result_designer.html", {"request": request})
 
 @router.get("/print-results", response_class=HTMLResponse)
 def print_results_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "print_results"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
     today_str = datetime.today().strftime("%Y-%m-%d")
     start_date = request.query_params.get("start_date", today_str)
     end_date = request.query_params.get("end_date", today_str)
@@ -160,9 +168,16 @@ def print_results_page(request: Request, session: Session = Depends(get_session)
 # ===========================
 @router.get("/print-report/{patient_id}", response_class=HTMLResponse)
 def print_report(patient_id: str, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "print_results", "print"):
+        return RedirectResponse(url="/print-results?error=Permission Denied", status_code=303)
     patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
     if not patient:
          return HTMLResponse(content="Patient not found", status_code=404)
+         
+    current_user = get_current_user(request, session)
+    if current_user:
+        log_activity_action(session, "PRINT_REPORT", f"Printed medical report for patient {patient.full_name}", current_user, "patient", patient.id)
+        session.commit()
          
     visit = session.exec(
         select(PatientVisit)
@@ -208,6 +223,8 @@ def print_report(patient_id: str, request: Request, session: Session = Depends(g
 
 @router.get("/view-results/{patient_id}", response_class=HTMLResponse)
 def view_results(patient_id: str, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "print_results"):
+        return RedirectResponse(url="/print-results?error=Permission Denied", status_code=303)
     patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
     if not patient:
          return HTMLResponse(content="Patient not found", status_code=404)
@@ -241,6 +258,18 @@ def view_results(patient_id: str, request: Request, session: Session = Depends(g
 async def save_print_template(request: Request, session: Session = Depends(get_session)):
     try:
         data = await request.json()
+        template_name = data.get("template_name", "")
+        
+        # Check permissions based on template_name
+        req_page = "print_result_designer"
+        if template_name == "barcode_label":
+            req_page = "print_barcode_designer"
+        elif template_name == "receipt":
+            req_page = "print_receipt_designer"
+            
+        if not require_permission(request, session, req_page, "save"):
+            return JSONResponse({"success": False, "message": "Permission Denied"}, status_code=403)
+            
         current_user = get_current_user(request, session)
         existing = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == data['template_name'])).first()
         if existing:
@@ -425,6 +454,12 @@ def print_barcode(patient_id: str, request: Request, session: Session = Depends(
     patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
     if not patient:
         return HTMLResponse(content="Patient not found", status_code=404)
+        
+    current_user = get_current_user(request, session)
+    if current_user:
+        log_activity_action(session, "PRINT_BARCODE", f"Printed barcode for patient {patient.full_name}", current_user, "patient", patient.id)
+        session.commit()
+        
     lab_info = session.exec(select(LabInfo).limit(1)).first()
     barcode_data = generate_barcode_base64(patient_id)
     return templates.TemplateResponse("print_barcode.html", {
@@ -436,6 +471,12 @@ def print_receipt(patient_id: str, request: Request, session: Session = Depends(
     patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
     if not patient:
         return HTMLResponse(content="Patient not found", status_code=404)
+        
+    current_user = get_current_user(request, session)
+    if current_user:
+        log_activity_action(session, "PRINT_RECEIPT", f"Printed receipt for patient {patient.full_name}", current_user, "patient", patient.id)
+        session.commit()
+        
     visits = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id)).all()
     orders = session.exec(select(Order).where(Order.patient_id == patient.id)).all()
     lab_info = session.exec(select(LabInfo).limit(1)).first()

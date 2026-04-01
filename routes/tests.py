@@ -14,7 +14,7 @@ from models import (
     Device, Parameter, Formula, FormulaItem, TestRange, TestResultType,
     Package, PackageTest,
 )
-from routes.helpers import templates, get_current_user, create_audit_log, model_to_dict
+from routes.helpers import templates, get_current_user, create_audit_log, model_to_dict, require_permission
 
 router = APIRouter()
 
@@ -23,6 +23,8 @@ router = APIRouter()
 # ===========================
 @router.get("/tests", response_class=HTMLResponse)
 def tests_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "tests"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     # ✅ N+1 FIX: eager-load test_devices and test_parameters in one query
     tests = session.exec(
         select(TestDefinition)
@@ -59,6 +61,8 @@ def create_test(test_name: str = Form(...), test_short_name: str = Form(...),
                 is_available: str = Form(None), device_ids: Optional[str] = Form(""),
                 parameter_ids: Optional[str] = Form(""), request: Request = None,
                 session: Session = Depends(get_session)):
+    if not require_permission(request, session, "tests", "create"):
+        return RedirectResponse(url="/tests?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         is_available_bool = True if is_available == "on" else False
@@ -97,6 +101,8 @@ def update_test(test_id: int, test_name: str = Form(...), test_short_name: str =
                 is_available: str = Form(None), device_ids: Optional[str] = Form(""),
                 parameter_ids: Optional[str] = Form(""), request: Request = None,
                 session: Session = Depends(get_session)):
+    if not require_permission(request, session, "tests", "edit"):
+        return RedirectResponse(url="/tests?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         test = session.get(TestDefinition, test_id)
@@ -141,6 +147,8 @@ def update_test(test_id: int, test_name: str = Form(...), test_short_name: str =
 
 @router.post("/tests/delete/{test_id}")
 def delete_test(test_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "tests", "delete"):
+        return RedirectResponse(url="/tests?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         test = session.get(TestDefinition, test_id)
@@ -166,6 +174,8 @@ def delete_test(test_id: int, request: Request, session: Session = Depends(get_s
 # ===========================
 @router.get("/formulas", response_class=HTMLResponse)
 def formulas_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "formulas"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     formulas = session.exec(select(Formula).order_by(Formula.id.asc())).all()
     formulas_json = [model_to_dict(f) for f in formulas]
     tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
@@ -183,6 +193,8 @@ def create_formula(formula_name: str = Form(...), main_test_id: int = Form(...),
                    main_parameter_id: Optional[int] = Form(None), gender_type: str = Form(...),
                    formula_expression: str = Form(""), formula_description: Optional[str] = Form(None),
                    request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "formulas", "create"):
+        return RedirectResponse(url="/formulas?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         new_formula = Formula(
@@ -206,6 +218,8 @@ def update_formula(formula_id: int, formula_name: str = Form(...), main_test_id:
                    main_parameter_id: Optional[int] = Form(None), gender_type: str = Form(...),
                    formula_expression: str = Form(""), formula_description: Optional[str] = Form(None),
                    request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "formulas", "edit"):
+        return RedirectResponse(url="/formulas?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         formula = session.get(Formula, formula_id)
@@ -231,6 +245,8 @@ def update_formula(formula_id: int, formula_name: str = Form(...), main_test_id:
 
 @router.post("/formulas/delete/{formula_id}")
 def delete_formula(formula_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "formulas", "delete"):
+        return RedirectResponse(url="/formulas?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         formula = session.get(Formula, formula_id)
@@ -250,6 +266,8 @@ def delete_formula(formula_id: int, request: Request, session: Session = Depends
 # ===========================
 @router.get("/test-ranges", response_class=HTMLResponse)
 def test_ranges_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "test_ranges"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     ranges = session.exec(select(TestRange).order_by(TestRange.id.asc())).all()
     ranges_json = [model_to_dict(r) for r in ranges]
     tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
@@ -280,6 +298,8 @@ def create_test_range(test_id: int = Form(...), parameter_id: Optional[int] = Fo
                       panic_less_than: Optional[float] = Form(None), panic_more_than: Optional[float] = Form(None),
                       text_range: Optional[str] = Form(None), request: Request = None,
                       session: Session = Depends(get_session)):
+    if not require_permission(request, session, "test_ranges", "create"):
+        return RedirectResponse(url="/test-ranges?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         fasting_bool = fasting_required.lower() == "true"
@@ -320,6 +340,8 @@ def update_test_range(range_id: int, test_id: int = Form(...), parameter_id: Opt
                       panic_less_than: Optional[float] = Form(None), panic_more_than: Optional[float] = Form(None),
                       text_range: Optional[str] = Form(None), request: Request = None,
                       session: Session = Depends(get_session)):
+    if not require_permission(request, session, "test_ranges", "edit"):
+        return RedirectResponse(url="/test-ranges?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         range_item = session.get(TestRange, range_id)
@@ -367,6 +389,8 @@ def update_test_range(range_id: int, test_id: int = Form(...), parameter_id: Opt
 
 @router.post("/test-ranges/delete/{range_id}")
 def delete_test_range(range_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "test_ranges", "delete"):
+        return RedirectResponse(url="/test-ranges?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         range_item = session.get(TestRange, range_id)
@@ -386,6 +410,8 @@ def delete_test_range(range_id: int, request: Request, session: Session = Depend
 # ===========================
 @router.get("/test-result-types", response_class=HTMLResponse)
 def test_result_types_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "test_result_types"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     result_types = session.exec(select(TestResultType).order_by(TestResultType.id.asc())).all()
     result_types_json = [model_to_dict(rt) for rt in result_types]
     tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
@@ -402,6 +428,8 @@ def test_result_types_page(request: Request, session: Session = Depends(get_sess
 def create_test_result_type(test_id: int = Form(...), parameter_id: Optional[int] = Form(None),
                             result_type: str = Form(...), selection_options: Optional[str] = Form(None),
                             request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "test_result_types", "create"):
+        return RedirectResponse(url="/test-result-types?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         new_result_type = TestResultType(
@@ -423,6 +451,8 @@ def update_test_result_type(result_type_id: int, test_id: int = Form(...),
                             parameter_id: Optional[int] = Form(None), result_type: str = Form(...),
                             selection_options: Optional[str] = Form(None), request: Request = None,
                             session: Session = Depends(get_session)):
+    if not require_permission(request, session, "test_result_types", "edit"):
+        return RedirectResponse(url="/test-result-types?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         rt = session.get(TestResultType, result_type_id)
@@ -446,6 +476,8 @@ def update_test_result_type(result_type_id: int, test_id: int = Form(...),
 
 @router.post("/test-result-types/delete/{result_type_id}")
 def delete_test_result_type(result_type_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "test_result_types", "delete"):
+        return RedirectResponse(url="/test-result-types?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         rt = session.get(TestResultType, result_type_id)
@@ -465,6 +497,8 @@ def delete_test_result_type(result_type_id: int, request: Request, session: Sess
 # ===========================
 @router.get("/packages", response_class=HTMLResponse)
 def packages_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "packages"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     # ✅ N+1 FIX: eager-load package_tests in one query
     packages = session.exec(
         select(Package)
@@ -490,6 +524,8 @@ def create_package(package_name: str = Form(...), package_short_name: str = Form
                    price: float = Form(...), package_note: Optional[str] = Form(None),
                    test_ids: Optional[str] = Form(""), request: Request = None,
                    session: Session = Depends(get_session)):
+    if not require_permission(request, session, "packages", "create"):
+        return RedirectResponse(url="/packages?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         new_package = Package(
@@ -517,6 +553,8 @@ def update_package(package_id: int, package_name: str = Form(...), package_short
                    price: float = Form(...), package_note: Optional[str] = Form(None),
                    test_ids: Optional[str] = Form(""), request: Request = None,
                    session: Session = Depends(get_session)):
+    if not require_permission(request, session, "packages", "edit"):
+        return RedirectResponse(url="/packages?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         pkg = session.get(Package, package_id)
@@ -548,6 +586,8 @@ def update_package(package_id: int, package_name: str = Form(...), package_short
 
 @router.post("/packages/delete/{package_id}")
 def delete_package(package_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "packages", "delete"):
+        return RedirectResponse(url="/packages?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         pkg = session.get(Package, package_id)

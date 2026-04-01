@@ -14,8 +14,8 @@ from models import (
     TestDevice, TestRange, TestResultType, Result, ResultDetail,
     Parameter, Device, SampleType, Formula
 )
-# ✅ NEW: Imported log_audit_action
-from routes.helpers import templates, get_current_user, log_audit_action
+# ✅ NEW: Imported log_audit_action and require_permission
+from routes.helpers import templates, get_current_user, log_audit_action, log_activity_action, require_permission
 
 router = APIRouter()
 
@@ -25,6 +25,8 @@ router = APIRouter()
 # ===========================
 @router.get("/result-entry", response_class=HTMLResponse)
 def result_entry_patients_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "result_entry"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
     today_str = datetime.today().strftime("%Y-%m-%d")
     start_date = request.query_params.get("start_date", today_str)
     end_date = request.query_params.get("end_date", today_str)
@@ -156,6 +158,8 @@ def result_entry_patients_page(request: Request, session: Session = Depends(get_
 # ===========================
 @router.get("/result-entry/{patient_id}", response_class=HTMLResponse)
 def result_entry_page(patient_id: str, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "result_entry"):
+        return RedirectResponse(url="/result-entry?error=Permission Denied", status_code=303)
     current_user = get_current_user(request, session)
     patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
     if not patient:
@@ -187,7 +191,9 @@ def result_entry_page(patient_id: str, request: Request, session: Session = Depe
 # RESULT ENTRY DATA API (JSON)
 # ===========================
 @router.get("/api/result-entry-data/{patient_id}")
-def result_entry_data(patient_id: str, session: Session = Depends(get_session)):
+def result_entry_data(patient_id: str, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "result_entry"):
+        return JSONResponse({"error": "Permission Denied"}, status_code=403)
     try:
         patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
         if not patient:
@@ -488,6 +494,8 @@ def result_entry_data(patient_id: str, session: Session = Depends(get_session)):
 # ===========================
 @router.post("/api/result-entry/save")
 async def save_results(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "result_entry", "save"):
+        return JSONResponse({"error": "Permission Denied"}, status_code=403)
     try:
         current_user = get_current_user(request, session)
         body = await request.json()
@@ -636,6 +644,24 @@ async def save_results(request: Request, session: Session = Depends(get_session)
             # ---------------------------------------------------------
 
         session.commit()
+
+        # Activity Log: Result save
+        test_names = []
+        auth_count = 0
+        for row in rows:
+            oid = row.get("order_id")
+            if oid:
+                o = session.get(Order, oid)
+                if o and o.test:
+                    test_names.append(o.test.test_name)
+                if row.get("authorized"):
+                    auth_count += 1
+        desc = f"Saved results for {len(rows)} test(s)"
+        if auth_count:
+            desc += f" ({auth_count} authorized)"
+        log_activity_action(session, "SAVE_RESULTS", desc, current_user, "patient")
+        session.commit()
+
         return {"success": True, "message": "Results saved successfully!"}
 
     except Exception as e:
@@ -651,10 +677,13 @@ async def save_results(request: Request, session: Session = Depends(get_session)
 @router.get("/api/range-for-device")
 def get_range_for_device(
     test_id: int, device_id: int,
+    request: Request,
     parameter_id: int = None,
     gender: str = "both", age: int = 0,
     session: Session = Depends(get_session)
 ):
+    if not require_permission(request, session, "result_entry"):
+        return JSONResponse({"error": "Permission Denied"}, status_code=403)
     """Return the best matching range when user changes device."""
     query = select(TestRange).where(
         TestRange.test_id == test_id,
@@ -699,6 +728,8 @@ def get_range_for_device(
 # ===========================
 @router.post("/api/result-entry/no-sample/{order_id}")
 async def mark_no_sample(order_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "result_entry", "no_sample"):
+        return JSONResponse({"success": False, "message": "Permission Denied"}, status_code=403)
     current_user = get_current_user(request, session)
     if not current_user:
         return JSONResponse({"success": False, "message": "Unauthorized"}, status_code=401)
@@ -740,6 +771,8 @@ async def mark_no_sample(order_id: int, request: Request, session: Session = Dep
 
 @router.post("/api/no-sample/receive/{order_id}")
 def receive_no_sample(order_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "no_sample", "receive_sample"):
+        return JSONResponse({"success": False, "message": "Permission Denied"}, status_code=403)
     current_user = get_current_user(request, session)
     if not current_user:
         return JSONResponse({"success": False, "message": "Unauthorized"}, status_code=401)
@@ -792,6 +825,8 @@ def receive_no_sample(order_id: int, request: Request, session: Session = Depend
 
 @router.get("/no-sample", response_class=HTMLResponse)
 def no_sample_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "no_sample"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
     query = select(Order).options(selectinload(Order.patient), selectinload(Order.test), selectinload(Order.visit)).where(Order.status == "no_sample").order_by(Order.order_date.desc())
     no_sample_orders = session.exec(query).all()
     

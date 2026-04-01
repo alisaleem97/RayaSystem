@@ -10,7 +10,7 @@ import os
 import uuid
 from database import get_session
 from models import Partner, Province, Region, LabInfo
-from routes.helpers import templates, get_current_user, create_audit_log, model_to_dict, save_uploaded_file
+from routes.helpers import templates, get_current_user, create_audit_log, model_to_dict, save_uploaded_file, require_permission
 
 router = APIRouter()
 
@@ -19,6 +19,8 @@ router = APIRouter()
 # ===========================
 @router.get("/partners", response_class=HTMLResponse)
 def partners_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "partners"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     partners = session.exec(select(Partner).order_by(Partner.id.asc())).all()
     partners_json = [model_to_dict(p) for p in partners]
     success = request.query_params.get("success")
@@ -32,6 +34,8 @@ def partners_page(request: Request, session: Session = Depends(get_session)):
 def create_partner(partner_name: str = Form(...), partner_note: Optional[str] = Form(None),
                    partner_contact: Optional[str] = Form(None), partner_weight: Optional[float] = Form(None),
                    request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "partners", "create"):
+        return RedirectResponse(url="/partners?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         new_partner = Partner(
@@ -52,6 +56,8 @@ def create_partner(partner_name: str = Form(...), partner_note: Optional[str] = 
 def update_partner(partner_id: int, partner_name: str = Form(...), partner_note: Optional[str] = Form(None),
                    partner_contact: Optional[str] = Form(None), partner_weight: Optional[float] = Form(None),
                    request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "partners", "edit"):
+        return RedirectResponse(url="/partners?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         partner = session.get(Partner, partner_id)
@@ -75,6 +81,8 @@ def update_partner(partner_id: int, partner_name: str = Form(...), partner_note:
 
 @router.post("/partners/delete/{partner_id}")
 def delete_partner(partner_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "partners", "delete"):
+        return RedirectResponse(url="/partners?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         partner = session.get(Partner, partner_id)
@@ -94,6 +102,8 @@ def delete_partner(partner_id: int, request: Request, session: Session = Depends
 # ===========================
 @router.get("/provinces", response_class=HTMLResponse)
 def provinces_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "provinces"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     provinces = session.exec(select(Province).order_by(Province.id.asc())).all()
     provinces_json = [model_to_dict(p) for p in provinces]
     success = request.query_params.get("success")
@@ -106,6 +116,8 @@ def provinces_page(request: Request, session: Session = Depends(get_session)):
 @router.post("/provinces/create")
 def create_province(province_name: str = Form(...), request: Request = None,
                     session: Session = Depends(get_session)):
+    if not require_permission(request, session, "provinces", "create"):
+        return RedirectResponse(url="/provinces?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         new_province = Province(province_name=province_name, is_active=True,
@@ -122,6 +134,8 @@ def create_province(province_name: str = Form(...), request: Request = None,
 @router.post("/provinces/update/{province_id}")
 def update_province(province_id: int, province_name: str = Form(...), request: Request = None,
                     session: Session = Depends(get_session)):
+    if not require_permission(request, session, "provinces", "edit"):
+        return RedirectResponse(url="/provinces?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         province = session.get(Province, province_id)
@@ -142,6 +156,8 @@ def update_province(province_id: int, province_name: str = Form(...), request: R
 
 @router.post("/provinces/delete/{province_id}")
 def delete_province(province_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "provinces", "delete"):
+        return RedirectResponse(url="/provinces?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         province = session.get(Province, province_id)
@@ -161,6 +177,8 @@ def delete_province(province_id: int, request: Request, session: Session = Depen
 # ===========================
 @router.get("/regions", response_class=HTMLResponse)
 def regions_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "regions"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     regions = session.exec(select(Region).order_by(Region.id.asc())).all()
     regions_json = [model_to_dict(r) for r in regions]
     provinces = session.exec(select(Province).where(Province.is_active == True)).all()
@@ -174,6 +192,8 @@ def regions_page(request: Request, session: Session = Depends(get_session)):
 @router.post("/regions/create")
 def create_region(region_name: str = Form(...), province_id: int = Form(...),
                   request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "regions", "create"):
+        return RedirectResponse(url="/regions?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         new_region = Region(region_name=region_name, province_id=province_id, is_active=True,
@@ -190,6 +210,8 @@ def create_region(region_name: str = Form(...), province_id: int = Form(...),
 @router.post("/regions/update/{region_id}")
 def update_region(region_id: int, region_name: str = Form(...), province_id: int = Form(...),
                   request: Request = None, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "regions", "edit"):
+        return RedirectResponse(url="/regions?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         region = session.get(Region, region_id)
@@ -211,6 +233,8 @@ def update_region(region_id: int, region_name: str = Form(...), province_id: int
 
 @router.post("/regions/delete/{region_id}")
 def delete_region(region_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "regions", "delete"):
+        return RedirectResponse(url="/regions?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         region = session.get(Region, region_id)
@@ -230,6 +254,8 @@ def delete_region(region_id: int, request: Request, session: Session = Depends(g
 # ===========================
 @router.get("/lab-info", response_class=HTMLResponse)
 def lab_info_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "lab_info"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     lab_info = session.exec(select(LabInfo).limit(1)).first()
     success = request.query_params.get("success")
     error = request.query_params.get("error")
@@ -240,6 +266,8 @@ def lab_info_page(request: Request, session: Session = Depends(get_session)):
 
 @router.get("/lab-info/edit", response_class=HTMLResponse)
 def lab_info_edit_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "lab_info", "edit"):
+        return RedirectResponse(url="/lab-info?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     lab_info = session.exec(select(LabInfo).limit(1)).first()
     return templates.TemplateResponse("lab_info.html", {
         "request": request, "lab_info": lab_info, "edit_mode": True
@@ -252,13 +280,16 @@ async def update_lab_info(request: Request, lab_name: str = Form(...), lab_title
                           lab_phone_2: Optional[str] = Form(None), whatsapp_api: Optional[str] = Form(None),
                           whatsapp_token: Optional[str] = Form(None), telegram_api: Optional[str] = Form(None),
                           telegram_token: Optional[str] = Form(None), lab_email: Optional[str] = Form(None),
-                          lab_website: Optional[str] = Form(None), lab_note_1: Optional[str] = Form(None),
+                          lab_website: Optional[str] = Form(None), tax_percentage: Optional[float] = Form(0.0),
+                          lab_note_1: Optional[str] = Form(None),
                           lab_note_2: Optional[str] = Form(None), lab_logo: Optional[UploadFile] = File(None),
                           lab_qr_1: Optional[UploadFile] = File(None), lab_qr_2: Optional[UploadFile] = File(None),
                           lab_stamp_1: Optional[UploadFile] = File(None), lab_stamp_2: Optional[UploadFile] = File(None),
                           lab_signature_1: Optional[UploadFile] = File(None), lab_signature_2: Optional[UploadFile] = File(None),
                           lab_image_1: Optional[UploadFile] = File(None), lab_image_2: Optional[UploadFile] = File(None),
                           session: Session = Depends(get_session)):
+    if not require_permission(request, session, "lab_info", "edit"):
+        return RedirectResponse(url="/lab-info?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         lab_info = session.exec(select(LabInfo).limit(1)).first()
@@ -278,6 +309,7 @@ async def update_lab_info(request: Request, lab_name: str = Form(...), lab_title
         lab_info.telegram_token = telegram_token
         lab_info.lab_email = lab_email
         lab_info.lab_website = lab_website
+        lab_info.tax_percentage = tax_percentage if tax_percentage is not None else 0.0
         lab_info.lab_note_1 = lab_note_1
         lab_info.lab_note_2 = lab_note_2
         lab_info.edited_by = current_user.id if current_user else None

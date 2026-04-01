@@ -1,0 +1,133 @@
+<!-- templates/tests_number.html -->
+{% extends "base.html" %}
+
+{% block title %}Test Number Report - NexLab{% endblock %}
+{% block page_title %}Test Number Report{% endblock %}
+
+{% block content %}
+<!-- Flatpickr for Date Selection -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<!-- Filter Form -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6 overflow-hidden">
+    <div class="p-6">
+        <form action="/reports/tests-number" method="GET" class="flex flex-wrap items-end gap-4">
+
+            <!-- Dates and Times -->
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">From Date</label>
+                <input type="text" name="start_date" required value="{{ start_date }}"
+                    class="datepicker w-36 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">From Time</label>
+                <input type="text" name="start_time" required value="{{ start_time }}"
+                    class="timepicker w-24 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+            </div>
+
+            <div class="ml-4">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">To Date</label>
+                <input type="text" name="end_date" required value="{{ end_date }}"
+                    class="datepicker w-36 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">To Time</label>
+                <input type="text" name="end_time" required value="{{ end_time }}"
+                    class="timepicker w-24 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+            </div>
+
+            <!-- Additional Filters -->
+            <div class="ml-4">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Test Name</label>
+                <select name="test_id" class="w-48 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm bg-white cursor-pointer select2">
+                    <option value="all">All Tests</option>
+                    {% for t in tests %}
+                    <option value="{{ t.id }}" {% if test_filter == t.id|string %}selected{% endif %}>{{ t.test_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Device</label>
+                <select name="device_id" class="w-48 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm bg-white cursor-pointer select2">
+                    <option value="all">All Devices</option>
+                    {% for d in devices %}
+                    <option value="{{ d.id }}" {% if device_filter == d.id|string %}selected{% endif %}>{{ d.device_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <button type="submit"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg text-sm font-semibold transition shadow-sm ml-auto">
+                Generate Report
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        flatpickr(".datepicker", {
+            dateFormat: "Y-m-d",
+            altInput: true,
+            altFormat: "d-m-Y",
+            allowInput: true
+        });
+
+        flatpickr(".timepicker", {
+            enableTime: true,
+            noCalendar: true,
+            dateFormat: "H:i",
+            time_24hr: true,
+            allowInput: true
+        });
+    });
+</script>
+
+<!-- Table Results -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr
+                    class="bg-emerald-50 border-b border-emerald-100 text-xs font-bold text-emerald-600 uppercase tracking-wider">
+                    <th class="px-6 py-4">Date</th>
+                    <th class="px-6 py-4">Test Name</th>
+                    <th class="px-6 py-4 text-center">Total</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+                {% if rows %}
+                {% for row in rows %}
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="px-6 py-4 font-medium text-slate-800">{{ row.date }}</td>
+                    <td class="px-6 py-4 font-medium text-slate-800">{{ row.test_name }}</td>
+                    <td class="px-6 py-4 text-center">
+                        <span
+                            class="inline-flex items-center justify-center min-w-[3rem] px-3 py-1 rounded-full text-sm font-bold bg-emerald-100 text-emerald-800">
+                            {{ row.test_count }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr>
+                    <td colspan="3" class="px-6 py-8 text-center text-slate-400 italic">No fully double authorized tests
+                        found for the selected dates.</td>
+                </tr>
+                {% endif %}
+            </tbody>
+            {% if rows %}
+            <tfoot class="bg-slate-50 border-t-2 border-slate-200 font-bold">
+                <tr>
+                    <td colspan="2" class="px-6 py-4 text-slate-700 uppercase tracking-wider text-sm text-right">Total
+                        Summary</td>
+                    <td class="px-6 py-4 text-center text-xl text-emerald-700">{{ total_tests }}</td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+{% endblock %}

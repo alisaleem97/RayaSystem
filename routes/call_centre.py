@@ -12,21 +12,21 @@ from datetime import datetime
 
 from database import get_session
 from models import Patient, PatientVisit, Order, Result, TestRange, LabInfo, PrintTemplate
-# ✅ NEW: Imported log_audit_action
-from routes.helpers import get_current_user, log_audit_action
+# ✅ Shared templates (with AutoUserTemplates) + helpers
+from routes.helpers import templates, get_current_user, log_audit_action, log_activity_action, require_permission
+from fastapi.responses import RedirectResponse, JSONResponse
 from routes.whatsapp_utils import generate_report_pdf, send_ultramsg_pdf
 
 # --- Google Gemini AI Setup ---
+import os
 import google.generativeai as genai
-genai.configure(api_key="AIzaSyBjeyiRZzUqyVHLa7CsWrg861E5pyP0t4U")
+_gemini_key = os.environ.get("GEMINI_API_KEY", "AIzaSyBjeyiRZzUqyVHLa7CsWrg861E5pyP0t4U")
+genai.configure(api_key=_gemini_key)
 
 class AIRequest(BaseModel):
     prompt: str
 
 router = APIRouter(tags=["Call Centre"])
-
-from fastapi.templating import Jinja2Templates
-templates = Jinja2Templates(directory="templates")
 
 @router.get("/call-centre", response_class=HTMLResponse)
 def call_centre_list(
@@ -39,6 +39,8 @@ def call_centre_list(
     status_filter: Optional[str] = "All", # Added toggle filter
     session: Session = Depends(get_session)
 ):
+    if not require_permission(request, session, "call_centre"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
     # 1. Default dates to TODAY if not provided
     today_str = datetime.now().strftime('%Y-%m-%d')
     if not start_date:
@@ -141,6 +143,8 @@ def call_centre_list(
 
 @router.get("/view-call-centre/{visit_id}", response_class=HTMLResponse)
 def view_call_centre_patient(visit_id: str, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "call_centre"):
+        return RedirectResponse(url="/call-centre?error=Permission Denied", status_code=303)
     visit = session.exec(
         select(PatientVisit)
         .options(
@@ -172,6 +176,8 @@ def view_call_centre_patient(visit_id: str, request: Request, session: Session =
 # ✅ NEW: Added request dependency to track WHO marked the patient as called
 @router.post("/api/mark-called/{visit_id}")
 def mark_called(visit_id: str, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "call_centre", "mark_called"):
+        return JSONResponse({"success": False, "message": "Permission Denied"}, status_code=403)
     current_user = get_current_user(request, session)
     visit = session.exec(select(PatientVisit).where(PatientVisit.visit_id == visit_id)).first()
     if not visit:
@@ -199,6 +205,8 @@ def mark_called(visit_id: str, request: Request, session: Session = Depends(get_
 # ✅ NEW: Added request dependency to track WHO sent the WhatsApp message
 @router.post("/api/send-whatsapp/{visit_id}")
 def send_whatsapp_results(visit_id: str, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "call_centre", "send_whatsapp"):
+        return JSONResponse({"success": False, "message": "Permission Denied"}, status_code=403)
     current_user = get_current_user(request, session)
     visit = session.exec(select(PatientVisit).where(PatientVisit.visit_id == visit_id)).first()
     if not visit:
@@ -250,7 +258,7 @@ def send_whatsapp_results(visit_id: str, request: Request, session: Session = De
                 template_data = elements
             else:
                 template_data["elements"] = elements
-        except:
+        except Exception:
             pass
 
     from routes.helpers import generate_barcode_base64
@@ -301,6 +309,11 @@ def send_whatsapp_results(visit_id: str, request: Request, session: Session = De
             # ---------------------------------------------------------
 
             session.commit()
+
+            # Activity Log: WhatsApp sent
+            log_activity_action(session, "SEND_WHATSAPP", f"Sent results via WhatsApp to {to_phone} for patient {patient.full_name}", current_user, "patient", patient.id)
+            session.commit()
+
             return {"success": True, "message": "Result sent successfully"}
         else:
             return {"success": False, "error": report.get('message', 'WhatsApp API Error')}

@@ -8,13 +8,15 @@ from datetime import datetime
 from database import get_session
 from models import Patient, PatientVisit, Order, TestDefinition, Result, ResultDetail
 # ✅ NEW: Added log_audit_action to imports
-from routes.helpers import templates, get_current_user, log_audit_action
+from routes.helpers import templates, get_current_user, log_audit_action, log_activity_action, require_permission
 
 router = APIRouter()
 
 # 1. Double Auth Patients List
 @router.get("/double-auth", response_class=HTMLResponse)
 def double_auth_patients_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "double_auth"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
     today_str = datetime.today().strftime("%Y-%m-%d")
     start_date = request.query_params.get("start_date", today_str)
     end_date = request.query_params.get("end_date", today_str)
@@ -136,6 +138,8 @@ def double_auth_patients_page(request: Request, session: Session = Depends(get_s
 # 2. Double Auth Page
 @router.get("/double-auth/{patient_id}", response_class=HTMLResponse)
 def double_auth_page(patient_id: str, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "double_auth"):
+        return RedirectResponse(url="/double-auth?error=Permission Denied", status_code=303)
     current_user = get_current_user(request, session)
     patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
     if not patient:
@@ -165,6 +169,8 @@ def double_auth_page(patient_id: str, request: Request, session: Session = Depen
 # 3. Actions API
 @router.post("/api/double-auth/authorize/{order_id}")
 def double_authorize_order(order_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "double_auth", "double_authorize"):
+        return JSONResponse({"success": False, "message": "Permission Denied"}, status_code=403)
     current_user = get_current_user(request, session)
     if not current_user:
         return JSONResponse({"success": False, "message": "Unauthorized"}, status_code=401)
@@ -205,6 +211,14 @@ def double_authorize_order(order_id: int, request: Request, session: Session = D
         # ---------------------------------------------------------
 
         session.commit()
+
+        # Activity Log
+        test_name = order.test.test_name if order.test else "Unknown"
+        patient = session.get(Patient, order.patient_id) if order.patient_id else None
+        patient_name = patient.full_name if patient else "Unknown"
+        log_activity_action(session, "DOUBLE_AUTH", f"Double authorized test '{test_name}' for patient {patient_name}", current_user, "patient", order.patient_id)
+        session.commit()
+
         return {"success": True, "message": "Test double authorized"}
     except Exception as e:
         session.rollback()
@@ -212,6 +226,8 @@ def double_authorize_order(order_id: int, request: Request, session: Session = D
 
 @router.post("/api/double-auth/rerun/{order_id}")
 def rerun_order(order_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "double_auth", "rerun"):
+        return JSONResponse({"success": False, "message": "Permission Denied"}, status_code=403)
     current_user = get_current_user(request, session)
     if not current_user:
         return JSONResponse({"success": False, "message": "Unauthorized"}, status_code=401)
@@ -273,6 +289,8 @@ def rerun_order(order_id: int, request: Request, session: Session = Depends(get_
 
 @router.post("/api/double-auth/unauth/{order_id}")
 async def unauth_order(order_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "double_auth", "unauthorize"):
+        return JSONResponse({"success": False, "message": "Permission Denied"}, status_code=403)
     current_user = get_current_user(request, session)
     if not current_user:
         return JSONResponse({"success": False, "message": "Unauthorized"}, status_code=401)

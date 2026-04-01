@@ -115,6 +115,7 @@ body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
 <div class="category-title"><i class="fas fa-calculator mr-2"></i>Accounting</div>
 <div class="element-item" draggable="true" data-type="total_amount"><span><i class="fas fa-dollar-sign mr-2"></i>Total Amount</span><i class="fas fa-plus"></i></div>
 <div class="element-item" draggable="true" data-type="discount"><span><i class="fas fa-percent mr-2"></i>Discount</span><i class="fas fa-plus"></i></div>
+<div class="element-item" draggable="true" data-type="total_after_tax"><span><i class="fas fa-file-invoice-dollar mr-2"></i>Total After Tax</span><i class="fas fa-plus"></i></div>
 <div class="element-item" draggable="true" data-type="paid_amount"><span><i class="fas fa-money-bill mr-2"></i>Paid Amount</span><i class="fas fa-plus"></i></div>
 <div class="element-item" draggable="true" data-type="remain_amount"><span><i class="fas fa-coins mr-2"></i>Remain Amount</span><i class="fas fa-plus"></i></div>
 </div>
@@ -209,7 +210,7 @@ async function loadLabInfoForPreview() {
     }
 }
 
-let currentPatient = { patient_id: '1100001', full_name: 'محمد عبد الكريم', gender: 'male', age: 30, age_unit: 'year', phone_key: '+964', phone_number: '7806140857', sample_type: 'Serum', visit_id: '1100001000', visit_date: new Date().toLocaleDateString('en-GB'), tests: [{ name: 'Vitamin D3', price: 25.00 }, { name: 'Complete Blood Count (CBC)', price: 15.00 }, { name: 'Liver Function Tests', price: 30.00 }], total_amount: 70.00, discount_amount: 5.00, paid_amount: 65.00, remain_amount: 0.00 };
+let currentPatient = { patient_id: '1100001', full_name: 'محمد عبد الكريم', gender: 'male', age: 30, age_unit: 'year', phone_key: '+964', phone_number: '7806140857', sample_type: 'Serum', visit_id: '1100001000', visit_date: new Date().toLocaleDateString('en-GB'), tests: [{ name: 'Vitamin D3', price: 25.00 }, { name: 'Complete Blood Count (CBC)', price: 15.00 }, { name: 'Liver Function Tests', price: 30.00 }], total_amount: 70.00, discount_amount: 5.00, total_after_tax: 65.00, paid_amount: 65.00, remain_amount: 0.00 };
 
 document.querySelectorAll('.element-item').forEach(item => { item.addEventListener('dragstart', handleDragStart); item.addEventListener('click', () => addElement(item.dataset.type)); });
 const paperPreview = document.getElementById('paperPreview');
@@ -223,7 +224,7 @@ function handleDrop(e) { e.preventDefault(); const type = e.dataTransfer.getData
 function handlePaperClick(e) { if (e.target === paperPreview || e.target.id === 'placeholderText') { deselectAll(); } }
 
 function addElement(type) {
-    const labels = { 'lab_name': 'Lab Name', 'lab_title': 'Lab Title', 'lab_address': 'Lab Address', 'lab_phone_1': 'Phone 1', 'lab_phone_2': 'Phone 2', 'lab_email': 'Email', 'lab_website': 'Website', 'first_doctor_name': 'First Doctor', 'second_doctor_name': 'Second Doctor', 'lab_note_1': 'Lab Note 1', 'lab_note_2': 'Lab Note 2', 'lab_logo': 'Lab Logo', 'lab_qr_1': 'QR Code 1', 'lab_qr_2': 'QR Code 2', 'lab_stamp_1': 'Stamp 1', 'lab_stamp_2': 'Stamp 2', 'lab_signature_1': 'Signature 1', 'lab_signature_2': 'Signature 2', 'patient_name': 'Patient Name', 'patient_id': 'Patient ID', 'visit_id': 'Visit ID', 'visit_date': 'Visit Date', 'patient_age': 'Age', 'patient_gender': 'Gender', 'patient_phone': 'Phone', 'sample_type': 'Sample Type', 'test_list_with_price': 'Tests List', 'test_name': 'Test Name', 'barcode_image': 'Barcode', 'total_amount': 'Total', 'discount': 'Discount', 'paid_amount': 'Paid', 'remain_amount': 'Remain', 'shape_line': 'Line', 'shape_box': 'Box', 'shape_circle': 'Circle', 'custom_text': 'Custom Text', 'thank_you_message': 'Thank You', 'footer_notes': 'Notes' };
+    const labels = { 'lab_name': 'Lab Name', 'lab_title': 'Lab Title', 'lab_address': 'Lab Address', 'lab_phone_1': 'Phone 1', 'lab_phone_2': 'Phone 2', 'lab_email': 'Email', 'lab_website': 'Website', 'first_doctor_name': 'First Doctor', 'second_doctor_name': 'Second Doctor', 'lab_note_1': 'Lab Note 1', 'lab_note_2': 'Lab Note 2', 'lab_logo': 'Lab Logo', 'lab_qr_1': 'QR Code 1', 'lab_qr_2': 'QR Code 2', 'lab_stamp_1': 'Stamp 1', 'lab_stamp_2': 'Stamp 2', 'lab_signature_1': 'Signature 1', 'lab_signature_2': 'Signature 2', 'patient_name': 'Patient Name', 'patient_id': 'Patient ID', 'visit_id': 'Visit ID', 'visit_date': 'Visit Date', 'patient_age': 'Age', 'patient_gender': 'Gender', 'patient_phone': 'Phone', 'sample_type': 'Sample Type', 'test_list_with_price': 'Tests List', 'test_name': 'Test Name', 'barcode_image': 'Barcode', 'total_amount': 'Total', 'discount': 'Discount', 'total_after_tax': 'Total After Tax', 'paid_amount': 'Paid', 'remain_amount': 'Remain', 'shape_line': 'Line', 'shape_box': 'Box', 'shape_circle': 'Circle', 'custom_text': 'Custom Text', 'thank_you_message': 'Thank You', 'footer_notes': 'Notes' };
     const rect = paperPreview.getBoundingClientRect();
     const x = rect.width / 2 - 75;
     const y = 20 + (designElements.length * 35);
@@ -278,6 +279,7 @@ function renderElement(element) {
     else if (element.type === 'barcode_image') { el.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="https://bwipjs-api.metafloor.com/?bcid=code128&text=${currentPatient.patient_id}&scale=2&height=8&includetext" style="max-width: 100%; height: auto;"></div>`; }
     else if (element.type === 'total_amount') { el.innerHTML = `<div class="total-row" style="padding: 5px; display: flex; justify-content: space-between;"><span>Total:</span><span>${currency}${currentPatient.total_amount.toFixed(2)}</span></div>`; }
     else if (element.type === 'discount') { el.innerHTML = `<div style="padding: 5px; display: flex; justify-content: space-between;"><span>Discount:</span><span>-${currency}${currentPatient.discount_amount.toFixed(2)}</span></div>`; }
+    else if (element.type === 'total_after_tax') { el.innerHTML = `<div style="padding: 5px; display: flex; justify-content: space-between; font-weight: bold;"><span>Total After Tax:</span><span>${currency}${currentPatient.total_after_tax.toFixed(2)}</span></div>`; }
     else if (element.type === 'paid_amount') { el.innerHTML = `<div style="padding: 5px; display: flex; justify-content: space-between;"><span>Paid:</span><span>${currency}${currentPatient.paid_amount.toFixed(2)}</span></div>`; }
     else if (element.type === 'remain_amount') { el.innerHTML = `<div class="total-row" style="padding: 5px; display: flex; justify-content: space-between;"><span>Remain:</span><span>${currency}${currentPatient.remain_amount.toFixed(2)}</span></div>`; }
     else if (element.type === 'shape_line') { el.className = 'design-element receipt-element shape-line'; el.style.height = element.shapeWidth + 'px'; el.style.background = element.shapeColor; el.innerHTML = ''; }
@@ -315,7 +317,7 @@ function deleteElement(id) { designElements = designElements.filter(el => el.id 
 
 function updatePaperSize() { const width = document.getElementById('paperWidth').value; const height = document.getElementById('paperHeight').value; paperPreview.style.width = width; paperPreview.style.minHeight = height === 'auto' ? '200mm' : height; }
 
-function updateCurrency() { currency = document.getElementById('currency').value || '$'; saveDesignLocal(); designElements.forEach(el => { if (['total_amount', 'discount', 'paid_amount', 'remain_amount'].includes(el.type)) { renderElement(el); } }); }
+function updateCurrency() { currency = document.getElementById('currency').value || '$'; saveDesignLocal(); designElements.forEach(el => { if (['total_amount', 'discount', 'total_after_tax', 'paid_amount', 'remain_amount'].includes(el.type)) { renderElement(el); } }); }
 
 async function saveDesign() { const design = { template_name: 'receipt', template_type: 'receipt', paper_width: document.getElementById('paperWidth').value, paper_height: document.getElementById('paperHeight').value, margin: document.getElementById('margin').value, currency: document.getElementById('currency').value || '$', elements: JSON.stringify(designElements) }; try { const response = await fetch('/api/print-template/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(design) }); const result = await response.json(); if (result.success) { alert('✅ Receipt design saved successfully!'); } else { alert('❌ Error saving design: ' + result.error); } } catch (error) { alert('❌ Error saving design: ' + error.message); } }
 

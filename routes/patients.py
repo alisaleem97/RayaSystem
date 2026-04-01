@@ -2,7 +2,7 @@
 # Patient registration, management, editing, soft-delete/restore, and deleted patients view.
 
 from fastapi import APIRouter, Depends, Request, Form, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload
 from datetime import datetime
@@ -11,9 +11,9 @@ import json
 from database import get_session
 from models import (
     Patient, PatientVisit, Order, TestDefinition, Package, PackageTest,
-    Province, Region, Partner, SampleType, LabInfo,
+    Province, Region, Partner, SampleType, LabInfo, Payment, Attachment, User, DeletedRecord, Result, ResultDetail
 )
-from routes.helpers import templates, get_current_user, create_audit_log, model_to_dict, generate_barcode_base64
+from routes.helpers import templates, get_current_user, create_audit_log, model_to_dict, generate_barcode_base64, require_permission, archive_deleted_record, log_activity_action
 
 router = APIRouter()
 
@@ -22,6 +22,8 @@ router = APIRouter()
 # ===========================
 @router.get("/patient-registration", response_class=HTMLResponse)
 def patient_registration_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "patient_registration"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     provinces = session.exec(select(Province).where(Province.is_active == True)).all()
     partners = session.exec(select(Partner).where(Partner.is_active == True)).all()
     tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
@@ -69,13 +71,24 @@ async def create_patient_registration(
     discount_amount: Optional[float] = Form(None),
     discount_note: Optional[str] = Form(None),
     received_amount: Optional[float] = Form(None),
+    apply_tax_toggle: Optional[str] = Form(None),
     session: Session = Depends(get_session)
 ):
+    if not require_permission(request, session, "patient_registration", "save_registration"):
+        return RedirectResponse(url="/patient-registration?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         items = json.loads(selected_items)
         
         total_price = sum(float(item.get('price', 0)) for item in items)
+        
+        # --- Check Discount Permissions ---
+        has_discount_perm = require_permission(request, session, "patient_registration", "discount")
+                        
+        if not has_discount_perm:
+            discount_percentage = None
+            discount_amount = None
+        # ----------------------------------
         
         final_total = total_price
         discount_amt = float(discount_amount) if discount_amount else 0.0
@@ -84,6 +97,17 @@ async def create_patient_registration(
             discount_amt = total_price - final_total
         elif discount_amount:
             final_total = total_price - float(discount_amount)
+        
+        # --- NEW TAX LOGIC ---
+        is_tax_applied = apply_tax_toggle == "on"
+        tax_amount = 0.0
+        if is_tax_applied:
+            from models import LabInfo
+            lab_info = session.exec(select(LabInfo)).first()
+            tax_percentage = lab_info.tax_percentage if lab_info else 0.0
+            tax_amount = (tax_percentage / 100) * final_total
+            final_total += tax_amount
+        # ---------------------
         
         received = float(received_amount) if received_amount else 0.0
         remaining = max(0, final_total - received)
@@ -130,11 +154,25 @@ async def create_patient_registration(
             discount_amount=round(discount_amt, 2),
             discount_percentage=disc_pct,
             discount_note=discount_note,
+            tax_applied=is_tax_applied,
+            tax_amount=round(tax_amount, 2),
             remaining_amount=remaining
         )
         session.add(new_visit)
         session.commit()
         session.refresh(new_visit)
+        
+        # [NEW] Add initial payment record if amount > 0
+        if received > 0:
+            payment = Payment(
+                visit_id=new_visit.id,
+                patient_id=new_patient.id,
+                amount=received,
+                payment_method="cash",
+                recorded_by=current_user.id if current_user else 0
+            )
+            session.add(payment)
+            session.commit()
         
         discount_ratio = discount_amt / total_price if total_price > 0 else 0
         
@@ -200,6 +238,10 @@ async def create_patient_registration(
         session.commit()
         # ---------------------------------------------------------
         
+        # Activity Log: Patient Registration
+        log_activity_action(session, "REGISTER_PATIENT", f"Registered patient {new_patient.full_name} (ID: {new_patient.patient_id})", current_user, "patient", new_patient.id)
+        session.commit()
+        
         return RedirectResponse(
             url=f"/patient-registration?success=Patient registered successfully!&patient_id={new_patient.patient_id}",
             status_code=status.HTTP_303_SEE_OTHER
@@ -219,6 +261,8 @@ async def create_patient_registration(
 # ===========================
 @router.get("/patients", response_class=HTMLResponse)
 def patients_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "patients"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     search = request.query_params.get("search", "")
     province_filter = request.query_params.get("province", "")
     gender_filter = request.query_params.get("gender", "")
@@ -257,6 +301,8 @@ def patients_page(request: Request, session: Session = Depends(get_session)):
 
 @router.get("/patients/edit/{patient_id}", response_class=HTMLResponse)
 def patient_edit_page(request: Request, patient_id: str, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "patient_edit"):
+        return RedirectResponse(url="/patients?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
         
@@ -296,6 +342,22 @@ def patient_edit_page(request: Request, patient_id: str, session: Session = Depe
         
         orders_json_str = json.dumps(orders_json if orders_json else [])
         
+        # [NEW] Fetch payments for the latest visit
+        payments = []
+        if latest_visit:
+            payments = session.exec(
+                select(Payment)
+                .where(Payment.visit_id == latest_visit.id)
+                .order_by(Payment.payment_date.desc())
+            ).all()
+        
+        # Fetch attachments for the patient
+        attachments = session.exec(
+            select(Attachment)
+            .where(Attachment.patient_id == patient.id)
+            .order_by(Attachment.uploaded_at.desc())
+        ).all()
+        
         success = request.query_params.get("success")
         error = request.query_params.get("error")
         
@@ -309,6 +371,8 @@ def patient_edit_page(request: Request, patient_id: str, session: Session = Depe
             "packages": packages,
             "visits": visits,
             "latest_visit": latest_visit,
+            "payments": payments,
+            "attachments": attachments,
             "orders_json": orders_json_str,
             "message_success": success,
             "message_error": error
@@ -320,10 +384,76 @@ def patient_edit_page(request: Request, patient_id: str, session: Session = Depe
         return HTMLResponse(content=f"<h1>Error Loading Page</h1><p>{str(e)}</p>", status_code=500)
 
 # ===========================
+# IMMEDIATE TEST REMOVAL API (AJAX)
+# ===========================
+@router.post("/api/patients/{patient_id}/remove-test")
+def api_remove_test(patient_id: str, request: Request, session: Session = Depends(get_session)):
+    """Immediately delete a specific test order from the patient's latest visit."""
+    if not require_permission(request, session, "patient_edit", "save"):
+        return JSONResponse({"success": False, "error": "Permission Denied"}, status_code=403)
+    try:
+        current_user = get_current_user(request, session)
+        patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
+        if not patient:
+            return JSONResponse({"success": False, "error": "Patient not found"}, status_code=404)
+        
+        # Get latest visit
+        latest_visit = session.exec(
+            select(PatientVisit)
+            .where(PatientVisit.patient_id == patient.id)
+            .order_by(PatientVisit.visit_date.desc())
+        ).first()
+        if not latest_visit:
+            return JSONResponse({"success": False, "error": "No visit found"}, status_code=404)
+        
+        # Parse query params since this is called from JS
+        test_id = int(request.query_params.get("test_id", 0))
+        reason = request.query_params.get("reason", "Removed from patient edit")
+        
+        if not test_id:
+            return JSONResponse({"success": False, "error": "test_id is required"}, status_code=400)
+        
+        # Find matching order(s)
+        orders_to_delete = session.exec(
+            select(Order)
+            .options(selectinload(Order.result).selectinload(Result.details))
+            .where(Order.visit_id == latest_visit.id, Order.test_id == test_id)
+        ).all()
+        
+        if not orders_to_delete:
+            return JSONResponse({"success": False, "error": "Order not found"}, status_code=404)
+        
+        for order in orders_to_delete:
+            # Archive before deletion
+            archive_deleted_record(session, "order", order.id, model_to_dict(order), current_user, reason)
+            # Delete result and details if they exist
+            if order.result:
+                for det in order.result.details:
+                    session.delete(det)
+                session.delete(order.result)
+            session.delete(order)
+        
+        session.commit()
+        
+        # Log activity
+        log_activity_action(session, "REMOVE_TEST", f"Removed test_id={test_id} from patient {patient.full_name} (ID: {patient_id}). Reason: {reason}", current_user, "order", test_id)
+        session.commit()
+        
+        print(f"✅ API: Removed test_id={test_id} from patient {patient_id}, reason: {reason}")
+        return JSONResponse({"success": True, "message": "Test removed successfully"})
+    
+    except Exception as e:
+        session.rollback()
+        print(f"❌ API Error removing test: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+# ===========================
 # PATIENT UPDATE
 # ===========================
 @router.post("/patients/update/{patient_id}")
-async def update_patient(
+def update_patient(
     patient_id: str,
     request: Request,
     full_name: str = Form(...),
@@ -348,12 +478,16 @@ async def update_patient(
     agent_name: Optional[str] = Form(None),
     is_outlab: str = Form("false"),
     selected_items: str = Form("[]"),
+    deleted_items: str = Form("[]"),
     discount_percentage: Optional[float] = Form(None),
     discount_amount: Optional[float] = Form(None),
     discount_note: Optional[str] = Form(None),
     received_amount: Optional[float] = Form(None),
+    apply_tax_toggle: Optional[str] = Form(None),
     session: Session = Depends(get_session)
 ):
+    if not require_permission(request, session, "patient_edit", "save"):
+        return RedirectResponse(url="/patients?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
@@ -393,6 +527,10 @@ async def update_patient(
 
         # Update orders: remove old orders for latest visit, recreate from selected_items
         items = json.loads(selected_items) if selected_items else []
+        with open("update_debug.log", "a") as f:
+            f.write(f"DEBUG update patient {patient_id}\n")
+            f.write(f"selected_items: {selected_items}\n")
+            f.write(f"deleted_items: {deleted_items}\n")
 
         # Get or create the latest visit
         visits = session.exec(
@@ -414,25 +552,101 @@ async def update_patient(
             session.commit()
             session.refresh(latest_visit)
 
-        # Delete old orders for this visit
-        old_orders = session.exec(select(Order).where(Order.visit_id == latest_visit.id)).all()
+        # Safely handle deleted orders and preserve unmodified ones
+        deleted_tests_json = json.loads(deleted_items) if deleted_items else []
+        final_test_ids = []
+        for item in items:
+            if item.get('type') == 'test':
+                final_test_ids.append(int(item['id']))
+            elif item.get('type') == 'package':
+                pts = session.exec(select(PackageTest).where(PackageTest.package_id == int(item['id']))).all()
+                final_test_ids.extend([pt.test_id for pt in pts])
+
+        print(f"🔍 PATIENT UPDATE DEBUG [{patient_id}]:")
+        print(f"   selected_items count: {len(items)}")
+        print(f"   deleted_items count: {len(deleted_tests_json)}")
+        print(f"   final_test_ids (should remain): {final_test_ids}")
+        print(f"   deleted_tests_json: {deleted_tests_json}")
+
+        old_orders = session.exec(
+            select(Order)
+            .options(selectinload(Order.result).selectinload(Result.details))
+            .where(Order.visit_id == latest_visit.id)
+        ).all()
+        active_old_order_test_ids = []
+        
+        print(f"   old_orders test_ids: {[o.test_id for o in old_orders]}")
+        
         for old_order in old_orders:
-            session.delete(old_order)
+            if old_order.test_id not in final_test_ids:
+                reason = "Deleted test from patient visit"
+                for dt in deleted_tests_json:
+                    if dt.get('type') == 'test' and int(dt['id']) == old_order.test_id:
+                        reason = dt.get('reason', reason)
+                
+                print(f"   ❌ DELETING order id={old_order.id}, test_id={old_order.test_id}, reason={reason}")
+                archive_deleted_record(session, "order", old_order.id, model_to_dict(old_order), current_user, reason)
+                if old_order.result:
+                    for det in old_order.result.details:
+                        session.delete(det)
+                    session.delete(old_order.result)
+                session.delete(old_order)
+            else:
+                print(f"   ✅ KEEPING order id={old_order.id}, test_id={old_order.test_id}")
+                active_old_order_test_ids.append(old_order.test_id)
         session.commit()
+        print(f"   ✅ Deletion commit successful")
 
         # Calculate totals
         total_price = sum(float(item.get('price', 0)) for item in items)
+        
+        # --- Check Discount Permissions ---
+        has_discount_perm = require_permission(request, session, "patient_edit", "discount")
+                        
+        if not has_discount_perm:
+            discount_percentage = None
+            discount_amount = None
+        # ----------------------------------
+        
         discount_amt = float(discount_amount) if discount_amount else 0.0
         final_total = total_price
-
+        
         if discount_percentage:
             final_total = total_price * (1 - discount_percentage / 100)
             discount_amt = total_price - final_total
         elif discount_amount:
             final_total = total_price - float(discount_amount)
 
+        # --- NEW TAX LOGIC ---
+        is_tax_applied = apply_tax_toggle == "on"
+        tax_amount = 0.0
+        if is_tax_applied:
+            from models import LabInfo
+            lab_info = session.exec(select(LabInfo)).first()
+            tax_percentage = lab_info.tax_percentage if lab_info else 0.0
+            tax_amount = (tax_percentage / 100) * final_total
+            final_total += tax_amount
+        # ---------------------
+
         received = float(received_amount) if received_amount else 0.0
         remaining = max(0, final_total - received)
+
+        # [NEW] Record payment difference as a new Payment record
+        print(f"DEBUG Update Patient: {patient_id}")
+        print(f"DEBUG selected_items received: {selected_items}")
+        print(f"DEBUG deleted_items received: {deleted_items}")
+        payment_diff = received - (latest_visit.received_amount if latest_visit.received_amount else 0.0)
+        if payment_diff != 0:
+            payment_record = Payment(
+                visit_id=latest_visit.id,
+                patient_id=patient.id,
+                amount=abs(payment_diff),
+                payment_method="cash",
+                recorded_by=current_user.id if current_user else 0,
+                is_refund=(payment_diff < 0),
+                note="Updated via EDIT form"
+            )
+            session.add(payment_record)
 
         # Update visit payment info
         disc_pct = float(discount_percentage) if discount_percentage else 0.0
@@ -440,6 +654,8 @@ async def update_patient(
         latest_visit.discount_amount = round(discount_amt, 2)
         latest_visit.discount_percentage = disc_pct
         latest_visit.discount_note = discount_note
+        latest_visit.tax_applied = is_tax_applied
+        latest_visit.tax_amount = round(tax_amount, 2)
         latest_visit.remaining_amount = remaining
         latest_visit.edited_by = current_user.id if current_user else None
         latest_visit.edited_at = datetime.utcnow()
@@ -450,6 +666,8 @@ async def update_patient(
 
         for item in items:
             if item.get('type') == 'test':
+                if int(item['id']) in active_old_order_test_ids:
+                    continue  # Keep existing order to preserve results and IDs
                 test = session.get(TestDefinition, item['id'])
                 unit_price = test.price if test else 0.0
                 order_discount = unit_price * discount_ratio
@@ -477,6 +695,8 @@ async def update_patient(
                 num_tests = len(package_tests)
                 price_per_test = package_price / num_tests if num_tests > 0 else 0.0
                 for pt in package_tests:
+                    if pt.test_id in active_old_order_test_ids:
+                        continue  # Keep existing order to preserve results and IDs
                     unit_price = price_per_test
                     order_discount = unit_price * discount_ratio
                     final_price = unit_price - order_discount
@@ -511,6 +731,10 @@ async def update_patient(
         session.commit()
         # ---------------------------------------------------------
 
+        # Activity Log: Patient Edit
+        log_activity_action(session, "EDIT_PATIENT", f"Updated patient {patient.full_name} (ID: {patient_id})", current_user, "patient", patient.id)
+        session.commit()
+
         return RedirectResponse(
             url=f"/patients/edit/{patient_id}?success=Patient updated successfully!",
             status_code=status.HTTP_303_SEE_OTHER
@@ -530,6 +754,8 @@ async def update_patient(
 # ===========================
 @router.post("/patients/delete/{patient_id}")
 def delete_patient(patient_id: str, request: Request, deleted_reason: str = Form(...), session: Session = Depends(get_session)):
+    if not require_permission(request, session, "patients", "delete"):
+        return RedirectResponse(url="/patients?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
@@ -546,6 +772,8 @@ def delete_patient(patient_id: str, request: Request, deleted_reason: str = Form
             # ---------------------------------------------------------
             # ✅ FIXED: LOG AND COMMIT DELETE
             # ---------------------------------------------------------
+            archive_deleted_record(session, "patient", patient.id, old_values, current_user, deleted_reason)
+            
             create_audit_log(
                 session, 
                 "patient", 
@@ -557,6 +785,10 @@ def delete_patient(patient_id: str, request: Request, deleted_reason: str = Form
             )
             session.commit()
             # ---------------------------------------------------------
+
+            # Activity Log: Patient Delete
+            log_activity_action(session, "DELETE_PATIENT", f"Deleted patient {patient.full_name} (ID: {patient_id}). Reason: {deleted_reason}", current_user, "patient", patient.id)
+            session.commit()
             
             return RedirectResponse(url="/patients?success=Patient deleted successfully!", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -571,7 +803,18 @@ def delete_patient(patient_id: str, request: Request, deleted_reason: str = Form
 # ===========================
 @router.get("/patients/deleted", response_class=HTMLResponse)
 def deleted_patients_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "deleted_patients"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
+    
     search = request.query_params.get("search", "")
+    start_date_str = request.query_params.get("start_date")
+    end_date_str = request.query_params.get("end_date")
+    user_filter = request.query_params.get("user_id", "all")
+    
+    if not start_date_str:
+        start_date_str = datetime.utcnow().strftime("%d-%m-%Y")
+    if not end_date_str:
+        end_date_str = start_date_str
     
     query = select(Patient).where(Patient.is_active == False)
     
@@ -581,8 +824,29 @@ def deleted_patients_page(request: Request, session: Session = Depends(get_sessi
             (Patient.patient_id.ilike(f"%{search}%")) |
             (Patient.phone_number.ilike(f"%{search}%"))
         )
+        
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, "%d-%m-%Y").replace(hour=0, minute=0, second=0)
+            query = query.where(Patient.deleted_at >= start_date)
+        except ValueError:
+            pass
+            
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, "%d-%m-%Y").replace(hour=23, minute=59, second=59)
+            query = query.where(Patient.deleted_at <= end_date)
+        except ValueError:
+            pass
+            
+    if user_filter and user_filter != "all":
+        query = query.where(Patient.deleted_by == int(user_filter))
     
     patients = session.exec(query.order_by(Patient.deleted_at.desc())).all()
+    
+    # Fetch all users for dropdown and dictionary
+    users = session.exec(select(User)).all()
+    user_dict = {u.id: u.full_name for u in users}
     
     success = request.query_params.get("success")
     error = request.query_params.get("error")
@@ -591,12 +855,19 @@ def deleted_patients_page(request: Request, session: Session = Depends(get_sessi
         "request": request,
         "patients": patients,
         "search": search,
+        "start_date": start_date_str,
+        "end_date": end_date_str,
+        "user_filter": user_filter,
+        "users": users,
+        "user_dict": user_dict,
         "message_success": success,
         "message_error": error
     })
 
 @router.get("/patients/view-deleted/{patient_id}", response_class=HTMLResponse)
 def view_deleted_patient(request: Request, patient_id: str, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "deleted_patients"):
+        return RedirectResponse(url="/patients/deleted?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
     
     if not patient or patient.is_active:
@@ -621,6 +892,8 @@ def view_deleted_patient(request: Request, patient_id: str, session: Session = D
 
 @router.get("/patients/restore/{patient_id}")
 def restore_patient(patient_id: str, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "deleted_patients", "restore"):
+        return RedirectResponse(url="/patients/deleted?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
         patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
@@ -657,3 +930,143 @@ def restore_patient(patient_id: str, request: Request, session: Session = Depend
     except Exception as e:
         session.rollback()
         return RedirectResponse(url=f"/patients/deleted?error={str(e).replace(' ', '%20')}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# ===========================
+# ADD NEW PAYMENT (AJAX or Form)
+# ===========================
+@router.post("/patient/{patient_id}/payment")
+def add_patient_payment(
+    patient_id: str,
+    request: Request,
+    visit_id: int = Form(...),
+    amount: float = Form(...),
+    payment_method: str = Form("cash"),
+    note: Optional[str] = Form(None),
+    is_refund: bool = Form(False),
+    session: Session = Depends(get_session)
+):
+    current_user = get_current_user(request, session)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+        
+    try:
+        visit = session.get(PatientVisit, visit_id)
+        patient_record = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
+        
+        if not visit or not patient_record or visit.patient_id != patient_record.id:
+            return RedirectResponse(url=f"/patient/edit/{patient_id}?error=Invalid visit", status_code=status.HTTP_303_SEE_OTHER)
+        
+        # 1. Create the payment record
+        payment = Payment(
+            visit_id=visit.id,
+            patient_id=patient_record.id,
+            amount=amount,
+            payment_method=payment_method,
+            note=note,
+            is_refund=is_refund,
+            recorded_by=current_user.id
+        )
+        session.add(payment)
+        
+        # 2. Update the visit's total received amount
+        all_payments = session.exec(select(Payment).where(Payment.visit_id == visit.id)).all()
+        
+        total_received = sum([p.amount if not p.is_refund else -p.amount for p in all_payments])
+        if is_refund:
+            total_received -= amount
+        else:
+            total_received += amount
+            
+        visit.received_amount = max(0, total_received)
+        
+        # Recalculate remaining
+        total_price = sum([(o.unit_price or 0.0) for o in visit.orders])
+        discount_amt = visit.discount_amount or 0.0
+        tax_amt = visit.tax_amount or 0.0
+        final_total = total_price - discount_amt + tax_amt
+        visit.remaining_amount = max(0, final_total - visit.received_amount)
+        
+        session.add(visit)
+        session.commit()
+        
+        msg = "Refund recorded" if is_refund else "Payment recorded"
+        return RedirectResponse(url=f"/patient/edit/{patient_id}?success={msg} successfully", status_code=status.HTTP_303_SEE_OTHER)
+        
+    except Exception as e:
+        session.rollback()
+        return RedirectResponse(url=f"/patient/edit/{patient_id}?error={str(e).replace(' ', '%20')}", status_code=status.HTTP_303_SEE_OTHER)
+
+# ===========================
+# DELETED TESTS
+# ===========================
+@router.get("/deleted_tests_page", response_class=HTMLResponse)
+def deleted_tests_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "deleted_tests"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
+    
+    start_date_str = request.query_params.get("start_date")
+    end_date_str = request.query_params.get("end_date")
+    user_filter = request.query_params.get("user_id", "all")
+    
+    if not start_date_str:
+        start_date_str = datetime.utcnow().strftime("%d-%m-%Y")
+    if not end_date_str:
+        end_date_str = start_date_str
+        
+    query = select(DeletedRecord).where(DeletedRecord.source_table == "order")
+    
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, "%d-%m-%Y").replace(hour=0, minute=0, second=0)
+            query = query.where(DeletedRecord.deleted_at >= start_date)
+        except ValueError:
+            pass
+            
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, "%d-%m-%Y").replace(hour=23, minute=59, second=59)
+            query = query.where(DeletedRecord.deleted_at <= end_date)
+        except ValueError:
+            pass
+            
+    if user_filter and user_filter != "all":
+        query = query.where(DeletedRecord.deleted_by == int(user_filter))
+        
+    deleted_records = session.exec(query.order_by(DeletedRecord.deleted_at.desc())).all()
+    
+    users = session.exec(select(User)).all()
+    user_map = {u.id: u.full_name for u in users}
+    
+    report_data = []
+    for idx, rec in enumerate(deleted_records, 1):
+        try:
+            data = json.loads(rec.record_data)
+        except:
+            data = {}
+            
+        patient_id = data.get("patient_id")
+        test_id = data.get("test_id")
+        
+        patient = session.get(Patient, patient_id) if patient_id else None
+        test = session.get(TestDefinition, test_id) if test_id else None
+        
+        report_data.append({
+            "no": idx,
+            "deleted_at": rec.deleted_at.strftime("%d-%m-%Y %H:%M"),
+            "deleted_by_name": user_map.get(rec.deleted_by, "System"),
+            "patient_code": patient.patient_id if patient else "N/A",
+            "patient_name": patient.full_name if patient else "Unknown",
+            "age_gender": f"{patient.age} {patient.age_unit} - {patient.gender}" if patient else "N/A",
+            "test_name": test.test_name if test else "Unknown Test",
+            "reason": rec.deleted_reason or "No reason provided"
+        })
+        
+    return templates.TemplateResponse("deleted_tests.html", {
+        "request": request,
+        "report_data": report_data,
+        "users": users,
+        "start_date": start_date_str,
+        "end_date": end_date_str,
+        "user_filter": user_filter
+    })

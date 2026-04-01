@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import selectinload
@@ -7,8 +7,8 @@ from datetime import datetime
 import json
 
 from database import get_session
-from models import Patient, PatientVisit, Order, TestDefinition, AuditLog
-from routes.helpers import templates
+from models import Patient, PatientVisit, Order, TestDefinition, AuditLog, ActivityLog # ✅ Added ActivityLog
+from routes.helpers import templates, require_permission, build_patient_list_query
 
 router = APIRouter()
 
@@ -17,51 +17,16 @@ router = APIRouter()
 # ===========================
 @router.get("/patient-history", response_class=HTMLResponse)
 def patient_history_search(request: Request, session: Session = Depends(get_session)):
-    today_str = datetime.today().strftime("%Y-%m-%d")
-    start_date = request.query_params.get("start_date", today_str)
-    end_date = request.query_params.get("end_date", today_str)
-    name = request.query_params.get("name", "")
-    patient_id_q = request.query_params.get("patient_id", "")
-    test_q = request.query_params.get("test", "")
+    if not require_permission(request, session, "patient_history"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
     
-    query = select(Patient).where(Patient.is_active == True)
-    
-    needs_visit_join = bool(start_date or end_date or test_q)
-    if needs_visit_join:
-        query = query.join(PatientVisit)
-        
-    if start_date:
-        query = query.where(PatientVisit.visit_date >= f"{start_date} 00:00:00")
-    if end_date:
-        query = query.where(PatientVisit.visit_date <= f"{end_date} 23:59:59")
-        
-    if name:
-        query = query.where(Patient.full_name.ilike(f"%{name}%"))
-    if patient_id_q:
-        query = query.where(Patient.patient_id.ilike(f"%{patient_id_q}%"))
-        
-    if test_q:
-        query = query.join(Order, Order.visit_id == PatientVisit.id).join(TestDefinition, Order.test_id == TestDefinition.id)
-        query = query.where(
-            (TestDefinition.test_name.ilike(f"%{test_q}%")) | 
-            (TestDefinition.test_short_name.ilike(f"%{test_q}%"))
-        )
-            
-    if needs_visit_join:
-        query = query.distinct()
-    
-    patients = session.exec(query.order_by(Patient.created_at.desc())).all()
+    query, filters = build_patient_list_query(request)
+    patients = session.exec(query).all()
     
     return templates.TemplateResponse("patient_history_list.html", {
         "request": request,
         "patients": patients,
-        "filters": {
-            "start_date": start_date,
-            "end_date": end_date,
-            "name": name,
-            "patient_id": patient_id_q,
-            "test": test_q,
-        }
+        "filters": filters
     })
 
 # ===========================
@@ -69,6 +34,8 @@ def patient_history_search(request: Request, session: Session = Depends(get_sess
 # ===========================
 @router.get("/patient-history/{patient_id}", response_class=HTMLResponse)
 def patient_history_detail(patient_id: str, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "patient_history"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
     # 1. Get the Core Patient
     patient = session.exec(
         select(Patient)
@@ -179,4 +146,39 @@ def patient_history_detail(patient_id: str, request: Request, session: Session =
         "request": request,
         "patient": patient,
         "logs": formatted_logs
+    })
+
+# ===========================
+# 3. GLOBAL ACTIVITY LOGS PAGE
+# ===========================
+@router.get("/activity-logs", response_class=HTMLResponse)
+def global_activity_logs(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "activity_logs", "view"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
+
+    # Filters
+    filter_user = request.query_params.get("user", "")
+    filter_action = request.query_params.get("action", "")
+
+    query = select(ActivityLog)
+
+    if filter_user:
+        query = query.where(ActivityLog.username == filter_user)
+    if filter_action:
+        query = query.where(ActivityLog.action_type == filter_action)
+
+    query = query.order_by(ActivityLog.created_at.desc()).limit(500)
+    activities = session.exec(query).all()
+
+    # Get distinct usernames and action types for the filter dropdowns
+    all_users = session.exec(select(ActivityLog.username).distinct()).all()
+    all_actions = session.exec(select(ActivityLog.action_type).distinct()).all()
+
+    return templates.TemplateResponse("activity_logs.html", {
+        "request": request,
+        "activities": activities,
+        "all_users": sorted([u for u in all_users if u]),
+        "all_actions": sorted([a for a in all_actions if a]),
+        "filter_user": filter_user,
+        "filter_action": filter_action
     })
