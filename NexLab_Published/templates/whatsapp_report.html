@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: A4;
+            margin: 1cm;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            color: #333;
+            line-height: 1.4;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .lab-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1e293b;
+        }
+        .lab-title {
+            font-size: 14px;
+            color: #64748b;
+        }
+        .patient-info {
+            width: 100%;
+            margin-bottom: 20px;
+            border-collapse: collapse;
+        }
+        .patient-info td {
+            padding: 5px;
+            font-size: 12px;
+        }
+        .label {
+            font-weight: bold;
+            color: #64748b;
+            width: 100px;
+        }
+        .value {
+            font-weight: bold;
+            color: #0f172a;
+        }
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .results-table th {
+            background-color: #f8fafc;
+            border: 1px solid #cbd5e1;
+            padding: 10px;
+            text-align: center;
+            font-size: 13px;
+        }
+        .results-table td {
+            border: 1px solid #cbd5e1;
+            padding: 10px;
+            text-align: center;
+            font-size: 13px;
+        }
+        .row-parent {
+            background-color: #f1f5f9;
+            font-weight: bold;
+            text-align: left !important;
+        }
+        .flag-high { color: #dc2626; font-weight: bold; }
+        .flag-low { color: #2563eb; font-weight: bold; }
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="lab-name">{{ lab_info.lab_name }}</div>
+        <div class="lab-title">{{ lab_info.lab_title }}</div>
+        <div style="font-size: 11px; margin-top: 5px;">
+            {{ lab_info.lab_address }} | {{ lab_info.lab_phone_1 }}
+        </div>
+    </div>
+
+    <table class="patient-info">
+        <tr>
+            <td class="label">Patient Name:</td>
+            <td class="value">{{ patient.full_name }}</td>
+            <td class="label">Patient ID:</td>
+            <td class="value">{{ patient.patient_id }}</td>
+        </tr>
+        <tr>
+            <td class="label">Age/Gender:</td>
+            <td class="value">{{ patient.age }} {{ patient.age_unit }} / {{ patient.gender|upper }}</td>
+            <td class="label">Visit ID:</td>
+            <td class="value">{{ visit.visit_id }}</td>
+        </tr>
+        <tr>
+            <td class="label">Date:</td>
+            <td class="value">{{ visit.visit_date.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td class="label">Doctor:</td>
+            <td class="value">{{ patient.doctor or 'N/A' }}</td>
+        </tr>
+    </table>
+
+    <table class="results-table">
+        <thead>
+            <tr>
+                <th>Test / Parameter</th>
+                <th>Result</th>
+                <th>Unit</th>
+                <th>Ref. Range</th>
+                <th>Flag</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in results %}
+                {% if row.type == 'parent' %}
+                    <tr class="row-parent">
+                        <td colspan="5">{{ row.test_name }}</td>
+                    </tr>
+                {% elif row.type == 'child' %}
+                    <tr>
+                        <td style="text-align: left; padding-left: 20px;">{{ row.parameter_name }}</td>
+                        <td>{{ row.result_value }}</td>
+                        <td>{{ row.unit }}</td>
+                        <td>{{ row.range }}</td>
+                        <td class="{{ 'flag-high' if 'H' in row.flag else ('flag-low' if 'L' in row.flag else '') }}">
+                            {{ row.flag or '' }}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td>{{ row.test_name }}</td>
+                        <td>{{ row.result_value }}</td>
+                        <td>{{ row.unit }}</td>
+                        <td>{{ row.range }}</td>
+                        <td class="{{ 'flag-high' if 'H' in row.flag else ('flag-low' if 'L' in row.flag else '') }}">
+                            {{ row.flag or '' }}
+                        </td>
+                    </tr>
+                {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer">
+        This is a computer-generated report. No signature required.
+        <br>
+        Generated on {{ now.strftime('%Y-%m-%d %H:%M') }}
+    </div>
+</body>
+</html>

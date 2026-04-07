@@ -1,0 +1,152 @@
+<!-- templates/devices.html -->
+{% extends "base.html" %}
+
+{% block title %}Devices - NexLab{% endblock %}
+{% block page_title %}Laboratory Devices{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+        <div>
+            <h3 class="text-lg font-semibold text-slate-800">Device Definition</h3>
+            <p class="text-sm text-slate-500">Manage laboratory equipment and analyzers</p>
+        </div>
+        <button onclick="toggleForm('addDeviceForm')" 
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200">
+            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Add Device
+        </button>
+    </div>
+
+    <!-- Add/Edit Device Form -->
+    <div id="addDeviceForm" style="display: none;" class="p-6 bg-slate-50 border-b border-slate-200">
+        <h4 class="text-md font-semibold text-slate-700 mb-4" id="formTitle">New Device Details</h4>
+        <form method="POST" id="deviceForm" action="/devices/create">
+            <input type="hidden" id="device_id" name="device_id" value="">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Device Name *</label>
+                    <input type="text" id="device_name" name="device_name" required placeholder="e.g., Sysmex XN-1000" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Serial Number *</label>
+                    <input type="text" id="serial_number" name="serial_number" required placeholder="e.g., SN-12345678" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Install Date *</label>
+                    <input type="date" id="install_date" name="install_date" required 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Installer Name *</label>
+                    <input type="text" id="installer_name" name="installer_name" required placeholder="e.g., John Smith" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Installer Phone *</label>
+                    <input type="tel" id="installer_phone" name="installer_phone" required placeholder="e.g., +123456789" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Note</label>
+                    <input type="text" id="note" name="note" placeholder="e.g., Maintenance due in 6 months" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+            </div>
+            
+            <div class="flex gap-2">
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                    <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    Save Device
+                </button>
+                <button type="button" onclick="toggleForm('addDeviceForm')" 
+                        class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Devices Table -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-slate-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Device Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Serial Number</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Install Date</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Installer</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Created</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-slate-200">
+                {% for device in devices %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">#{{ device.id }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{{ device.device_name }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 font-mono">{{ device.serial_number }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ device.install_date.strftime('%Y-%m-%d') }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                        {{ device.installer_name }}<br>
+                        <span class="text-xs text-slate-400">{{ device.installer_phone }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ device.created_at.strftime('%Y-%m-%d') }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div class="flex items-center space-x-3">
+                            <button onclick='editDevice({{ devices_json[loop.index0] | tojson }})' 
+                                    class="text-blue-600 hover:text-blue-900" title="Edit">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </button>
+                            <a href="javascript:void(0)" 
+                               onclick="confirmDelete('/devices/delete/{{ device.id }}')"
+                               class="text-red-600 hover:text-red-900" title="Delete">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    {% if not devices %}
+    <div class="text-center py-12">
+        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-slate-900">No devices</h3>
+        <p class="mt-1 text-sm text-slate-500">Get started by adding a new device.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function toggleForm(formId) {
+    const form = document.getElementById(formId);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'none') {
+        document.getElementById('deviceForm').reset();
+        document.getElementById('device_id').value = '';
+        document.getElementById('formTitle').textContent = 'New Device Details';
+    }
+}
+
+function editDevice(device) {
+    document.getElementById('device_id').value = device.id;
+    document.getElementById('device_name').value = device.device_name;
+    document.getElementById('serial_number').value = device.serial_number;
+    document.getElementById('install_date').value = device.install_date.split('T')[0];
+    document.getElementById('installer_name').value = device.installer_name;
+    document.getElementById('installer_phone').value = device.installer_phone;
+    document.getElementById('note').value = device.note || '';
+    document.getElementById('formTitle').textContent = 'Edit Device Details';
+    document.getElementById('addDeviceForm').style.display = 'block';
+    document.getElementById('deviceForm').action = '/devices/update/' + device.id;
+}
+</script>
+{% endblock %}

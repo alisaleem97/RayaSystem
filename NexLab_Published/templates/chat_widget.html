@@ -1,0 +1,965 @@
+<div id="chat-widget-container" class="fixed bottom-20 right-6 w-[750px] h-[550px] bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-[1000] hidden flex-row transform transition-all duration-300 origin-bottom-right scale-95 opacity-0">
+    
+    <!-- Left Pane: Chat List -->
+    <div class="w-1/3 border-r border-slate-200 flex flex-col bg-slate-50">
+        <!-- Header -->
+        <div class="p-4 border-b border-slate-200 bg-white flex justify-between items-center">
+            <h3 class="font-bold text-lg text-slate-800">Chats</h3>
+            <div class="flex space-x-2">
+                <button onclick="openNewChatModal()" class="p-2 bg-primary/10 text-primary rounded-full hover:bg-primary/20 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Search -->
+        <div class="p-3">
+            <div class="relative">
+                <input type="text" id="searchInput" placeholder="Search chats..." class="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary">
+                <svg class="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </div>
+        </div>
+
+        <!-- Chats List -->
+        <div class="flex-1 overflow-y-auto" id="chatsListContainer">
+            <!-- Populated by JS -->
+            <div class="p-4 text-center text-slate-500 loading-chats">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Right Pane: Active Chat -->
+    <div class="flex-1 flex flex-col bg-white hidden" id="activeChatPane">
+        <!-- Active Chat Header -->
+        <div class="h-14 border-b border-slate-200 px-4 flex items-center justify-between bg-white shadow-sm z-10">
+            <div class="flex items-center">
+                <div class="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm mr-3" id="activeChatAvatar">A</div>
+                <div>
+                    <h4 class="font-semibold text-slate-800 text-sm" id="activeChatName">Chat Name</h4>
+                    <p class="text-[10px] text-slate-500" id="activeChatStatus">online</p>
+                </div>
+            </div>
+            <div class="flex space-x-1">
+                <button onclick="startCall('audio')" class="p-2 text-slate-500 hover:text-primary transition-colors" title="Audio Call">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+                </button>
+                <button onclick="startCall('video')" class="p-2 text-slate-500 hover:text-primary transition-colors" title="Video Call">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                </button>
+                <button onclick="closeActiveChat()" class="p-2 text-slate-500 hover:text-slate-800 transition-colors hidden md:block" title="Close Chat">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Messages Area -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50" id="messagesContainer">
+            <!-- Populated by JS -->
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-3 bg-white border-t border-slate-200 flex items-center gap-2">
+            <button onclick="document.getElementById('attachmentInput').click()" class="p-2 text-slate-500 hover:text-primary rounded-full hover:bg-slate-100 transition-colors">
+                <svg class="w-5 h-5 transform rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+            </button>
+            <input type="file" id="attachmentInput" class="hidden" onchange="handleFileUpload(event)">
+            
+            <input type="text" id="messageInput" placeholder="Type a message..." class="flex-1 py-2 px-4 text-sm bg-slate-100 border-none rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50" onkeypress="handleTyping(event)">
+            
+            <button id="recordVoiceBtn" onmousedown="startRecording()" onmouseup="stopRecording()" class="p-2 text-slate-500 hover:text-primary rounded-full hover:bg-slate-100 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+            </button>
+            
+            <button onclick="sendMessage()" class="p-2 bg-primary text-white rounded-full hover:bg-primary-focus transition-colors shadow-sm">
+                <svg class="w-4 h-4 transform rotate-45 -ml-1 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Empty State -->
+    <div class="flex-1 flex flex-col items-center justify-center bg-slate-50 text-slate-400 relative" id="emptyStatePane">
+        <button onclick="toggleChatWidget()" class="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-800 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+        <div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+            <svg class="w-8 h-8 text-primary opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+        </div>
+        <h3 class="text-lg font-medium text-slate-700">NexLab Messenger</h3>
+        <p class="mt-1 text-xs text-slate-500 text-center px-4">Select a chat from the sidebar or start a new conversation.</p>
+    </div>
+</div>
+
+<!-- New Chat Modal -->
+<div id="newChatModal" class="modal-overlay !z-[1100]">
+    <div class="modal-content !max-w-md !text-left">
+        <h3 class="text-xl font-bold mb-4">New Chat</h3>
+        <div class="mb-4">
+            <label class="flex items-center space-x-2 text-sm cursor-pointer mb-2">
+                <input type="checkbox" id="isGroupToggle" class="rounded text-primary focus:ring-primary" onchange="toggleGroupOptions()">
+                <span>Create a Group Chat</span>
+            </label>
+            <div id="groupNameContainer" class="hidden mb-4">
+                <input type="text" id="groupNameInput" placeholder="Group Name" class="w-full px-3 py-2 border border-slate-300 rounded focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none text-sm">
+            </div>
+        </div>
+        <div class="max-h-60 overflow-y-auto mb-4 border border-slate-200 rounded divide-y divide-slate-100 text-sm" id="usersListContainer">
+            <!-- Populated by JS -->
+        </div>
+        <div class="flex gap-2 justify-end">
+            <button onclick="closeNewChatModal()" class="px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded text-sm">Cancel</button>
+            <button onclick="createChat()" class="px-4 py-2 bg-primary text-white rounded hover:bg-primary-focus text-sm">Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- Incoming Call Modal -->
+<div id="incomingCallModal" class="modal-overlay !z-[2000]">
+    <div class="modal-content !bg-slate-900 border border-slate-700 !text-white text-center shadow-2xl">
+        <div class="w-20 h-20 rounded-full bg-slate-800 mx-auto flex items-center justify-center text-3xl font-bold mb-4 animate-pulse" id="callerAvatar">A</div>
+        <h3 class="text-2xl font-bold mb-1" id="callerName">Someone</h3>
+        <p class="text-green-400 mb-8" id="callTypeLabel">Incoming Video Call...</p>
+        <div class="flex justify-center gap-6">
+            <button onclick="declineCall()" class="w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-transform hover:scale-110">
+                <svg class="w-6 h-6 transform rotate-135" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+            </button>
+            <button onclick="acceptCall()" class="w-14 h-14 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center transition-transform hover:scale-110 animate-bounce">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Active Call Video/Audio Modal -->
+<div id="activeCallModal" class="modal-overlay !z-[1500] !bg-black/90">
+    <div class="w-full max-w-4xl max-h-screen p-4 flex flex-col relative">
+        <div class="flex-1 bg-black rounded-lg overflow-hidden relative shadow-2xl border border-slate-800">
+            <!-- Remote Video -->
+            <video id="remoteVideo" class="w-full h-full object-cover" autoplay playsinline></video>
+            <!-- Local Video (Picture in Picture) -->
+            <video id="localVideo" class="absolute bottom-4 right-4 w-48 h-36 bg-slate-900 rounded border-2 border-white/20 object-cover shadow-lg" autoplay playsinline muted></video>
+            
+            <!-- Call Info Overlay -->
+            <div class="absolute top-4 left-4 bg-black/50 text-white px-4 py-2 rounded-full backdrop-blur-sm text-sm" id="callDuration">
+                00:00
+            </div>
+            
+            <!-- Audio Only Placeholder -->
+            <div id="audioOnlyPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center hidden bg-slate-900">
+                <div class="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center text-4xl font-bold text-white mb-4 shadow-xl" id="callActiveAvatar">A</div>
+                <h3 class="text-xl text-white">Audio Call</h3>
+            </div>
+        </div>
+        
+        <!-- Controls -->
+        <div class="flex justify-center gap-4 mt-6">
+            <button onclick="toggleMute()" id="muteBtn" class="w-12 h-12 rounded-full bg-slate-700/50 hover:bg-slate-600 text-white flex items-center justify-center backdrop-blur-sm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+            </button>
+            <button onclick="toggleVideo()" id="videoBtn" class="w-12 h-12 rounded-full bg-slate-700/50 hover:bg-slate-600 text-white flex items-center justify-center backdrop-blur-sm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+            </button>
+            <button onclick="endCall()" class="w-12 h-12 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    {% if current_user %}
+    const CURRENT_USER_ID = {{ current_user.id }};
+    let ws = null;
+    let chats = [];
+    let currentChatId = null;
+    let allUsers = [];
+    let totalUnread = 0;
+    
+    // WebRTC Variables
+    let localStream = null;
+    let peerConnection = null;
+    let activeCallType = 'audio';
+    let currentCallTargetId = null;
+    const ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+    
+    // Audio Recording
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+
+    // Widget Toggle Logic
+    let isWidgetOpen = false;
+    
+    function toggleChatWidget() {
+        const widget = document.getElementById("chat-widget-container");
+        if (isWidgetOpen) {
+            widget.classList.add("scale-95", "opacity-0");
+            setTimeout(() => {
+                widget.classList.remove("flex");
+                widget.classList.add("hidden");
+            }, 300);
+            isWidgetOpen = false;
+        } else {
+            widget.classList.remove("hidden");
+            widget.classList.add("flex");
+            // small delay to allow display switch before transforming
+            setTimeout(() => {
+                widget.classList.remove("scale-95", "opacity-0");
+                widget.classList.add("scale-100", "opacity-100");
+            }, 10);
+            isWidgetOpen = true;
+            
+            // clear total badge when opening widget
+            totalUnread = 0;
+            updateGlobalBadge();
+            
+            // scroll if we are in a chat
+            if (currentChatId) {
+                const container = document.getElementById("messagesContainer");
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+    }
+
+    // Initialize
+    document.addEventListener("DOMContentLoaded", () => {
+        if (CURRENT_USER_ID) {
+            initWebSocket();
+            loadChats();
+            loadUsers();
+            
+            // Notifications
+            if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+                Notification.requestPermission();
+            }
+            
+            // Listen for escape closing chat
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && isWidgetOpen) {
+                    toggleChatWidget();
+                }
+            });
+        }
+    });
+
+    function initWebSocket() {
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const wsUrl = `${protocol}//${window.location.host}/ws/${CURRENT_USER_ID}`;
+        
+        ws = new WebSocket(wsUrl);
+        
+        ws.onopen = () => console.log("WebSocket connected");
+        ws.onclose = () => {
+            console.log("WebSocket disconnected. Reconnecting in 3s...");
+            setTimeout(initWebSocket, 3000);
+        };
+        ws.onerror = (e) => console.error("WebSocket error", e);
+        
+        ws.onmessage = async (event) => {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === "new_message") {
+                handleNewMessage(data);
+            } else if (data.type === "status") {
+                handleStatusUpdate(data);
+            } else if (data.type === "typing") {
+                handleTypingEvt(data);
+            } else if (data.type === "receipt") {
+                handleReceipt(data);
+            } else if (data.type === "offer") {
+                handleCallOffer(data);
+            } else if (data.type === "answer") {
+                handleCallAnswer(data);
+            } else if (data.type === "ice-candidate") {
+                handleIceCandidate(data);
+            } else if (data.type === "call-end") {
+                handleCallEnd();
+            }
+        };
+    }
+
+    function updateGlobalBadge() {
+        const badge = document.getElementById("globalUnreadBadge");
+        if (badge) {
+            if (totalUnread > 0) {
+                badge.textContent = totalUnread;
+                badge.classList.remove("hidden");
+            } else {
+                badge.classList.add("hidden");
+            }
+        }
+    }
+
+    /* --- CHATS LIST & UI --- */
+
+    async function loadChats() {
+        const res = await fetch("/messages/api/chats");
+        const data = await res.json();
+        chats = data.chats || [];
+        
+        // Sum unreads across all chats
+        totalUnread = chats.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+        updateGlobalBadge();
+        
+        renderChatsList();
+    }
+    
+    async function loadUsers() {
+        const res = await fetch("/messages/api/users");
+        const data = await res.json();
+        allUsers = data.users.filter(u => u.id !== CURRENT_USER_ID);
+    }
+
+    function renderChatsList() {
+        const container = document.getElementById("chatsListContainer");
+        container.innerHTML = "";
+        
+        if (chats.length === 0) {
+            container.innerHTML = `<div class="p-4 text-center text-sm text-slate-500">No chats yet. Start a new one!</div>`;
+            return;
+        }
+        
+        chats.forEach(chat => {
+            const lastMsgText = chat.last_message ? (chat.last_message.is_attachment ? '📷 Attachment' : (chat.last_message.is_voice ? '🎤 Voice Note' : chat.last_message.text)) : 'No messages yet';
+            const time = chat.last_message ? new Date(chat.last_message.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+            const unreadBadge = chat.unread_count > 0 ? `<div class="bg-primary text-white text-xs rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center font-bold">${chat.unread_count}</div>` : '';
+            
+            const initials = chat.name ? chat.name.substring(0, 2).toUpperCase() : 'C';
+            const isOnlineBadge = (!chat.is_group && chat.other_user_online) ? `<div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-slate-200 rounded-full"></div>` : '';
+            
+            const el = document.createElement("div");
+            el.className = `p-3 border-b border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors flex items-center ${currentChatId === chat.id ? 'bg-primary/5' : ''}`;
+            el.onclick = () => openChat(chat.id);
+            
+            el.innerHTML = `
+                <div class="relative w-10 h-10 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                    ${initials}
+                    ${isOnlineBadge}
+                </div>
+                <div class="ml-3 flex-1 overflow-hidden">
+                    <div class="flex justify-between items-center">
+                        <h5 class="font-semibold text-slate-800 text-sm truncate">${chat.name || 'Group Chat'}</h5>
+                        <span class="text-[10px] text-slate-400 whitespace-nowrap ml-2">${time}</span>
+                    </div>
+                    <div class="flex justify-between items-center mt-1">
+                        <p class="text-xs text-slate-500 truncate" id="preview-${chat.id}">${lastMsgText}</p>
+                        ${unreadBadge}
+                    </div>
+                </div>
+            `;
+            container.appendChild(el);
+        });
+    }
+
+    async function openChat(chatId) {
+        currentChatId = chatId;
+        const chat = chats.find(c => c.id === chatId);
+        
+        document.getElementById("emptyStatePane").classList.add("hidden");
+        document.getElementById("activeChatPane").classList.remove("hidden");
+        document.getElementById("activeChatPane").classList.add("flex");
+        
+        document.getElementById("activeChatName").textContent = chat.name || 'Group Chat';
+        document.getElementById("activeChatAvatar").textContent = chat.name ? chat.name.substring(0, 2).toUpperCase() : 'C';
+        
+        if (!chat.is_group) {
+            document.getElementById("activeChatStatus").textContent = chat.other_user_online ? 'Online' : (chat.other_user_last_seen ? 'Last seen ' + new Date(chat.other_user_last_seen).toLocaleString() : 'Offline');
+            currentCallTargetId = chat.other_user_id;
+        } else {
+            document.getElementById("activeChatStatus").textContent = `${chat.members.length} members`;
+            currentCallTargetId = null; // No group calls yet
+        }
+        
+        renderChatsList(); // Update active highlight
+        
+        // Fetch history
+        const res = await fetch(`/messages/api/chats/${chatId}/history`);
+        const data = await res.json();
+        
+        renderMessages(data.messages);
+        
+        // Tell server we read these
+        const unreadIds = data.messages.filter(m => m.sender_id !== CURRENT_USER_ID && m.status !== 'read').map(m => m.id);
+        if (unreadIds.length > 0) {
+            ws.send(JSON.stringify({ type: "read", chat_id: chatId, message_ids: unreadIds }));
+        }
+        
+        // Clear local unread count
+        chat.unread_count = 0;
+        
+        // Re-calculate global unread
+        totalUnread = chats.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+        updateGlobalBadge();
+        
+        renderChatsList();
+    }
+    
+    function closeActiveChat() {
+        currentChatId = null;
+        document.getElementById("activeChatPane").classList.add("hidden");
+        document.getElementById("activeChatPane").classList.remove("flex");
+        document.getElementById("emptyStatePane").classList.remove("hidden");
+        renderChatsList();
+    }
+
+    function renderMessages(messages, append = false) {
+        const container = document.getElementById("messagesContainer");
+        if (!append) container.innerHTML = "";
+        
+        messages.forEach(msg => {
+            const isMine = msg.sender_id === CURRENT_USER_ID;
+            const time = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            let statusIcon = '';
+            if (isMine) {
+                if (msg.status === 'read') statusIcon = '<span class="text-blue-500 text-[10px] ml-1 font-bold">✓✓</span>';
+                else if (msg.status === 'delivered') statusIcon = '<span class="text-slate-400 text-[10px] ml-1 font-bold">✓✓</span>';
+                else statusIcon = '<span class="text-slate-400 text-[10px] ml-1 font-bold">✓</span>';
+            }
+            
+            let contentHtml = '';
+            if (msg.text) contentHtml += `<p class="text-sm">${msg.text}</p>`;
+            if (msg.attachment_path) {
+                if (msg.attachment_type === 'image' || msg.attachment_name.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                    contentHtml += `<img src="${msg.attachment_path}" alt="Attachment" class="max-w-xs rounded-lg mt-2 cursor-pointer hover:opacity-90 max-h-40 object-contain bg-black/5" onclick="window.open('${msg.attachment_path}', '_blank')">`;
+                } else {
+                    contentHtml += `<a href="${msg.attachment_path}" target="_blank" class="flex items-center gap-2 p-2 bg-black/5 rounded mt-2 hover:bg-black/10 transition text-sm"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg> <span class="truncate max-w-[150px] underline">${msg.attachment_name}</span></a>`;
+                }
+            }
+            if (msg.voice_note_path) {
+                contentHtml += `
+                    <div class="flex items-center gap-2 bg-black/5 rounded-full px-2 py-1 mt-1">
+                        <button onclick="document.getElementById('audio-${msg.id}').play()" class="p-1 text-primary hover:text-primary-focus"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg></button>
+                        <div class="w-24 h-1 bg-slate-300 rounded overflow-hidden"><div class="h-full bg-primary" style="width:0%"></div></div>
+                        <span class="text-[10px] text-slate-500">${formatDuration(msg.voice_note_duration)}</span>
+                        <audio id="audio-${msg.id}" src="${msg.voice_note_path}"></audio>
+                    </div>`;
+            }
+            
+            const el = document.createElement("div");
+            el.className = `flex ${isMine ? 'justify-end' : 'justify-start'}`;
+            el.id = `msg-${msg.id}`;
+            
+            if (msg.is_call) {
+                const callIcon = msg.call_status === 'answered' 
+                    ? '<svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>'
+                    : '<svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.516l2.257-1.13a1 1 0 00.502-1.21L9.184 3.684A1 1 0 008.284 3H5z"></path></svg>';
+                
+                const statusText = msg.call_status === 'answered' 
+                    ? `Voice Call (${formatDuration(msg.call_duration)})` 
+                    : (msg.call_status === 'declined' ? 'Declined Call' : 'Missed Call');
+                    
+                el.innerHTML = `
+                    <div class="flex flex-col items-center w-full my-2">
+                        <div class="bg-slate-100 border border-slate-200 rounded-full px-4 py-1 flex items-center gap-2 shadow-sm">
+                            ${callIcon}
+                            <span class="text-xs font-medium text-slate-600">${statusText}</span>
+                            <span class="text-[9px] text-slate-400 ml-1">${time}</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                el.innerHTML = `
+                    <div class="max-w-[75%] ${isMine ? 'bg-[#dcf8c6] text-slate-800 rounded-tl-xl rounded-tr-xl rounded-bl-xl shadow-sm' : 'bg-white border border-slate-200 text-slate-800 rounded-tr-xl rounded-br-xl rounded-tl-xl shadow-sm'} px-3 py-2">
+                        ${contentHtml}
+                        <div class="flex justify-end items-center mt-1 -mb-1">
+                            <span class="text-[9px] text-slate-400">${time}</span>
+                            ${statusIcon}
+                        </div>
+                    </div>
+                `;
+            }
+            container.appendChild(el);
+        });
+        
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function formatDuration(seconds) {
+        if (!seconds) return "0:00";
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    /* --- SENDING & RECEIVING --- */
+
+    function sendMessage() {
+        const input = document.getElementById("messageInput");
+        const text = input.value.trim();
+        
+        if (!text && !currentChatId) return;
+        
+        const payload = {
+            type: "message",
+            chat_id: currentChatId,
+            text: text
+        };
+        
+        ws.send(JSON.stringify(payload));
+        input.value = "";
+    }
+    
+    // Allow enter to send
+    const messageInput = document.getElementById("messageInput");
+    if(messageInput){
+        messageInput.addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                sendMessage();
+            } else {
+                ws.send(JSON.stringify({ type: "typing", chat_id: currentChatId }));
+            }
+        });
+    }
+
+    async function handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file || !currentChatId) return;
+        
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("type", file.type.startsWith("image/") ? "image" : "document");
+        
+        const res = await fetch("/messages/api/upload", { method: "POST", body: formData });
+        const data = await res.json();
+        
+        ws.send(JSON.stringify({
+            type: "message",
+            chat_id: currentChatId,
+            text: "",
+            attachment: data
+        }));
+        
+        event.target.value = ""; // reset
+    }
+
+    function handleNewMessage(data) {
+        const msg = data.message;
+        const msgChatId = data.chat_id;
+        
+        // Update chats list locally
+        let chat = chats.find(c => c.id === msgChatId);
+        if (chat) {
+            chat.last_message = msg;
+            
+            // Set preview text
+            let previewText = msg.text || 'Message';
+            if (msg.is_call) {
+                previewText = msg.call_status === 'answered' ? `📞 Call (${formatDuration(msg.call_duration)})` : `📞 Missed Call`;
+            } else if (msg.is_attachment) {
+                previewText = '📷 Attachment';
+            } else if (msg.is_voice) {
+                previewText = '🎤 Voice Note';
+            }
+            
+            const previewEl = document.getElementById(`preview-${chat.id}`);
+            if (previewEl) previewEl.textContent = previewText;
+            
+            if (msgChatId !== currentChatId && msg.sender_id !== CURRENT_USER_ID) {
+                chat.unread_count = (chat.unread_count || 0) + 1;
+                
+                if (!isWidgetOpen) {
+                    totalUnread++;
+                    updateGlobalBadge();
+                }
+                
+                playNotificationSound();
+                showNotification(`New message from ${chat.name || 'someone'}`, msg.text || '📷 Media');
+            }
+            // Move to top
+            chats = chats.filter(c => c.id !== msgChatId);
+            chats.unshift(chat);
+            renderChatsList();
+        } else {
+            // Need to reload chats
+            loadChats();
+        }
+        
+        // Append to active chat if open
+        if (currentChatId === msgChatId) {
+            // Tell server we read it immediately
+            if (msg.sender_id !== CURRENT_USER_ID) {
+                ws.send(JSON.stringify({ type: "read", chat_id: msgChatId, message_ids: [msg.id] }));
+                chat.unread_count = 0;
+            }
+            renderMessages([msg], true); // Append!
+        }
+    }
+
+    /* --- NEW CHAT MODAL --- */
+    function openNewChatModal() {
+        document.getElementById("newChatModal").classList.add("active");
+        renderUsersList();
+    }
+    
+    function closeNewChatModal() {
+        document.getElementById("newChatModal").classList.remove("active");
+        document.getElementById("isGroupToggle").checked = false;
+        document.getElementById("groupNameInput").value = "";
+        toggleGroupOptions();
+    }
+    
+    function toggleGroupOptions() {
+        const isGroup = document.getElementById("isGroupToggle").checked;
+        document.getElementById("groupNameContainer").classList.toggle("hidden", !isGroup);
+        if(!isGroup) {
+            renderUsersList();
+        } else {
+            renderUsersList();
+        }
+    }
+    
+    function renderUsersList() {
+        const isGroup = document.getElementById("isGroupToggle").checked;
+        const container = document.getElementById("usersListContainer");
+        container.innerHTML = "";
+        
+        allUsers.forEach(u => {
+            const el = document.createElement("label");
+            el.className = "flex items-center space-x-3 p-3 hover:bg-slate-50 cursor-pointer";
+            if (isGroup) {
+                el.innerHTML = `
+                    <input type="checkbox" name="userSelect" value="${u.id}" class="rounded text-primary focus:ring-primary">
+                    <span class="flex-1 font-medium text-slate-800">${u.full_name} <span class="text-xs text-slate-400">(@${u.username})</span></span>
+                `;
+            } else {
+                el.innerHTML = `
+                    <input type="radio" name="userSelect" value="${u.id}" class="text-primary focus:ring-primary">
+                    <span class="flex-1 font-medium text-slate-800">${u.full_name} <span class="text-xs text-slate-400">(@${u.username})</span></span>
+                `;
+            }
+            container.appendChild(el);
+        });
+    }
+    
+    async function createChat() {
+        const isGroup = document.getElementById("isGroupToggle").checked;
+        const name = document.getElementById("groupNameInput").value;
+        const selected = Array.from(document.querySelectorAll('input[name="userSelect"]:checked')).map(cb => parseInt(cb.value));
+        
+        if (selected.length === 0) return alert("Select at least one user");
+        if (isGroup && !name) return alert("Group name is required");
+        
+        const res = await fetch("/messages/api/chats/create", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ is_group: isGroup, name: name, members: selected })
+        });
+        const data = await res.json();
+        
+        closeNewChatModal();
+        await loadChats();
+        openChat(data.chat_id);
+    }
+
+    /* --- UTILS --- */
+    function playNotificationSound() {
+        // Safe play
+        const audio = new Audio('/static/notification.mp3'); 
+        audio.play().catch(e => {});
+    }
+    function showNotification(title, body) {
+        if (Notification.permission === "granted") {
+            new Notification(title, { body: body });
+        }
+    }
+    function handleStatusUpdate(data) {
+        loadChats(); // reload offline/online icons
+    }
+    let typingTimeout;
+    function handleTypingEvt(data) {
+        if (data.chat_id === currentChatId) {
+            document.getElementById("activeChatStatus").textContent = "typing...";
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                const chat = chats.find(c => c.id === currentChatId);
+                if (chat) document.getElementById("activeChatStatus").textContent = chat.other_user_online ? 'Online' : 'Offline';
+            }, 2000);
+        }
+    }
+    function handleReceipt(data) {
+        // Find msg bubble and update checkmarks
+        const bubble = document.getElementById(`msg-${data.message_id}`);
+        if(bubble) {
+            const icon = bubble.querySelector('.text-slate-400, .text-blue-500');
+            if(icon) {
+                icon.className = 'text-blue-500 text-[10px] ml-1 font-bold';
+                icon.textContent = '✓✓';
+            }
+        }
+    }
+
+    /* --- VOICE RECORDING (MediaRecorder) --- */
+    async function startRecording() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const formData = new FormData();
+                formData.append("file", audioBlob, "voicenote.webm");
+                formData.append("type", "voice");
+                
+                // Estimate duration
+                const duration = Math.round(audioBlob.size / 10000); 
+                
+                const res = await fetch("/messages/api/upload", { method: "POST", body: formData });
+                const data = await res.json();
+                data.duration = duration;
+                
+                ws.send(JSON.stringify({
+                    type: "message",
+                    chat_id: currentChatId,
+                    text: "",
+                    voice: data
+                }));
+            };
+            
+            mediaRecorder.start();
+            isRecording = true;
+            document.getElementById("recordVoiceBtn").classList.add("text-red-500", "animate-pulse");
+        } catch(e) { console.error("Mic error", e); }
+    }
+    
+    function stopRecording() {
+        if(isRecording && mediaRecorder) {
+            mediaRecorder.stop();
+            isRecording = false;
+            document.getElementById("recordVoiceBtn").classList.remove("text-red-500", "animate-pulse");
+        }
+    }
+
+    /* =========================================
+       WEBRTC AUDIO/VIDEO CALLING IMPLEMENTATION
+       ========================================= */
+
+    async function startCall(type) {
+        if (!currentCallTargetId) {
+            alert("Calls are only available in 1-on-1 chats currently.");
+            return;
+        }
+        activeCallType = type;
+        
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: true, 
+                video: type === 'video' 
+            });
+            
+            showCallModal(true);
+            document.getElementById('localVideo').srcObject = localStream;
+            
+            peerConnection = new RTCPeerConnection(ICE_SERVERS);
+            
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+            
+            peerConnection.ontrack = (event) => {
+                document.getElementById('remoteVideo').srcObject = event.streams[0];
+            };
+            
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    ws.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        target_id: currentCallTargetId,
+                        candidate: event.candidate
+                    }));
+                }
+            };
+            
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            
+            ws.send(JSON.stringify({
+                type: 'offer',
+                target_id: currentCallTargetId,
+                offer: offer,
+                callType: type,
+                callerName: document.getElementById('activeChatName').textContent
+            }));
+            
+        } catch (error) {
+            console.error('Error starting call', error);
+            alert("Could not access camera/microphone.");
+        }
+    }
+
+    let incomingCallData = null;
+
+    function handleCallOffer(data) {
+        incomingCallData = data;
+        document.getElementById('callerName').textContent = data.callerName || "Someone";
+        document.getElementById('callTypeLabel').textContent = `Incoming ${data.callType === 'video' ? 'Video' : 'Audio'} Call...`;
+        document.getElementById('incomingCallModal').classList.add('active');
+        playNotificationSound();
+    }
+
+    async function acceptCall() {
+        document.getElementById('incomingCallModal').classList.remove('active');
+        activeCallType = incomingCallData.callType;
+        currentCallTargetId = incomingCallData.sender_id;
+        
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: true, 
+                video: activeCallType === 'video' 
+            });
+            
+            showCallModal(false);
+            document.getElementById('localVideo').srcObject = localStream;
+            
+            peerConnection = new RTCPeerConnection(ICE_SERVERS);
+            
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+            
+            peerConnection.ontrack = (event) => {
+                document.getElementById('remoteVideo').srcObject = event.streams[0];
+            };
+            
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    ws.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        target_id: currentCallTargetId,
+                        candidate: event.candidate
+                    }));
+                }
+            };
+            
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCallData.offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            
+            ws.send(JSON.stringify({
+                type: 'answer',
+                target_id: currentCallTargetId,
+                answer: answer
+            }));
+            startCallTimer();
+            
+        } catch (error) {
+            console.error('Error accepting call', error);
+            declineCall();
+        }
+    }
+
+    function declineCall() {
+        document.getElementById('incomingCallModal').classList.remove('active');
+        if (incomingCallData) {
+            ws.send(JSON.stringify({
+                type: 'call-end',
+                target_id: incomingCallData.sender_id
+            }));
+            incomingCallData = null;
+        }
+    }
+
+    async function handleCallAnswer(data) {
+        if (peerConnection) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+            startCallTimer();
+        }
+    }
+
+    function startCallTimer() {
+        if (callTimerInterval) clearInterval(callTimerInterval);
+        callStartTime = Date.now();
+        callTimerInterval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+            document.getElementById('callDuration').textContent = formatDuration(elapsed);
+        }, 1000);
+    }
+
+    async function handleIceCandidate(data) {
+        if (peerConnection) {
+            try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+            } catch (e) {
+                console.error('Error adding received ice candidate', e);
+            }
+        }
+    }
+
+    function endCall() {
+        if (currentCallTargetId) {
+            ws.send(JSON.stringify({
+                type: 'call-end',
+                target_id: currentCallTargetId
+            }));
+        }
+        cleanupCall();
+    }
+
+    function handleCallEnd() {
+        cleanupCall();
+        document.getElementById('incomingCallModal').classList.remove('active');
+    }
+
+    function cleanupCall() {
+        if (peerConnection) {
+            peerConnection.close();
+            peerConnection = null;
+        }
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+            localStream = null;
+        }
+        if (callTimerInterval) {
+            clearInterval(callTimerInterval);
+            callTimerInterval = null;
+        }
+        document.getElementById('localVideo').srcObject = null;
+        document.getElementById('remoteVideo').srcObject = null;
+        document.getElementById('activeCallModal').classList.remove('active');
+        currentCallTargetId = null;
+    }
+
+    let callTimerInterval = null;
+    let callStartTime = null;
+
+    function showCallModal(isInitiator) {
+        document.getElementById('activeCallModal').classList.add('active');
+        document.getElementById('callDuration').textContent = "00:00";
+        
+        if (activeCallType === 'audio') {
+            document.getElementById('remoteVideo').classList.add('hidden');
+            document.getElementById('localVideo').classList.add('hidden');
+            document.getElementById('audioOnlyPlaceholder').classList.remove('hidden');
+        } else {
+            document.getElementById('remoteVideo').classList.remove('hidden');
+            document.getElementById('localVideo').classList.remove('hidden');
+            document.getElementById('audioOnlyPlaceholder').classList.add('hidden');
+        }
+    }
+    
+    // We need to start the timer when BOTH have connected (i.e. answer received/sent)
+    // Adding it to handleCallAnswer and acceptCall
+
+
+    function toggleMute() {
+        if (localStream) {
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = !audioTrack.enabled;
+                document.getElementById('muteBtn').classList.toggle('bg-red-600', !audioTrack.enabled);
+            }
+        }
+    }
+
+    function toggleVideo() {
+        if (localStream) {
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (videoTrack) {
+                videoTrack.enabled = !videoTrack.enabled;
+                document.getElementById('videoBtn').classList.toggle('bg-red-600', !videoTrack.enabled);
+            }
+        }
+    }
+    {% endif %}
+</script>

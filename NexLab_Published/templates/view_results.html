@@ -1,0 +1,237 @@
+<!-- templates/view_results.html -->
+{% extends "base.html" %}
+{% block title %}View Results - NexLab{% endblock %}
+{% block page_title %}View Results for Printing{% endblock %}
+{% block content %}
+<style>
+    .result-grid { font-size: 13px; border-collapse: collapse; }
+    .result-grid th { position: sticky; top: 0; z-index: 10; background: #f8fafc; border: 1px solid #cbd5e1; }
+    .result-grid td, .result-grid th { padding: 8px 10px; white-space: nowrap; vertical-align: middle; text-align: center; border: 1px solid #cbd5e1; }
+    .row-parent { background: #f1f5f9 !important; font-weight: 700; }
+    .row-child .test-name { padding-left: 32px !important; font-weight: 400; color: #475569; text-align: left; }
+    .row-standalone { font-weight: 600; }
+    .row-standalone .test-name { text-align: left; }
+    .row-parent .test-name { text-align: left; }
+    .select-cb { width: 18px; height: 18px; accent-color: #059669; cursor: pointer; }
+    .status-high { color: #dc2626; font-weight: 700; }
+    .status-low { color: #2563eb; font-weight: 700; }
+    .status-normal { color: #16a34a; font-weight: 500; }
+    .save-footer { position: sticky; bottom: 0; z-index: 20; background: white; border-top: 1px solid #e2e8f0; }
+</style>
+
+<!-- Patient Header -->
+<div class="bg-white rounded-3xl shadow-sm border border-slate-200 mb-4 p-5 relative overflow-hidden">
+    <div class="absolute top-4 right-4">
+        <a href="/print-results" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition">← Back to List</a>
+    </div>
+    
+    <div class="flex items-start gap-4">
+        <div class="w-14 h-14 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-2xl font-bold flex-shrink-0 mt-1">
+            {{ patient.full_name[0] if patient.full_name else '?' }}
+        </div>
+        
+        <div class="flex-1 min-w-0 pr-24">
+            <h3 class="text-xl font-bold text-slate-800 mb-3"><span class="text-slate-500 text-sm font-semibold mr-1">Name:</span>{{ patient.full_name }}</h3>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-y-2 gap-x-4 text-sm text-slate-700 mb-4">
+                <div class="truncate" title="ID: {{ patient.patient_id }}"><span class="font-semibold text-slate-500">ID:</span> <span class="font-mono font-bold bg-slate-100 px-1 rounded">{{ patient.patient_id }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Gender:</span> 
+                    <span class="px-1.5 py-0.5 rounded text-xs font-bold {{ 'bg-blue-100 text-blue-800' if patient.gender == 'male' else 'bg-pink-100 text-pink-800' }}">
+                        {{ patient.gender|capitalize }}
+                    </span>
+                </div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Age:</span> <span class="font-bold">{{ patient.age }} {{ patient.age_unit or 'year' }}{{ 's' if patient.age and patient.age > 1 else '' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Weight:</span> <span class="font-bold">{{ patient.weight or 'N/A' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Height:</span> <span class="font-bold">{{ patient.height or 'N/A' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Phone:</span> <span class="font-bold">{{ patient.phone_number or 'N/A' }}</span></div>
+
+                {% if visit %}
+                <div class="truncate"><span class="font-semibold text-slate-500">Visit:</span> <span class="font-mono font-bold text-xs">{{ visit.visit_id }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">Date:</span> <span class="font-bold">{{ visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit.visit_date else 'N/A' }}</span></div>
+                <div class="truncate"><span class="font-semibold text-slate-500">User:</span> <span class="font-bold">{{ visit_user_name or 'System' }}</span></div>
+                {% endif %}
+                <div class="truncate"><span class="font-semibold text-slate-500">Fasting Time:</span> <span class="font-bold">{{ patient.fasting_time if patient.fasting_time else 'N/A' }}</span></div>
+            </div>
+
+            <!-- Medical Details -->
+            <div class="bg-amber-50 rounded-lg p-3 border border-amber-100">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-slate-700">
+                    <div><span class="font-semibold text-slate-500 block text-xs">Disease/Diagnosis</span><div class="truncate font-bold text-blue-600">{{ patient.diagnosis or '' }}</div></div>
+                    <div><span class="font-semibold text-slate-500 block text-xs">Symptoms</span><div class="truncate font-bold text-blue-600">{{ patient.symptoms or '' }}</div></div>
+                    <div><span class="font-semibold text-slate-500 block text-xs">Therapy</span><div class="truncate font-bold text-blue-600">{{ patient.therapy or '' }}</div></div>
+                    <div><span class="font-semibold text-slate-500 block text-xs">Note</span><div class="truncate font-bold text-blue-600" title="{{ patient.note or '' }}">{{ patient.note or '' }}</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Results Grid -->
+<div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-20">
+    <div class="overflow-x-auto">
+        <table class="w-full result-grid" id="resultGrid">
+            <thead>
+                <tr>
+                    <th class="w-16">
+                        <label class="flex items-center justify-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="selectAllPrint" class="select-cb" checked>
+                        </label>
+                    </th>
+                    <th class="text-left px-6">Test / Parameter</th>
+                    <th>Result</th>
+                    <th>Unit</th>
+                    <th>Range</th>
+                    <th>Remark</th>
+                </tr>
+            </thead>
+
+            <tbody id="gridBody">
+                <tr id="loadingRow">
+                    <td colspan="6" class="py-20 text-center text-slate-400">
+                        <i class="fas fa-spinner fa-spin fa-2x mb-2"></i>
+                        <p>Loading results...</p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Footer Actions -->
+<div class="save-footer fixed bottom-0 left-0 right-0 p-4 shadow-lg flex justify-center">
+    <div class="max-w-7xl w-full flex justify-between items-center px-6">
+        <div class="text-sm text-slate-500">
+            <span id="selectedCount">0</span> tests selected for printing
+        </div>
+        <div class="flex gap-3">
+            <a href="/print-results" class="px-6 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 font-semibold transition">
+                Cancel
+            </a>
+            <button onclick="printSelected()" id="printBtn" class="px-8 py-2.5 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition shadow-lg shadow-emerald-200 flex items-center gap-2">
+                <i class="fas fa-print"></i> Print Selected
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const patientId = "{{ patient.patient_id }}";
+    let gridRows = [];
+
+    async function loadResults() {
+        try {
+            const resp = await fetch(`/api/double-authorized-tests/${patientId}`);
+            const data = await resp.json();
+            if (data.success) {
+                gridRows = data.results;
+                renderGrid(data.results);
+                updateSelectedCount();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to load results');
+        }
+    }
+
+    function renderGrid(rows) {
+        const tbody = document.getElementById('gridBody');
+        tbody.innerHTML = '';
+
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="py-10 text-center text-slate-400">No double-authorized results found.</td></tr>';
+            return;
+        }
+
+        rows.forEach((row, idx) => {
+            const tr = document.createElement('tr');
+            if (row.type === 'parent') {
+                tr.className = 'row-parent';
+                tr.innerHTML = `
+                    <td>
+                        <input type="checkbox" class="select-cb order-select" data-id="${row.order_id || ''}" checked onchange="onOrderSelectChange(this)">
+                    </td>
+                    <td class="test-name px-6"><i class="fas fa-flask mr-2 text-slate-400"></i>${row.test_name}</td>
+                    <td></td><td></td><td></td>
+                    <td></td>
+                `;
+            } else if (row.type === 'child') {
+                tr.className = 'row-child';
+                const flagClass = getFlagClass(row.flag);
+                tr.innerHTML = `
+                    <td></td>
+                    <td class="test-name px-6">${row.parameter_name}</td>
+                    <td class="font-bold ${flagClass}">${row.result_value}</td>
+                    <td class="text-slate-500">${row.unit || ''}</td>
+                    <td class="text-slate-500">${row.range || ''}</td>
+                    <td class="text-xs italic text-slate-400">${row.remark || ''}</td>
+                `;
+            } else {
+                // standalone
+                tr.className = 'row-standalone';
+                const flagClass = getFlagClass(row.flag);
+                tr.innerHTML = `
+                    <td>
+                        <input type="checkbox" class="select-cb order-select" data-id="${row.order_id || ''}" checked onchange="updateSelectedCount()">
+                    </td>
+                    <td class="test-name px-6"><i class="fas fa-flask mr-2 text-slate-400"></i>${row.test_name}</td>
+                    <td class="font-bold ${flagClass}">${row.result_value}</td>
+                    <td class="text-slate-500">${row.unit || ''}</td>
+                    <td class="text-slate-500">${row.range || ''}</td>
+                    <td class="text-xs italic text-slate-400">${row.remark || ''}</td>
+                `;
+            }
+
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    function getFlagClass(flag) {
+        if (!flag) return '';
+        const f = flag.toUpperCase();
+        if (f.includes('H')) return 'status-high';
+        if (f.includes('L')) return 'status-low';
+        return 'status-normal';
+    }
+
+    function onOrderSelectChange(cb) {
+        updateSelectedCount();
+    }
+
+    document.getElementById('selectAllPrint').addEventListener('change', function() {
+        const checked = this.checked;
+        document.querySelectorAll('.order-select').forEach(cb => {
+            cb.checked = checked;
+        });
+        updateSelectedCount();
+    });
+
+    function updateSelectedCount() {
+        const cbs = document.querySelectorAll('.order-select:checked');
+        document.getElementById('selectedCount').textContent = cbs.length;
+        
+        // Sync Select All
+        const totalCbs = document.querySelectorAll('.order-select');
+        document.getElementById('selectAllPrint').checked = (cbs.length === totalCbs.length && totalCbs.length > 0);
+    }
+
+    function printSelected() {
+        const selectedIds = Array.from(document.querySelectorAll('.order-select:checked'))
+            .map(cb => cb.dataset.id)
+            .filter(id => id !== '');
+        
+        if (selectedIds.length === 0) {
+            alert('Please select at least one test to print.');
+            return;
+        }
+
+        const url = `/print-report/${patientId}?order_ids=${selectedIds.join(',')}`;
+        window.open(url, '_blank');
+    }
+
+    window.onload = loadResults;
+</script>
+{% endblock %}
