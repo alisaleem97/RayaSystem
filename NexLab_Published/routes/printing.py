@@ -459,11 +459,54 @@ def print_barcode(patient_id: str, request: Request, session: Session = Depends(
     if current_user:
         log_activity_action(session, "PRINT_BARCODE", f"Printed barcode for patient {patient.full_name}", current_user, "patient", patient.id)
         session.commit()
-        
+    
+    # Load saved barcode template design
+    template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "barcode")).first()
+    template_data = None
+    if template:
+        template_data = {
+            "paper_width": template.paper_width,
+            "paper_height": template.paper_height,
+            "margin": template.margin,
+            "elements": template.elements
+        }
+    
+    # Get orders with test + sample_type eagerly loaded
+    orders = session.exec(
+        select(Order).options(
+            selectinload(Order.test).selectinload(TestDefinition.sample_type)
+        ).where(Order.patient_id == patient.id)
+    ).all()
+    
+    # Build tests_by_sample_type using test_short_name
+    tests_by_sample_type = {}
+    for order in orders:
+        if order.test:
+            sample_type_name = order.test.sample_type.sample_name if order.test.sample_type else "Unknown"
+            if sample_type_name not in tests_by_sample_type:
+                tests_by_sample_type[sample_type_name] = []
+            test_display = order.test.test_short_name if order.test.test_short_name else order.test.test_name
+            tests_by_sample_type[sample_type_name].append(test_display)
+    
+    # If no tests, still have at least one barcode
+    if not tests_by_sample_type:
+        tests_by_sample_type = {"Unknown": []}
+    
     lab_info = session.exec(select(LabInfo).limit(1)).first()
-    barcode_data = generate_barcode_base64(patient_id)
+    
+    # Load visit data
+    visit = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id)).first()
+    visit_id = visit.visit_id if visit else ""
+    visit_date = visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit and visit.visit_date else ""
+        
     return templates.TemplateResponse("print_barcode.html", {
-        "request": request, "patient": patient, "lab_info": lab_info, "barcode_data": barcode_data
+        "request": request,
+        "patient": patient,
+        "lab_info": lab_info,
+        "template_data": template_data,
+        "tests_by_sample_type": tests_by_sample_type,
+        "visit_id": visit_id,
+        "visit_date": visit_date
     })
 
 @router.get("/print-receipt/{patient_id}", response_class=HTMLResponse)
@@ -476,12 +519,67 @@ def print_receipt(patient_id: str, request: Request, session: Session = Depends(
     if current_user:
         log_activity_action(session, "PRINT_RECEIPT", f"Printed receipt for patient {patient.full_name}", current_user, "patient", patient.id)
         session.commit()
-        
-    visits = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id)).all()
-    orders = session.exec(select(Order).where(Order.patient_id == patient.id)).all()
+    
+    # Load saved receipt template design
+    template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "receipt")).first()
+    template_data = None
+    if template:
+        template_data = {
+            "paper_width": template.paper_width,
+            "paper_height": template.paper_height,
+            "margin": template.margin,
+            "elements": template.elements
+        }
+    
+    # Load lab info
     lab_info = session.exec(select(LabInfo).limit(1)).first()
-    barcode_data = generate_barcode_base64(patient_id)
-    return templates.TemplateResponse("print_receipt.html", {
-        "request": request, "patient": patient, "visits": visits, "orders": orders,
-        "lab_info": lab_info, "barcode_data": barcode_data
+    
+    # Load visit data + accounting
+    visit = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id)).first()
+    visit_id = visit.visit_id if visit else ""
+    visit_date = visit.visit_date.strftime('%d/%m/%Y %H:%M') if visit and visit.visit_date else ""
+    
+    received_amount = visit.received_amount if visit else 0.0
+    discount_amount = visit.discount_amount if visit else 0.0
+    tax_amount = visit.tax_amount if visit and visit.tax_amount else 0.0
+    remaining_amount = visit.remaining_amount if visit else 0.0
+    
+    # Load orders with test relationship
+    orders = session.exec(
+        select(Order).options(
+            selectinload(Order.test)
+        ).where(Order.patient_id == patient.id)
+    ).all()
+    
+    # Build orders data for template
+    orders_data = []
+    for order in orders:
+        test = order.test
+        orders_data.append({
+            "test_name": test.test_name if test else 'Unknown',
+            "test_short_name": test.test_short_name if test and test.test_short_name else (test.test_name if test else 'Unknown'),
+            "package_name": order.package_name or None,
+            "unit_price": order.unit_price or (test.price if test else 0),
+            "final_price": order.final_price or (order.unit_price or 0),
+            "test_id": order.test_id
+        })
+        
+    # Calculate accounting totals (same logic as /api/patient/)
+    total_amount = sum([float(o["final_price"]) if o["final_price"] else 0 for o in orders_data])
+    total_after_tax = total_amount - discount_amount + tax_amount
+    
+    return templates.TemplateResponse("print_receipt_page.html", {
+        "request": request,
+        "patient": patient,
+        "lab_info": lab_info,
+        "template_data": template_data,
+        "orders": orders_data,
+        "visit_id": visit_id,
+        "visit_date": visit_date,
+        "total_amount": total_amount,
+        "discount_amount": discount_amount,
+        "tax_amount": tax_amount,
+        "total_after_tax": total_after_tax,
+        "paid_amount": received_amount,
+        "remain_amount": remaining_amount
     })

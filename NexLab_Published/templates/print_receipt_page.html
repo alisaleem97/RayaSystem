@@ -1,0 +1,421 @@
+<!-- templates/print_receipt_page.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrintReceipt - {{ patient.patient_id if patient else 'NexLab' }}</title>
+    <style>
+        @page {
+            size: {{ template_data.paper_width if template_data else '80mm' }} {{ template_data.paper_height if template_data and template_data.paper_height != 'auto' else 'auto' }};
+            margin: {{ template_data.margin if template_data and template_data.margin != '0' else '0' }};
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #f3f4f6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .toolbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 10px 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            z-index: 100;
+        }
+        .toolbar button {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .btn-print {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+        .btn-print:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); }
+        .btn-close {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        .btn-close:hover { background: #e5e7eb; }
+        .receipt-container {
+            margin-top: 60px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .receipt-page {
+            background: white;
+            border: 1px solid #d1d5db;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+            width: {{ template_data.paper_width if template_data else '80mm' }};
+            min-height: {{ template_data.paper_height if template_data and template_data.paper_height != 'auto' else '200mm' }};
+        }
+        .receipt-element {
+            position: absolute;
+            overflow: hidden;
+        }
+        @media print {
+            body { background: white; padding: 0; margin: 0; }
+            .toolbar { display: none !important; }
+            .receipt-container { margin-top: 0; }
+            .receipt-page {
+                border: none;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Toolbar (hidden during print) -->
+    <div class="toolbar">
+        <button class="btn-print" onclick="window.print()">🖨️ Print</button>
+        <button class="btn-close" onclick="window.close()">✕ Close</button>
+    </div>
+
+    <div class="receipt-container">
+        {% if template_data and template_data.elements %}
+            <div class="receipt-page" id="receiptPage">
+                <!-- Elements rendered by JavaScript -->
+            </div>
+        {% else %}
+            <div style="padding: 40px; text-align: center; color: #ef4444;">
+                <h2>⚠️ No Receipt Design Found</h2>
+                <p>Please create and save a receipt design in the <a href="/print-receipt-designer">Receipt Designer</a> first.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <script src="/static/vendor/bwip-js/bwip-js.min.js"></script>
+    <script src="/static/vendor/bwip-js/barcode-helper.js"></script>
+    <script>
+    (function() {
+        const templateData = {{ template_data | tojson if template_data else 'null' }};
+        const patient = {
+            patient_id: "{{ patient.patient_id }}",
+            full_name: "{{ patient.full_name }}",
+            gender: "{{ patient.gender or '' }}",
+            age: {{ patient.age or 0 }},
+            age_unit: "{{ patient.age_unit or 'year' }}",
+            phone_key: "{{ patient.phone_key or '' }}",
+            phone_number: "{{ patient.phone_number or '' }}",
+            sample_type: "{{ patient.sample_type or '' }}"
+        };
+        const labInfo = {
+            lab_name: "{{ lab_info.lab_name if lab_info else '' }}",
+            lab_title: "{{ lab_info.lab_title if lab_info and lab_info.lab_title else '' }}",
+            lab_address: "{{ lab_info.lab_address if lab_info and lab_info.lab_address else '' }}",
+            lab_phone_1: "{{ lab_info.lab_phone_1 if lab_info and lab_info.lab_phone_1 else '' }}",
+            lab_phone_2: "{{ lab_info.lab_phone_2 if lab_info and lab_info.lab_phone_2 else '' }}",
+            lab_email: "{{ lab_info.lab_email if lab_info and lab_info.lab_email else '' }}",
+            lab_website: "{{ lab_info.lab_website if lab_info and lab_info.lab_website else '' }}",
+            lab_currency: "{{ lab_info.lab_currency if lab_info and lab_info.lab_currency else '$' }}",
+            first_doctor_name: "{{ lab_info.first_doctor_name if lab_info and lab_info.first_doctor_name else '' }}",
+            second_doctor_name: "{{ lab_info.second_doctor_name if lab_info and lab_info.second_doctor_name else '' }}",
+            lab_note_1: "{{ lab_info.lab_note_1 if lab_info and lab_info.lab_note_1 else '' }}",
+            lab_note_2: "{{ lab_info.lab_note_2 if lab_info and lab_info.lab_note_2 else '' }}",
+            lab_logo: "{{ lab_info.lab_logo if lab_info and lab_info.lab_logo else '' }}",
+            lab_qr_1: "{{ lab_info.lab_qr_1 if lab_info and lab_info.lab_qr_1 else '' }}",
+            lab_qr_2: "{{ lab_info.lab_qr_2 if lab_info and lab_info.lab_qr_2 else '' }}",
+            lab_stamp_1: "{{ lab_info.lab_stamp_1 if lab_info and lab_info.lab_stamp_1 else '' }}",
+            lab_stamp_2: "{{ lab_info.lab_stamp_2 if lab_info and lab_info.lab_stamp_2 else '' }}",
+            lab_signature_1: "{{ lab_info.lab_signature_1 if lab_info and lab_info.lab_signature_1 else '' }}",
+            lab_signature_2: "{{ lab_info.lab_signature_2 if lab_info and lab_info.lab_signature_2 else '' }}"
+        };
+        const orders = {{ orders | tojson }};
+        const visitId = "{{ visit_id }}";
+        const visitDate = "{{ visit_date }}";
+        
+        // Accounting data (computed on server from orders + visit)
+        const accounting = {
+            total_amount: {{ total_amount or 0 }},
+            discount_amount: {{ discount_amount or 0 }},
+            tax_amount: {{ tax_amount or 0 }},
+            total_after_tax: {{ total_after_tax or 0 }},
+            paid_amount: {{ paid_amount or 0 }},
+            remain_amount: {{ remain_amount or 0 }}
+        };
+
+        if (!templateData || !templateData.elements) return;
+
+        function formatPrice(val) {
+            var num = Math.round(parseFloat(val) || 0);
+            return num.toLocaleString('en-US');
+        }
+
+        const elements = JSON.parse(templateData.elements || '[]');
+        const page = document.getElementById('receiptPage');
+        if (!page) return;
+
+        elements.forEach(function(el) {
+            var div = document.createElement('div');
+            div.className = 'receipt-element';
+            div.style.left = el.x + 'px';
+            div.style.top = el.y + 'px';
+            div.style.width = el.width + 'px';
+            div.style.height = el.height + 'px';
+            div.style.fontSize = (el.fontSize || 11) + 'px';
+            div.style.fontWeight = el.fontWeight || 'normal';
+            div.style.color = el.color || '#000000';
+            div.style.textAlign = el.align || 'left';
+            div.style.backgroundColor = el.bgColor || 'transparent';
+            div.style.padding = '2px 4px';
+
+            var isEmpty = false;
+            var content = '';
+
+            switch(el.type) {
+                // Lab Info
+                case 'lab_name':
+                    isEmpty = !labInfo.lab_name;
+                    content = '<div style="font-weight: bold; font-size: 14px; text-align: center;">' + labInfo.lab_name + '</div>';
+                    break;
+                case 'lab_title':
+                    isEmpty = !labInfo.lab_title;
+                    content = '<div style="font-size: 10px; text-align: center;">' + labInfo.lab_title + '</div>';
+                    break;
+                case 'lab_address':
+                    isEmpty = !labInfo.lab_address;
+                    content = '<div style="font-size: 10px; text-align: center;">' + labInfo.lab_address + '</div>';
+                    break;
+                case 'lab_phone_1':
+                    isEmpty = !labInfo.lab_phone_1;
+                    content = '<div style="font-size: 10px;">📞 ' + labInfo.lab_phone_1 + '</div>';
+                    break;
+                case 'lab_phone_2':
+                    isEmpty = !labInfo.lab_phone_2;
+                    content = '<div style="font-size: 10px;">' + labInfo.lab_phone_2 + '</div>';
+                    break;
+                case 'lab_email':
+                    isEmpty = !labInfo.lab_email;
+                    content = '<div style="font-size: 10px;">✉️ ' + labInfo.lab_email + '</div>';
+                    break;
+                case 'lab_website':
+                    isEmpty = !labInfo.lab_website;
+                    content = '<div style="font-size: 10px;">🌐 ' + labInfo.lab_website + '</div>';
+                    break;
+                case 'first_doctor_name':
+                    isEmpty = !labInfo.first_doctor_name;
+                    content = '<div style="font-size: 10px;">' + labInfo.first_doctor_name + '</div>';
+                    break;
+                case 'second_doctor_name':
+                    isEmpty = !labInfo.second_doctor_name;
+                    content = '<div style="font-size: 10px;">' + labInfo.second_doctor_name + '</div>';
+                    break;
+                case 'lab_note_1':
+                    isEmpty = !labInfo.lab_note_1;
+                    content = '<div style="font-size: 9px; font-style: italic;">' + labInfo.lab_note_1 + '</div>';
+                    break;
+                case 'lab_note_2':
+                    isEmpty = !labInfo.lab_note_2;
+                    content = '<div style="font-size: 9px; font-style: italic;">' + labInfo.lab_note_2 + '</div>';
+                    break;
+
+                // Lab Images
+                case 'lab_logo':
+                    var logoUrl = el.imageUrl || labInfo.lab_logo;
+                    isEmpty = !logoUrl;
+                    content = logoUrl ? '<div style="text-align: center; padding: 5px;"><img src="/uploads/' + logoUrl + '" style="max-width: 100%; max-height: 60px;"></div>' : '';
+                    break;
+                case 'lab_qr_1':
+                    var qr1Url = el.imageUrl || labInfo.lab_qr_1;
+                    isEmpty = !qr1Url;
+                    content = qr1Url ? '<div style="text-align: center; padding: 5px;"><img src="/uploads/' + qr1Url + '" style="max-width: 80px; max-height: 80px;"></div>' : '';
+                    break;
+                case 'lab_qr_2':
+                    var qr2Url = el.imageUrl || labInfo.lab_qr_2;
+                    isEmpty = !qr2Url;
+                    content = qr2Url ? '<div style="text-align: center; padding: 5px;"><img src="/uploads/' + qr2Url + '" style="max-width: 80px; max-height: 80px;"></div>' : '';
+                    break;
+                case 'lab_stamp_1':
+                    var stamp1Url = el.imageUrl || labInfo.lab_stamp_1;
+                    isEmpty = !stamp1Url;
+                    content = stamp1Url ? '<div style="text-align: center; padding: 5px;"><img src="/uploads/' + stamp1Url + '" style="max-width: 100px; max-height: 100px;"></div>' : '';
+                    break;
+                case 'lab_stamp_2':
+                    var stamp2Url = el.imageUrl || labInfo.lab_stamp_2;
+                    isEmpty = !stamp2Url;
+                    content = stamp2Url ? '<div style="text-align: center; padding: 5px;"><img src="/uploads/' + stamp2Url + '" style="max-width: 100px; max-height: 100px;"></div>' : '';
+                    break;
+                case 'lab_signature_1':
+                    var sig1Url = el.imageUrl || labInfo.lab_signature_1;
+                    isEmpty = !sig1Url;
+                    content = sig1Url ? '<div style="text-align: center; padding: 5px;"><img src="/uploads/' + sig1Url + '" style="max-width: 120px; max-height: 50px;"></div>' : '';
+                    break;
+                case 'lab_signature_2':
+                    var sig2Url = el.imageUrl || labInfo.lab_signature_2;
+                    isEmpty = !sig2Url;
+                    content = sig2Url ? '<div style="text-align: center; padding: 5px;"><img src="/uploads/' + sig2Url + '" style="max-width: 120px; max-height: 50px;"></div>' : '';
+                    break;
+
+                // Patient Info
+                case 'patient_name':
+                    isEmpty = !patient.full_name;
+                    content = '<div><strong>Name:</strong> ' + patient.full_name + '</div>';
+                    break;
+                case 'patient_id':
+                    isEmpty = !patient.patient_id;
+                    content = '<div><strong>ID:</strong> ' + patient.patient_id + '</div>';
+                    break;
+                case 'visit_id':
+                    isEmpty = !visitId;
+                    content = '<div><strong>Visit:</strong> ' + visitId + '</div>';
+                    break;
+                case 'visit_date':
+                    isEmpty = !visitDate;
+                    content = '<div><strong>Date:</strong> ' + visitDate + '</div>';
+                    break;
+                case 'patient_age':
+                    var ageStr = patient.age ? (patient.age + ' ' + patient.age_unit + (patient.age > 1 ? 's' : '')) : '';
+                    isEmpty = !ageStr;
+                    content = '<div><strong>Age:</strong> ' + ageStr + '</div>';
+                    break;
+                case 'patient_gender':
+                    var genderStr = patient.gender ? (patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1)) : '';
+                    isEmpty = !genderStr;
+                    content = '<div><strong>Gender:</strong> ' + genderStr + '</div>';
+                    break;
+                case 'patient_phone':
+                    var phoneStr = (patient.phone_key + ' ' + patient.phone_number).trim();
+                    isEmpty = !phoneStr;
+                    content = '<div><strong>Phone:</strong> ' + phoneStr + '</div>';
+                    break;
+                case 'sample_type':
+                    isEmpty = !patient.sample_type;
+                    content = '<div><strong>Sample:</strong> ' + patient.sample_type + '</div>';
+                    break;
+
+                // Test List with Prices
+                case 'test_list_with_price':
+                    if (orders.length > 0) {
+                        // Group by package
+                        var grouped = {};
+                        orders.forEach(function(o) {
+                            var key = o.package_name ? ('pkg_' + o.package_name) : ('test_' + o.test_id);
+                            if (!grouped[key]) {
+                                grouped[key] = { name: o.package_name || o.test_short_name || o.test_name, price: 0, isPackage: !!o.package_name };
+                            }
+                            grouped[key].price += (o.final_price || o.unit_price || 0);
+                        });
+                        var testsHtml = '';
+                        Object.keys(grouped).forEach(function(key) {
+                            var o = grouped[key];
+                            testsHtml += '<div style="border-bottom: 1px dotted #ccc; padding: 3px 0; display: flex; justify-content: space-between;">' +
+                                '<span>' + (o.isPackage ? '📦 ' : '') + o.name + '</span>' +
+                                '<span>' + formatPrice(o.price) + '</span></div>';
+                        });
+                        content = '<div><strong>Tests:</strong><br>' + testsHtml + '</div>';
+                    } else {
+                        content = '<div><strong>Tests:</strong><br><em>No tests ordered</em></div>';
+                    }
+                    break;
+                case 'test_name':
+                    var firstTestName = orders.length > 0 ? (orders[0].test_short_name || orders[0].test_name) : '';
+                    isEmpty = !firstTestName;
+                    content = '<div>' + firstTestName + '</div>';
+                    break;
+
+                // Barcode — use bwip-js
+                case 'barcode_image':
+                    var bcDataUrl = generateBarcodeDataURL(patient.patient_id, 2, 8, true);
+                    content = '<div style="text-align: center; padding: 5px 0;"><img src="' + bcDataUrl + '" style="max-width: 100%; height: auto; display: block; margin: 0 auto;"></div>';
+                    break;
+
+                // Accounting
+                case 'total_amount':
+                    isEmpty = accounting.total_amount === 0;
+                    content = '<div style="display: flex; justify-content: space-between; font-weight: bold;"><span>Total:</span><span>' + formatPrice(accounting.total_amount) + '</span></div>';
+                    break;
+                case 'discount':
+                    content = '<div style="display: flex; justify-content: space-between;"><span>Discount:</span><span>' + formatPrice(accounting.discount_amount) + '</span></div>';
+                    break;
+                case 'total_after_tax':
+                    content = '<div style="display: flex; justify-content: space-between; font-weight: bold;"><span>Total After Tax:</span><span>' + formatPrice(accounting.total_after_tax) + '</span></div>';
+                    break;
+                case 'paid_amount':
+                    isEmpty = accounting.paid_amount === 0;
+                    content = '<div style="display: flex; justify-content: space-between;"><span>Paid:</span><span>' + formatPrice(accounting.paid_amount) + '</span></div>';
+                    break;
+                case 'remain_amount':
+                    isEmpty = accounting.remain_amount === 0;
+                    var remainStyle = accounting.remain_amount > 0 ? 'color: #dc2626; font-weight: bold;' : '';
+                    content = '<div style="display: flex; justify-content: space-between; border-top: 2px solid #000; padding-top: 5px; ' + remainStyle + '"><span>Remaining:</span><span>' + formatPrice(accounting.remain_amount) + '</span></div>';
+                    break;
+
+                // Shapes
+                case 'shape_line':
+                    div.className = '';
+                    div.style.position = 'absolute';
+                    div.style.height = (el.shapeWidth || 2) + 'px';
+                    div.style.background = el.shapeColor || '#000000';
+                    div.style.border = 'none';
+                    div.style.padding = '0';
+                    content = '';
+                    break;
+                case 'shape_box':
+                    div.className = '';
+                    div.style.position = 'absolute';
+                    div.style.border = (el.shapeWidth || 2) + 'px solid ' + (el.shapeColor || '#000000');
+                    div.style.background = 'transparent';
+                    div.style.padding = '0';
+                    content = '';
+                    break;
+                case 'shape_circle':
+                    div.style.border = (el.shapeWidth || 2) + 'px solid ' + (el.shapeColor || '#000000');
+                    div.style.borderRadius = '50%';
+                    div.style.background = 'transparent';
+                    div.style.padding = '0';
+                    content = '';
+                    break;
+
+                // Custom Text
+                case 'custom_text':
+                    var customVal = el.customText || '';
+                    isEmpty = !customVal;
+                    content = '<div>' + customVal + '</div>';
+                    break;
+                case 'thank_you_message':
+                    var thankVal = el.customText || 'Thank you for choosing our services!';
+                    isEmpty = !thankVal;
+                    content = '<div style="text-align: center; font-style: italic; margin-top: 10px;">' + thankVal + '</div>';
+                    break;
+                case 'footer_notes':
+                    var footerVal = labInfo.lab_note_1 || 'Results are valid for 30 days. Please consult your doctor for interpretation.';
+                    isEmpty = !footerVal;
+                    content = '<div style="font-size: 9px; text-align: center; padding-top: 10px; border-top: 1px dashed #ccc;">' + footerVal + '</div>';
+                    break;
+
+                default:
+                    var defVal = el.label || '';
+                    isEmpty = !defVal;
+                    content = '<div>' + defVal + '</div>';
+            }
+
+            // Hide if empty and configured
+            if (el.hideIfEmpty && isEmpty) {
+                div.style.display = 'none';
+            }
+
+            div.innerHTML = content;
+            page.appendChild(div);
+        });
+    })();
+    </script>
+</body>
+</html>

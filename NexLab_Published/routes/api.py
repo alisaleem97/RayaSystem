@@ -151,6 +151,7 @@ def get_patient_api(patient_id: str, session: Session = Depends(get_session)):
         ).all()
         
         test_names = [order.test.test_name if order.test else 'Unknown' for order in orders]
+        test_short_names = [order.test.test_short_name if order.test and order.test.test_short_name else (order.test.test_name if order.test else 'Unknown') for order in orders]
         
         tests_by_sample_type = {}
         for order in orders:
@@ -158,7 +159,9 @@ def get_patient_api(patient_id: str, session: Session = Depends(get_session)):
                 sample_type_name = order.test.sample_type.sample_name if order.test.sample_type else "Unknown"
                 if sample_type_name not in tests_by_sample_type:
                     tests_by_sample_type[sample_type_name] = []
-                tests_by_sample_type[sample_type_name].append(order.test.test_name)
+                tests_by_sample_type[sample_type_name].append(
+                    order.test.test_short_name if order.test.test_short_name else order.test.test_name
+                )
         
         visits = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id)).all()
         visit_id = visits[0].visit_id if visits else patient.patient_id + '000'
