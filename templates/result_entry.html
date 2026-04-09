@@ -576,9 +576,9 @@
 
     function buildDeviceOptions(devices, selectedId) {
         if (!devices || devices.length === 0) return '<option value="">No device</option>';
-        let html = '';
+        let html = '<option value="">-- Select --</option>';
         devices.forEach(d => {
-            html += `<option value="${d.id}" ${d.id === selectedId ? 'selected' : ''}>${escHtml(d.name)}</option>`;
+            html += `<option value="${d.id}" ${d.id == selectedId ? 'selected' : ''}>${escHtml(d.name)}</option>`;
         });
         return html;
     }
@@ -891,20 +891,49 @@
         return inputs.some(inp => inp.value && inp.value.trim() !== '');
     }
 
+    function hasSelectedDevice(orderId, type, tr) {
+        let devSelect = null;
+        if (type === 'parent') {
+            devSelect = tr.querySelector('.parent-device-select');
+        } else if (type === 'standalone') {
+            devSelect = tr.querySelector('.device-select');
+        } else if (type === 'child') {
+            const parentTr = document.querySelector(`tr.row-parent[data-order-id="${orderId}"]`);
+            if (parentTr) devSelect = parentTr.querySelector('.parent-device-select');
+        }
+
+        if (devSelect) {
+            if (devSelect.options.length === 1 && devSelect.options[0].text === "No device") {
+                return true;
+            }
+            return devSelect.value !== '';
+        }
+        return true; 
+    }
+
     // ===========================
     // SELECT ALL AUTHORIZE
     // ===========================
     document.getElementById('selectAllAuth').addEventListener('change', function () {
         const checked = this.checked;
         let blockedAny = false;
+        let blockedReason = '';
+
         document.querySelectorAll('.authorize-cb:not(#selectAllAuth)').forEach(cb => {
             if (checked) {
                 const tr = cb.closest('tr');
                 if (tr) {
                     const orderId = tr.dataset.orderId;
                     const type = tr.dataset.type;
+                    
+                    if (!hasSelectedDevice(orderId, type, tr)) {
+                        blockedAny = true;
+                        blockedReason = 'Please select a device before AUTH';
+                        return; // Skip checking this one
+                    }
                     if (!hasAnyResult(orderId, type)) {
                         blockedAny = true;
+                        blockedReason = 'Please enter the result to AUTH';
                         return; // Skip checking this one
                     }
                 }
@@ -914,8 +943,8 @@
         });
         syncSelectAllAuth();
         if (blockedAny) {
-            this.checked = false; // Cannot truly "select all" if some are missing results
-            showNotification('Please enter the result to AUTH', 'error');
+            this.checked = false; // Cannot truly "select all" if some are missing results/devices
+            showNotification(blockedReason, 'error');
         }
     });
 
@@ -950,6 +979,12 @@
                 if (tr) {
                     const orderId = tr.dataset.orderId;
                     const type = tr.dataset.type;
+                    
+                    if (!hasSelectedDevice(orderId, type, tr)) {
+                        cb.checked = false;
+                        showNotification('Please select a device before AUTH', 'error');
+                        return;
+                    }
                     if (!hasAnyResult(orderId, type)) {
                         cb.checked = false;
                         showNotification('Please enter the result to AUTH', 'error');

@@ -80,13 +80,27 @@
             font-weight: 500;
         }
         @media print {
-            body { background: white; padding: 0; margin: 0; }
+            body { 
+                background: white; 
+                padding: 0; 
+                margin: 0; 
+                align-items: flex-start; 
+                justify-content: flex-start; 
+                display: block; 
+            }
             .toolbar { display: none !important; }
-            .barcode-pages { margin-top: 0; gap: 0; }
+            .barcode-pages { 
+                margin-top: 0; 
+                gap: 0; 
+                align-items: flex-start; 
+            }
             .barcode-page {
                 border: none;
                 box-shadow: none;
                 page-break-after: always;
+                position: absolute;
+                top: 0;
+                left: 0;
             }
             .barcode-page:last-child {
                 page-break-after: auto;

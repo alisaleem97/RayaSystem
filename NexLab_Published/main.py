@@ -87,6 +87,15 @@ async def auth_middleware(request, call_next):
     public_paths = ["/login", "/static/", "/tmp/", "/favicon.ico"]
     is_public = any(path.startswith(p) for p in public_paths)
     
+    # ✅ NexPrint token bypass: allow /print-barcode/ and /print-receipt/ with valid token
+    # Token = first 16 chars of SECRET_KEY hash (simple, non-guessable)
+    import hashlib
+    PRINT_TOKEN = hashlib.sha256(SECRET_KEY.encode()).hexdigest()[:16]
+    if (path.startswith("/print-barcode/") or path.startswith("/print-receipt/")):
+        token = request.query_params.get("print_token", "")
+        if token == PRINT_TOKEN:
+            is_public = True
+    
     if not is_public:
         try:
             from itsdangerous import URLSafeSerializer

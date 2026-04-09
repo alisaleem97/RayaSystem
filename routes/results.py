@@ -361,7 +361,7 @@ def result_entry_data(patient_id: str, request: Request, session: Session = Depe
 
             if has_params:
                 # Parent row (read-only, no input)
-                parent_dev_id = (existing_result.device_id if existing_result else None) or primary_device_id
+                parent_dev_id = existing_result.device_id if existing_result else None
                 grid_rows.append({
                     "type": "parent",
                     "order_id": order.id,
@@ -409,7 +409,7 @@ def result_entry_data(patient_id: str, request: Request, session: Session = Depe
                     })
             else:
                 # Standalone test (no sub-parameters)
-                dev_id = (existing_result.device_id if existing_result else None) or primary_device_id
+                dev_id = existing_result.device_id if existing_result else None
                 rng = find_range(test.id, None, dev_id)
                 rt = get_result_type(test.id, None)
                 grid_rows.append({
@@ -691,8 +691,6 @@ def get_range_for_device(
     ranges = session.exec(query.where(TestRange.device_id == device_id)).all()
     if not ranges:
         ranges = session.exec(query.where(TestRange.device_id == None)).all()
-    if not ranges:
-        ranges = session.exec(query).all()
 
     best = None
     for r in ranges:

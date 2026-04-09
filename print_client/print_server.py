@@ -61,6 +61,11 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
                 
                 patient_id = data.get('patient_id', '')
                 patient_name = data.get('patient_name', '')
+                print_token = data.get('print_token', '')
+                barcode_width = data.get('barcode_width', '')
+                barcode_height = data.get('barcode_height', '')
+                receipt_width = data.get('receipt_width', '')
+                receipt_height = data.get('receipt_height', '')
                 
                 if not patient_id:
                     self._send_error(400, 'patient_id is required')
@@ -89,7 +94,12 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
                             server_url=server_url,
                             patient_id=patient_id,
                             barcode_printer=barcode_printer,
-                            receipt_printer=receipt_printer
+                            receipt_printer=receipt_printer,
+                            print_token=print_token,
+                            barcode_width=barcode_width,
+                            barcode_height=barcode_height,
+                            receipt_width=receipt_width,
+                            receipt_height=receipt_height
                         )
                         
                         if results['barcode_success']:

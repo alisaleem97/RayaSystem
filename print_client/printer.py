@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 import winreg
+import PyPDF2 # Forced global import for PyInstaller
 
 
 def find_edge_executable():
@@ -97,9 +98,30 @@ def render_html_to_pdf(url, output_pdf, edge_path=None):
         f'--user-data-dir={temp_profile}',
         url
     ]
+    # Try with --headless=new first, as older --headless is deprecated
+    cmd_new = list(cmd)
+    cmd_new[1] = '--headless=new'
+    cmd_new.insert(4, '--disable-dev-shm-usage') # Prevents crashes
     
     try:
         result = subprocess.run(
+            cmd_new,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+        )
+        
+        # Wait up to 5 seconds for file to be fully written
+        for _ in range(10):
+            if os.path.exists(output_pdf) and os.path.getsize(output_pdf) > 0:
+                time.sleep(0.5)
+                return True
+            time.sleep(0.5)
+            
+        # Fallback to old --headless
+        cmd.insert(4, '--disable-dev-shm-usage')
+        result2 = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
@@ -107,13 +129,19 @@ def render_html_to_pdf(url, output_pdf, edge_path=None):
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
         )
         
-        # Wait a moment for file to be fully written
-        time.sleep(0.5)
+        for _ in range(10):
+            if os.path.exists(output_pdf) and os.path.getsize(output_pdf) > 0:
+                time.sleep(0.5)
+                return True
+            time.sleep(0.5)
+            
+        err1 = result.stderr.strip().replace('\n', ' ')
+        err1 = err1[-60:] if len(err1) > 60 else err1
         
-        if os.path.exists(output_pdf) and os.path.getsize(output_pdf) > 0:
-            return True
-        else:
-            raise RuntimeError(f"PDF not generated. Edge stderr: {result.stderr}")
+        err2 = result2.stderr.strip().replace('\n', ' ')
+        err2 = err2[-60:] if len(err2) > 60 else err2
+        
+        raise RuntimeError(f"RC1={result.returncode} Err1='{err1}'. RC2={result2.returncode} Err2='{err2}'")
     except subprocess.TimeoutExpired:
         raise RuntimeError("PDF generation timed out (30s)")
     finally:
@@ -158,7 +186,63 @@ def print_pdf_to_printer(pdf_path, printer_name, sumatra_path=None):
         raise RuntimeError("Print command timed out (30s)")
 
 
-def print_job(server_url, patient_id, barcode_printer, receipt_printer, edge_path=None, sumatra_path=None):
+def parse_dim_to_pt(dim_str):
+    """Convert a dimension string (e.g., '4in', '50mm', '80px') to PDF points (1/72 inch)."""
+    if not dim_str or dim_str.lower() == 'auto': return None
+    dim_str = str(dim_str).strip().lower()
+    try:
+        import re
+        match = re.match(r'^([\d\.]+)\s*([a-z]*)$', dim_str)
+        if not match: return None
+        val, unit = float(match.group(1)), match.group(2)
+        
+        if unit == 'mm': return val * 2.83465
+        elif unit == 'cm': return val * 28.3465
+        elif unit == 'in': return val * 72.0
+        elif unit == 'px': return val * 0.75
+        else: return val # assume points
+    except:
+        return None
+
+def crop_pdf(pdf_path, width_str, height_str):
+    """Crop the PDF to the given dimensions starting from the top left corner."""
+    width_pt = parse_dim_to_pt(width_str)
+    height_pt = parse_dim_to_pt(height_str)
+    if not width_pt and not height_pt:
+        return
+        
+    try:
+        import PyPDF2
+        with open(pdf_path, 'rb') as f:
+            reader = PyPDF2.PdfReader(f)
+            if len(reader.pages) == 0: return
+            page = reader.pages[0]
+            
+            orig_height = float(page.mediabox.height)
+            orig_width = float(page.mediabox.width)
+            
+            w = width_pt if width_pt else orig_width
+            h = height_pt if height_pt else orig_height
+            
+            # PDF origin (0,0) is bottom-left, but HTML content starts top-left
+            page.mediabox.lower_left = (0, orig_height - h)
+            page.mediabox.upper_right = (w, orig_height)
+            
+            # Also update cropbox to be explicit
+            page.cropbox.lower_left = (0, orig_height - h)
+            page.cropbox.upper_right = (w, orig_height)
+            
+            writer = PyPDF2.PdfWriter()
+            writer.add_page(page)
+            
+        with open(pdf_path, 'wb') as f:
+            writer.write(f)
+    except Exception as e:
+        raise RuntimeError(f"Failed to crop PDF: {e}")
+
+
+
+def print_job(server_url, patient_id, barcode_printer, receipt_printer, print_token='', barcode_width='', barcode_height='', receipt_width='', receipt_height='', edge_path=None, sumatra_path=None):
     """
     Complete print job: render barcode + receipt to PDF, then print to configured printers.
     Returns dict with results.
@@ -175,11 +259,15 @@ def print_job(server_url, patient_id, barcode_printer, receipt_printer, edge_pat
     try:
         # --- Print Barcode ---
         if barcode_printer:
-            barcode_url = f"{server_url.rstrip('/')}/print-barcode/{patient_id}"
+            barcode_url = f"{server_url.rstrip('/')}/print-barcode/{patient_id}?print_token={print_token}"
             barcode_pdf = os.path.join(temp_dir, 'barcode.pdf')
             
             try:
                 render_html_to_pdf(barcode_url, barcode_pdf, edge_path)
+                # Fallback to local defaults if client didn't refresh HTML page payload
+                if not barcode_width: barcode_width = '50mm'
+                if not barcode_height: barcode_height = '25mm'
+                crop_pdf(barcode_pdf, barcode_width, barcode_height)
                 print_pdf_to_printer(barcode_pdf, barcode_printer, sumatra_path)
                 results['barcode_success'] = True
             except Exception as e:
@@ -187,11 +275,13 @@ def print_job(server_url, patient_id, barcode_printer, receipt_printer, edge_pat
         
         # --- Print Receipt ---
         if receipt_printer:
-            receipt_url = f"{server_url.rstrip('/')}/print-receipt/{patient_id}"
+            receipt_url = f"{server_url.rstrip('/')}/print-receipt/{patient_id}?print_token={print_token}"
             receipt_pdf = os.path.join(temp_dir, 'receipt.pdf')
             
             try:
                 render_html_to_pdf(receipt_url, receipt_pdf, edge_path)
+                if not receipt_width: receipt_width = '80mm'
+                crop_pdf(receipt_pdf, receipt_width, receipt_height)
                 print_pdf_to_printer(receipt_pdf, receipt_printer, sumatra_path)
                 results['receipt_success'] = True
             except Exception as e:

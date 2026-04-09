@@ -32,11 +32,24 @@ def patient_registration_page(request: Request, session: Session = Depends(get_s
     success = request.query_params.get("success")
     error = request.query_params.get("error")
     last_patient_id = request.query_params.get("patient_id")
+    import hashlib
+    from routes.helpers import SECRET_KEY
+    print_token = hashlib.sha256(SECRET_KEY.encode()).hexdigest()[:16]
+    
+    from models import PrintTemplate
+    barcode_template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "barcode")).first()
+    receipt_template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "receipt")).first()
+    
     return templates.TemplateResponse("patient_registration.html", {
         "request": request, "provinces": provinces, "partners": partners,
         "tests": tests, "packages": packages,
         "message_success": success, "message_error": error,
-        "last_patient_id": last_patient_id
+        "last_patient_id": last_patient_id,
+        "print_token": print_token,
+        "barcode_width": barcode_template.paper_width if barcode_template else '4in',
+        "barcode_height": barcode_template.paper_height if barcode_template else '2in',
+        "receipt_width": receipt_template.paper_width if receipt_template else '80mm',
+        "receipt_height": receipt_template.paper_height if receipt_template else 'auto'
     })
 
 class CheckDuplicateRequest(BaseModel):

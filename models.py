@@ -569,6 +569,7 @@ class PatientVisit(SQLModel, table=True):
     # Call Centre fields
     is_called: bool = Field(default=False)
     is_whatsapp_sent: bool = Field(default=False)
+    is_printed: bool = Field(default=False)
     
     # Relationships
     patient: Optional["Patient"] = Relationship(back_populates="visits")

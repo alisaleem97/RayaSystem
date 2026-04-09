@@ -173,6 +173,14 @@
                             </span>
                             {% endif %}
 
+                            {% if item.is_printed %}
+                            <span
+                                class="px-3 py-1 bg-blue-600 text-white text-[10px] font-bold rounded-full shadow-sm uppercase tracking-wide"
+                                title="Results Printed">
+                                Printed
+                            </span>
+                            {% endif %}
+
                             {% if item.alarm %}
                             <span class="flex items-center justify-center" title="Overdue (Pending > 4h)">
                                 <div class="relative flex h-3 w-3">
@@ -183,7 +191,7 @@
                             </span>
                             {% endif %}
 
-                            {% if not item.alarm and not item.is_called %}
+                            {% if not item.alarm and not item.is_called and not item.is_printed %}
                             <span class="text-slate-300">—</span>
                             {% endif %}
                         </div>

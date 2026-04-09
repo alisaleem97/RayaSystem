@@ -96,7 +96,7 @@
 <body>
 
     <div class="no-print fixed top-4 right-4 flex gap-2 z-50">
-        <button onclick="window.print()"
+        <button onclick="handlePrint()"
             class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-bold shadow-lg transition">
             <i class="fas fa-print mr-2"></i> Print Report
         </button>
@@ -143,6 +143,17 @@
             if (!dateStr) return '';
             const d = new Date(dateStr);
             return isNaN(d) ? dateStr : d.toISOString().split('T')[0];
+        }
+
+        async function handlePrint() {
+            if (visit && visit.visit_id) {
+                try {
+                    await fetch(`/api/mark-printed/${visit.visit_id}`, { method: 'POST' });
+                } catch(e) {
+                    console.error("Failed to mark as printed", e);
+                }
+            }
+            window.print();
         }
 
         async function fetchResultsAndRender() {

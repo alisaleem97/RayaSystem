@@ -128,7 +128,8 @@ def call_centre_list(
             "tests_names": ", ".join(test_list[:3]) + ("..." if len(test_list) > 3 else ""),
             "status": status_text,
             "status_color": status_color,
-            "is_called": v.is_called
+            "is_called": v.is_called,
+            "is_printed": v.is_printed
         })
     
     return templates.TemplateResponse("call_centre.html", {
@@ -199,6 +200,32 @@ def mark_called(visit_id: str, request: Request, session: Session = Depends(get_
         action="UPDATE",
         current_user=current_user,
         new_values={"action": "Patient marked as Called"}
+    )
+    # ---------------------------------------------------------
+
+    session.commit()
+    return {"success": True}
+
+@router.post("/api/mark-printed/{visit_id}")
+def mark_printed(visit_id: str, request: Request, session: Session = Depends(get_session)):
+    current_user = get_current_user(request, session)
+    visit = session.exec(select(PatientVisit).where(PatientVisit.visit_id == visit_id)).first()
+    if not visit:
+        raise HTTPException(status_code=404, detail="Visit not found")
+    
+    visit.is_printed = True
+    session.add(visit)
+
+    # ---------------------------------------------------------
+    # ✅ INJECT AUDIT LOG HERE (Tracking Results Print)
+    # ---------------------------------------------------------
+    log_audit_action(
+        session=session,
+        table_name="patientvisit",
+        record_id=visit.id,
+        action="UPDATE",
+        current_user=current_user,
+        new_values={"action": "Patient Results Printed"}
     )
     # ---------------------------------------------------------
 

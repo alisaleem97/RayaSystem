@@ -1093,7 +1093,12 @@ async function printReceipt(patientId) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             patient_id: patientId,
-            patient_name: patientName
+            patient_name: patientName,
+            print_token: '{{ print_token }}',
+            barcode_width: '{{ barcode_width }}',
+            barcode_height: '{{ barcode_height }}',
+            receipt_width: '{{ receipt_width }}',
+            receipt_height: '{{ receipt_height }}'
         })
     })
     .then(r => r.json())
