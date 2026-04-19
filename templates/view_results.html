@@ -12,7 +12,69 @@
     .row-standalone { font-weight: 600; }
     .row-standalone .test-name { text-align: left; }
     .row-parent .test-name { text-align: left; }
-    .select-cb { width: 18px; height: 18px; accent-color: #059669; cursor: pointer; }
+    .custom-checkbox {
+        display: inline-block;
+        position: relative;
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+    }
+
+    .custom-checkbox input {
+        position: absolute;
+        opacity: 0;
+        cursor: pointer;
+        height: 0;
+        width: 0;
+    }
+
+    .checkmark {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 24px;
+        width: 24px;
+        background-color: #e2e8f0;
+        border-radius: 6px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 2px solid #cbd5e1;
+    }
+
+    .custom-checkbox:hover input ~ .checkmark {
+        background-color: #cbd5e1;
+        border-color: #94a3b8;
+    }
+
+    .custom-checkbox input:checked ~ .checkmark {
+        background-color: #10b981;
+        border-color: #059669;
+    }
+
+    .checkmark:after {
+        content: "";
+        position: absolute;
+        display: none;
+    }
+
+    .custom-checkbox input:checked ~ .checkmark:after {
+        display: block;
+    }
+
+    .custom-checkbox .checkmark:after {
+        left: 7px;
+        top: 2px;
+        width: 6px;
+        height: 12px;
+        border: solid white;
+        border-width: 0 2.5px 2.5px 0;
+        transform: rotate(45deg);
+    }
+    .select-cell {
+        width: 50px !important;
+        min-width: 50px !important;
+        padding: 0 !important;
+        text-align: center !important;
+    }
     .status-high { color: #dc2626; font-weight: 700; }
     .status-low { color: #2563eb; font-weight: 700; }
     .status-normal { color: #16a34a; font-weight: 500; }
@@ -73,10 +135,13 @@
         <table class="w-full result-grid" id="resultGrid">
             <thead>
                 <tr>
-                    <th class="w-16">
-                        <label class="flex items-center justify-center gap-2 cursor-pointer">
-                            <input type="checkbox" id="selectAllPrint" class="select-cb" checked>
-                        </label>
+                    <th class="select-cell">
+                        <div class="flex items-center justify-center">
+                            <label class="custom-checkbox">
+                                <input type="checkbox" id="selectAllPrint" checked>
+                                <span class="checkmark"></span>
+                            </label>
+                        </div>
                     </th>
                     <th class="text-left px-6">Test / Parameter</th>
                     <th>Result</th>
@@ -150,18 +215,23 @@
             if (row.type === 'parent') {
                 tr.className = 'row-parent';
                 tr.innerHTML = `
-                    <td>
-                        <input type="checkbox" class="select-cb order-select" data-id="${row.order_id || ''}" checked onchange="onOrderSelectChange(this)">
+                    <td class="select-cell">
+                        <div class="flex items-center justify-center">
+                            <label class="custom-checkbox">
+                                <input type="checkbox" class="order-select" data-id="${row.order_id || ''}" checked onchange="onOrderSelectChange(this)">
+                                <span class="checkmark"></span>
+                            </label>
+                        </div>
                     </td>
                     <td class="test-name px-6"><i class="fas fa-flask mr-2 text-slate-400"></i>${row.test_name}</td>
                     <td></td><td></td><td></td>
-                    <td></td>
+                    <td class="text-xs italic text-slate-400">${row.note || ''}</td>
                 `;
             } else if (row.type === 'child') {
                 tr.className = 'row-child';
                 const flagClass = getFlagClass(row.flag);
                 tr.innerHTML = `
-                    <td></td>
+                    <td class="select-cell"></td>
                     <td class="test-name px-6">${row.parameter_name}</td>
                     <td class="font-bold ${flagClass}">${row.result_value}</td>
                     <td class="text-slate-500">${row.unit || ''}</td>
@@ -173,8 +243,13 @@
                 tr.className = 'row-standalone';
                 const flagClass = getFlagClass(row.flag);
                 tr.innerHTML = `
-                    <td>
-                        <input type="checkbox" class="select-cb order-select" data-id="${row.order_id || ''}" checked onchange="updateSelectedCount()">
+                    <td class="select-cell">
+                        <div class="flex items-center justify-center">
+                            <label class="custom-checkbox">
+                                <input type="checkbox" class="order-select" data-id="${row.order_id || ''}" checked onchange="updateSelectedCount()">
+                                <span class="checkmark"></span>
+                            </label>
+                        </div>
                     </td>
                     <td class="test-name px-6"><i class="fas fa-flask mr-2 text-slate-400"></i>${row.test_name}</td>
                     <td class="font-bold ${flagClass}">${row.result_value}</td>

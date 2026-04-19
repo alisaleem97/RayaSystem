@@ -15,7 +15,7 @@ from models import (
     Parameter, Device, SampleType, Formula
 )
 # ✅ NEW: Imported log_audit_action and require_permission
-from routes.helpers import templates, get_current_user, log_audit_action, log_activity_action, require_permission
+from routes.helpers import templates, get_current_user, log_audit_action, log_activity_action, require_permission, age_to_days
 
 router = APIRouter()
 
@@ -43,9 +43,9 @@ def result_entry_patients_page(request: Request, session: Session = Depends(get_
         query = query.join(PatientVisit)
         
     if start_date:
-        query = query.where(PatientVisit.visit_date >= f"{start_date} 00:00:00")
+        query = query.where(PatientVisit.visit_date >= datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S"))
     if end_date:
-        query = query.where(PatientVisit.visit_date <= f"{end_date} 23:59:59")
+        query = query.where(PatientVisit.visit_date <= datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S"))
         
     if name:
         query = query.where(Patient.full_name.ilike(f"%{name}%"))
@@ -78,9 +78,9 @@ def result_entry_patients_page(request: Request, session: Session = Depends(get_
         # Get latest visit matching the date criteria if applicable
         visit_query = select(PatientVisit).options(selectinload(PatientVisit.orders).selectinload(Order.test)).where(PatientVisit.patient_id == patient.id)
         if start_date:
-            visit_query = visit_query.where(PatientVisit.visit_date >= f"{start_date} 00:00:00")
+            visit_query = visit_query.where(PatientVisit.visit_date >= datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S"))
         if end_date:
-            visit_query = visit_query.where(PatientVisit.visit_date <= f"{end_date} 23:59:59")
+            visit_query = visit_query.where(PatientVisit.visit_date <= datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S"))
             
         visit = session.exec(visit_query.order_by(PatientVisit.id.desc())).first()
 
@@ -242,7 +242,9 @@ def result_entry_data(patient_id: str, request: Request, session: Session = Depe
                 "unit": r.unit or "",
                 "gender_type": r.gender_type,
                 "age_from": r.age_from,
+                "age_from_unit": r.age_from_unit,
                 "age_to": r.age_to,
+                "age_to_unit": r.age_to_unit,
                 "age_unit": r.age_unit,
                 "range_type": r.range_type,
                 "normal_from": r.normal_from,
@@ -344,10 +346,12 @@ def result_entry_data(patient_id: str, request: Request, session: Session = Depe
 
                 # Filter by gender and age
                 best = None
+                patient_days = age_to_days(patient.age, patient.age_unit)
                 for c in candidates:
                     gender_ok = c["gender_type"] == "both" or c["gender_type"] == patient.gender
-                    age_val = patient.age or 0
-                    age_ok = c["age_from"] <= age_val <= c["age_to"]
+                    range_from_days = age_to_days(c["age_from"], c.get("age_from_unit", "year"))
+                    range_to_days = age_to_days(c["age_to"], c.get("age_to_unit", "year"))
+                    age_ok = range_from_days <= patient_days <= range_to_days
                     if gender_ok and age_ok:
                         best = c
                         break
@@ -445,7 +449,9 @@ def result_entry_data(patient_id: str, request: Request, session: Session = Depe
                 "unit": r.unit or "",
                 "gender_type": r.gender_type,
                 "age_from": r.age_from,
+                "age_from_unit": r.age_from_unit,
                 "age_to": r.age_to,
+                "age_to_unit": r.age_to_unit,
                 "age_unit": r.age_unit,
                 "range_type": r.range_type,
                 "normal_from": r.normal_from,
@@ -507,6 +513,10 @@ async def save_results(request: Request, session: Session = Depends(get_session)
             if not order:
                 continue
 
+            # ✅ Guard: Never regress a finalized (double_authorized) order
+            if order.status == "double_authorized":
+                continue
+
             row_type = row.get("type")
             authorized = row.get("authorized", False)
 
@@ -528,8 +538,11 @@ async def save_results(request: Request, session: Session = Depends(get_session)
                 result.flag = row.get("flag", "")
                 result.note = row.get("remark", "")
                 result.device_id = row.get("device_id")
-                result.authorized = authorized
-                if authorized:
+                # Enforce status machine: ordered -> resulted -> authorized
+                # Authorization only allowed if order already has results (was 'resulted' or 'authorized')
+                can_authorize = authorized and order.status in ("resulted", "authorized")
+                result.authorized = can_authorize
+                if can_authorize:
                     result.authorized_by = user_id
                     result.authorized_at = now
                 else:
@@ -538,7 +551,7 @@ async def save_results(request: Request, session: Session = Depends(get_session)
 
                 # Update order status
                 if result.result_value:
-                    order.status = "authorized" if authorized else "resulted"
+                    order.status = "authorized" if can_authorize else "resulted"
                 else:
                     order.status = "ordered"
 
@@ -562,14 +575,6 @@ async def save_results(request: Request, session: Session = Depends(get_session)
                     )
                     session.add(result)
                     session.flush()  # Need result.id for details
-
-                result.authorized = authorized
-                if authorized:
-                    result.authorized_by = user_id
-                    result.authorized_at = now
-                else:
-                    result.authorized_by = None
-                    result.authorized_at = None
 
                 if "device_id" in row:
                     result.device_id = row.get("device_id")
@@ -608,8 +613,18 @@ async def save_results(request: Request, session: Session = Depends(get_session)
                     if detail.result_value:
                         has_any_value = True
 
+                # Enforce status machine: ordered -> resulted -> authorized
+                can_authorize = authorized and order.status in ("resulted", "authorized")
+                result.authorized = can_authorize
+                if can_authorize:
+                    result.authorized_by = user_id
+                    result.authorized_at = now
+                else:
+                    result.authorized_by = None
+                    result.authorized_at = None
+
                 if has_any_value:
-                    order.status = "authorized" if authorized else "resulted"
+                    order.status = "authorized" if can_authorize else "resulted"
                 else:
                     order.status = "ordered"
 
@@ -674,7 +689,7 @@ def get_range_for_device(
     test_id: int, device_id: int,
     request: Request,
     parameter_id: int = None,
-    gender: str = "both", age: int = 0,
+    gender: str = "both", age: int = 0, age_unit: str = "year",
     session: Session = Depends(get_session)
 ):
     if not require_permission(request, session, "result_entry"):
@@ -693,9 +708,12 @@ def get_range_for_device(
         ranges = session.exec(query.where(TestRange.device_id == None)).all()
 
     best = None
+    patient_days = age_to_days(age, age_unit)
     for r in ranges:
         gender_ok = r.gender_type == "both" or r.gender_type == gender
-        age_ok = r.age_from <= age <= r.age_to
+        range_from_days = age_to_days(r.age_from, r.age_from_unit or "year")
+        range_to_days = age_to_days(r.age_to, r.age_to_unit or "year")
+        age_ok = range_from_days <= patient_days <= range_to_days
         if gender_ok and age_ok:
             best = r
             break

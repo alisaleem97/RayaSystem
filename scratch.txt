@@ -1,0 +1,135 @@
+Match at 510:
+        return tr;
+    }
+
+    // ===========================
+    // BUILD HELPERS
+    // ===========================
+    function buildActionButtonsHTML(row) {
+        if (row.authorized) {
+            return `
+            <div class="action-btn-container flex gap-1 justify-center" data-order-id="${row.order_id}">
+                <button class="action-btn" onclick="duplicateOrder(${row.order_id})" title="Duplicate">📋</button>
+            </div>
+        `;
+        }
+
+        const safeTestName = row.test_name ? String(row.test_name).replace(/'/g, "\\'").replace(/"/g, '&quot;') : '';
+
+        // Check if this order (or any of its child parameters) has an existing saved result
+        let hasResult = false;
+        if (gridData && gridData.grid_rows) {
+            hasResult = gridData.grid_rows.some(r =>
+                r.order_id == row.order_id &&
+                r.result_value !== null &&
+                r.result_value !== undefined &&
+                String(r.result_value).trim() !== ''
+---
+Match at 530:
+            hasResult = gridData.grid_rows.some(r =>
+                r.order_id == row.order_id &&
+                r.result_value !== null &&
+                r.result_value !== undefined &&
+                String(r.result_value).trim() !== ''
+            );
+        }
+
+        return `
+        <div class="action-btn-container flex gap-1 justify-center" data-order-id="${row.order_id}">
+            <button class="action-btn" onclick="duplicateOrder(${row.order_id})" title="Duplicate">📋</button>
+            ${hasResult ? `<button class="action-btn" onclick="reRunOrder(${row.order_id})" title="ReRun">⏪</button>` : ''}
+            ${!hasResult ? `<button class="action-btn" onclick="noSampleOrder(${row.order_id}, '${safeTestName}')" title="No Sample">🚫</button>` : ''}
+        </div>
+    `;
+    }
+
+    function buildInputHtml(row, idx) {
+        const val = escAttr(row.result_value || '');
+        const rt = row.result_type || 'number';
+        const disabledAttr = row.authorized ? 'disabled' : '';
+
+        // Formula Integration
+        const isFormula = !!row.formula_expression;
+        const formulaAttr = isFormula ? 'readonly title="Auto-calculated from formula"' : '';
+---
+Match at 1172:
+
+        const btnContainers = document.querySelectorAll(`.action-btn-container[data-order-id="${orderId}"]`);
+        btnContainers.forEach(container => {
+            const row = gridData.grid_rows.find(r => r.order_id == orderId && (r.type === 'parent' || r.type === 'standalone'));
+            if (row) {
+                container.innerHTML = buildActionButtonsHTML(row);
+            }
+        });
+    }
+
+    function duplicateOrder(orderId) {
+        let updated = false;
+
+        // Loop through the main grid rows instead of DOM selectors alone
+        for (let i = 0; i < gridData.grid_rows.length; i++) {
+            const row = gridData.grid_rows[i];
+            if (row.order_id == orderId) {
+                const input = document.querySelector(`.remark-input[data-idx="${i}"]`);
+                if (input && !input.disabled && !input.readOnly) {
+                    const sentence = "This test was done by duplication.";
+                    if (input.value.trim()) {
+                        if (!input.value.includes(sentence)) {
+                            input.value = input.value.trim() + " " + sentence;
+                        }
+                    } else {
+---
+Match at 1181:
+
+    function duplicateOrder(orderId) {
+        let updated = false;
+
+        // Loop through the main grid rows instead of DOM selectors alone
+        for (let i = 0; i < gridData.grid_rows.length; i++) {
+            const row = gridData.grid_rows[i];
+            if (row.order_id == orderId) {
+                const input = document.querySelector(`.remark-input[data-idx="${i}"]`);
+                if (input && !input.disabled && !input.readOnly) {
+                    const sentence = "This test was done by duplication.";
+                    if (input.value.trim()) {
+                        if (!input.value.includes(sentence)) {
+                            input.value = input.value.trim() + " " + sentence;
+                        }
+                    } else {
+                        input.value = sentence;
+                    }
+                    updated = true;
+
+                    // Visual highlight for the user
+                    input.classList.add('bg-blue-50', 'transition-colors', 'duration-300');
+                    setTimeout(() => {
+                        input.classList.remove('bg-blue-50', 'transition-colors', 'duration-300');
+                    }, 1000);
+---
+Match at 1201:
+                    // Visual highlight for the user
+                    input.classList.add('bg-blue-50', 'transition-colors', 'duration-300');
+                    setTimeout(() => {
+                        input.classList.remove('bg-blue-50', 'transition-colors', 'duration-300');
+                    }, 1000);
+                }
+            }
+        }
+
+        if (updated) {
+            showNotification('📋 Remark automatically filled for duplication.', 'success');
+        } else {
+            showNotification('Could not update remark (test may be authorized).', 'error');
+        }
+    }
+
+    function noSampleOrder(orderId, testName) {
+        currentNoSampleOrderId = orderId;
+        document.getElementById('noSampleTestName').textContent = 'Test: ' + (testName || 'Unknown');
+        document.getElementById('noSampleReasonInput').value = '';
+        document.getElementById('noSampleError').classList.add('hidden');
+        document.getElementById('btnSubmitNoSample').textContent = 'Mark No Sample';
+        document.getElementById('btnSubmitNoSample').disabled = false;
+
+        const modal = document.getElementById('noSampleReasonModal');
+---

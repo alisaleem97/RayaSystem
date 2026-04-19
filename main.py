@@ -31,6 +31,8 @@ from routes.reports import router as reports_router
 # ✅ NEW: Import Messages and WebSockets routers
 from routes.messages import router as messages_router
 from routes.websockets import router as websockets_router
+from routes.supplies import router as supplies_router
+from routes.inventory import router as inventory_router
 
 
 # ===========================
@@ -67,7 +69,7 @@ async def lifespan(app: FastAPI):
             )
             session.add(admin)
             session.commit()
-            print("✅ Admin user created (admin / admin123)")
+            print("WARNING: Default admin user created with password 'admin123'. Change this immediately in production!")
         else:
             print("✅ Admin user already exists")
     
@@ -86,6 +88,11 @@ async def auth_middleware(request, call_next):
     # Exclude /uploads/ from public_paths so attachments are secure
     public_paths = ["/login", "/static/", "/tmp/", "/favicon.ico"]
     is_public = any(path.startswith(p) for p in public_paths)
+    
+    # ✅ Allow local Headless Chrome to load assets for PDF generation
+    user_agent = request.headers.get("user-agent", "")
+    if "HeadlessChrome" in user_agent and request.client.host == "127.0.0.1":
+        is_public = True
     
     # ✅ NexPrint token bypass: allow /print-barcode/ and /print-receipt/ with valid token
     # Token = first 16 chars of SECRET_KEY hash (simple, non-guessable)
@@ -147,3 +154,5 @@ app.include_router(reports_router)
 # ✅ NEW: Register internal messaging router
 app.include_router(messages_router)
 app.include_router(websockets_router)
+app.include_router(supplies_router)
+app.include_router(inventory_router)

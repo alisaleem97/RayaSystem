@@ -120,20 +120,6 @@
             background-size: 10px 10px;
         }
 
-        .canvas.size-a4 {
-            width: 210mm;
-            height: 297mm;
-            min-width: 210mm;
-            min-height: 297mm;
-        }
-
-        .canvas.size-a5 {
-            width: 148mm;
-            height: 210mm;
-            min-width: 148mm;
-            min-height: 210mm;
-        }
-
         .design-element {
             position: absolute;
             cursor: move;
@@ -307,7 +293,7 @@
         }
 
         @page {
-            size: A4;
+            size: auto;
             margin: 0;
         }
 
@@ -372,9 +358,16 @@
                 <i class="fas fa-file-invoice text-emerald-600"></i>
             </div>
             <h1 class="text-xl font-bold text-slate-800 border-r pr-4 border-slate-200">Result Designer</h1>
-            <div class="flex bg-slate-100 p-1 rounded-lg gap-1 border border-slate-200 ml-2">
-                <button class="tool-btn active" data-size="A4" onclick="setPaperSize('A4')">A4</button>
-                <button class="tool-btn" data-size="A5" onclick="setPaperSize('A5')">A5</button>
+            <!-- Custom Paper Size Inputs -->
+            <div class="flex items-center bg-slate-100 p-1 rounded-lg gap-2 border border-slate-200 ml-2 text-xs">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase">Width</label>
+                    <input type="text" id="paperWidth" value="210mm" onchange="updatePaperSize()" class="w-16 px-1 py-0.5 rounded border border-slate-300 text-center font-mono focus:ring-1 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase">Height</label>
+                    <input type="text" id="paperHeight" value="297mm" onchange="updatePaperSize()" class="w-16 px-1 py-0.5 rounded border border-slate-300 text-center font-mono focus:ring-1 focus:ring-blue-500">
+                </div>
             </div>
             <div class="flex gap-1 ml-2">
                 <button class="tool-btn active" onclick="toggleGrid()" id="gridToggleBtn" title="Snap to Grid (10px)"><i
@@ -670,7 +663,8 @@
         let designElements = [];
         let selectedElementId = null;
         let elementIdCounter = 0;
-        let paperSize = 'A4';
+        let paperWidth = '210mm';
+        let paperHeight = '297mm';
         let labInfo = {};
 
         let historyStack = [];
@@ -682,13 +676,19 @@
         const paper = document.getElementById('paperPreview');
         const emptyHint = document.getElementById('emptyHint');
 
-        function setPaperSize(size) {
-            paperSize = size;
-            document.querySelectorAll('.tool-btn[data-size]').forEach(btn => btn.classList.remove('active'));
-            const activeBtn = document.querySelector(`.tool-btn[data-size="${size}"]`);
-            if (activeBtn) activeBtn.classList.add('active');
-            paper.className = `canvas size-${size.toLowerCase()} ${isGridEnabled ? 'show-grid' : ''}`;
+        function updatePaperSize() {
+            paperWidth = document.getElementById('paperWidth').value || '210mm';
+            paperHeight = document.getElementById('paperHeight').value || '297mm';
+            paper.style.width = paperWidth;
+            paper.style.minHeight = paperHeight;
+            paper.className = `canvas ${isGridEnabled ? 'show-grid' : ''}`;
             saveLocal();
+        }
+
+        function setPaperSize(w, h) {
+            document.getElementById('paperWidth').value = w;
+            document.getElementById('paperHeight').value = h;
+            updatePaperSize();
         }
 
         function saveState() {
@@ -858,8 +858,7 @@
 
             const bWidth = data.borderWidth !== undefined ? data.borderWidth : 1;
             let cellStyle = `padding: ${data.cellPadding !== undefined ? data.cellPadding : 8}px; border: ${bWidth}px solid ${data.borderColor || '#e2e8f0'};`;
-            if (data.wordWrap === false) { cellStyle += ` white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`; }
-            else { cellStyle += ` white-space: normal; word-break: break-word;`; }
+            cellStyle += ` white-space: pre-wrap; word-break: break-word; vertical-align: top;`;
 
             let html = `<table style="${tableStyle}">${colGroupHtml}`;
             html += `<thead style="background:${data.headerBg || '#f8fafc'}; color:${data.headerColor || '#1e293b'};"><tr>`;
@@ -994,13 +993,16 @@
             } catch (error) { labInfo = { lab_name: ' NexLab Center', lab_currency: '$' }; }
         }
 
-        function saveLocal() { localStorage.setItem('lab_result_design_v6', JSON.stringify({ elements: designElements, paperSize, counter: elementIdCounter })); }
+        function saveLocal() { localStorage.setItem('lab_result_design_v6', JSON.stringify({ elements: designElements, paperWidth, paperHeight, counter: elementIdCounter })); }
 
         function loadLocal() {
             const saved = localStorage.getItem('lab_result_design_v6');
             if (saved) {
-                const data = JSON.parse(saved); designElements = data.elements || []; paperSize = data.paperSize || 'A4'; elementIdCounter = data.counter || 0;
-                setPaperSize(paperSize); if (designElements.length > 0) emptyHint.style.display = 'none';
+                const data = JSON.parse(saved); designElements = data.elements || []; 
+                paperWidth = data.paperWidth || '210mm'; 
+                paperHeight = data.paperHeight || '297mm'; 
+                elementIdCounter = data.counter || 0;
+                setPaperSize(paperWidth, paperHeight); if (designElements.length > 0) emptyHint.style.display = 'none';
                 designElements.forEach(renderElement);
                 historyStack = [JSON.parse(JSON.stringify(designElements))]; historyIndex = 0;
             }
@@ -1017,7 +1019,7 @@
 
         async function saveDesign() {
             const safeElements = JSON.parse(JSON.stringify(designElements));
-            const data = { template_name: 'result_report', template_type: 'result_report', paper_width: paperSize === 'A4' ? '210mm' : '148mm', paper_height: paperSize === 'A4' ? '297mm' : '210mm', margin: '0', elements: JSON.stringify({ elements: safeElements, paperSize: paperSize }) };
+            const data = { template_name: 'result_report', template_type: 'result_report', paper_width: paperWidth, paper_height: paperHeight, margin: '0', elements: JSON.stringify({ elements: safeElements, paperWidth: paperWidth, paperHeight: paperHeight }) };
             try {
                 const res = await fetch('/api/print-template/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
                 if (!res.ok) throw new Error(`Server returned status ${res.status}`);
@@ -1034,11 +1036,13 @@
                 if (result.success && result.template) {
                     const loaded = result.template; let parsedData;
                     try {
-                        parsedData = JSON.parse(loaded.elements && loaded.elements.trim() !== '' && loaded.elements !== 'None' ? loaded.elements : '{"elements":[], "paperSize":"A4"}');
-                    } catch (parseErr) { alert('The template data in the database is corrupted. Loading a fresh canvas.'); parsedData = { elements: [], paperSize: 'A4' }; }
-                    designElements = parsedData.elements || []; paperSize = parsedData.paperSize || (loaded.paper_width === '148mm' ? 'A5' : 'A4');
+                        parsedData = JSON.parse(loaded.elements && loaded.elements.trim() !== '' && loaded.elements !== 'None' ? loaded.elements : '{"elements":[], "paperWidth":"210mm", "paperHeight":"297mm"}');
+                    } catch (parseErr) { alert('The template data in the database is corrupted. Loading a fresh canvas.'); parsedData = { elements: [], paperWidth: '210mm', paperHeight: '297mm' }; }
+                    designElements = parsedData.elements || []; 
+                    paperWidth = parsedData.paperWidth || loaded.paper_width || '210mm';
+                    paperHeight = parsedData.paperHeight || loaded.paper_height || '297mm';
                     elementIdCounter = designElements.reduce((max, el) => Math.max(max, isNaN(parseInt(el.id.split('_')[1])) ? 0 : parseInt(el.id.split('_')[1])), 0);
-                    setPaperSize(paperSize);
+                    setPaperSize(paperWidth, paperHeight);
                     paper.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center opacity-10 pointer-events-none" id="emptyHint"><i class="fas fa-vial text-[120px] mb-4"></i><p class="text-2xl font-bold tracking-widest uppercase">Drag Elements Here</p></div>`;
                     if (designElements.length > 0) document.getElementById('emptyHint').style.display = 'none';
                     designElements.forEach(renderElement);

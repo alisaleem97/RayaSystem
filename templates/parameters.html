@@ -5,6 +5,8 @@
 {% block page_title %}Test Parameters{% endblock %}
 
 {% block content %}
+<!-- Tom Select CSS -->
+<link href="/static/vendor/tom-select/tom-select.css" rel="stylesheet">
 <div class="bg-white rounded-xl shadow-sm border border-slate-200">
     <div class="p-6 border-b border-slate-200 flex justify-between items-center">
         <div>
@@ -56,6 +58,28 @@
         </form>
     </div>
 
+    <!-- Search/Filter Section -->
+    <div class="p-6 border-b border-slate-200 bg-slate-50">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Search by Parameter Name</label>
+                <select id="search_parameter" placeholder="Search parameters..."
+                        class="w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">All Parameters...</option>
+                    {% for param in parameters %}
+                    <option value="{{ param.parameter_name }}">{{ param.parameter_name }} ({{ param.parameter_short_name }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <button onclick="filterParametersTable()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    Search
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Parameters Table -->
     <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-slate-200">
@@ -69,9 +93,9 @@
                     <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-slate-200">
+            <tbody class="bg-white divide-y divide-slate-200" id="parametersTableBody">
                 {% for param in parameters %}
-                <tr class="hover:bg-slate-50">
+                <tr class="hover:bg-slate-50 parameter-row" style="display: none;" data-parameter-name="{{ param.parameter_name }}">
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">#{{ param.id }}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{{ param.parameter_name }}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">{{ param.parameter_short_name }}</td>
@@ -113,7 +137,38 @@
     {% endif %}
 </div>
 
+<!-- Tom Select JS -->
+<script src="/static/vendor/tom-select/tom-select.complete.min.js"></script>
 <script>
+let paramSearchSelect;
+
+function initTomSelect() {
+    paramSearchSelect = new TomSelect('#search_parameter', {
+        plugins: ['dropdown_input', 'clear_button'],
+        placeholder: 'Search parameters...',
+        create: false,
+        maxItems: 1
+    });
+}
+
+document.addEventListener('DOMContentLoaded', initTomSelect);
+
+function filterParametersTable() {
+    const nameFilter = document.getElementById('search_parameter').value.toLowerCase();
+    const rows = document.querySelectorAll('.parameter-row');
+    
+    rows.forEach(row => {
+        const paramName = row.dataset.parameterName.toLowerCase();
+        const matchName = !nameFilter || paramName === nameFilter;
+        
+        if (matchName) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
 function toggleForm(formId) {
     const form = document.getElementById(formId);
     form.style.display = form.style.display === 'none' ? 'block' : 'none';

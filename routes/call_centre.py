@@ -11,17 +11,18 @@ import traceback
 from datetime import datetime
 
 from database import get_session
-from models import Patient, PatientVisit, Order, Result, TestRange, LabInfo, PrintTemplate
+from models import Patient, PatientVisit, Order, Result, TestRange, LabInfo, PrintTemplate, Inventory
 # ✅ Shared templates (with AutoUserTemplates) + helpers
 from routes.helpers import templates, get_current_user, log_audit_action, log_activity_action, require_permission
 from fastapi.responses import RedirectResponse, JSONResponse
-from routes.whatsapp_utils import generate_report_pdf, send_ultramsg_pdf
+from routes.whatsapp_utils import generate_report_pdf, send_wati_pdf
 
 # --- Google Gemini AI Setup ---
 import os
 import google.generativeai as genai
-_gemini_key = os.environ.get("GEMINI_API_KEY", "AIzaSyBjeyiRZzUqyVHLa7CsWrg861E5pyP0t4U")
-genai.configure(api_key=_gemini_key)
+_gemini_key = os.environ.get("GEMINI_API_KEY")
+if _gemini_key:
+    genai.configure(api_key=_gemini_key)
 
 class AIRequest(BaseModel):
     prompt: str
@@ -208,13 +209,33 @@ def mark_called(visit_id: str, request: Request, session: Session = Depends(get_
 
 @router.post("/api/mark-printed/{visit_id}")
 def mark_printed(visit_id: str, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "call_centre", "mark_printed"):
+        return JSONResponse({"success": False, "message": "Permission Denied"}, status_code=403)
     current_user = get_current_user(request, session)
-    visit = session.exec(select(PatientVisit).where(PatientVisit.visit_id == visit_id)).first()
+    visit = session.exec(select(PatientVisit).options(selectinload(PatientVisit.orders)).where(PatientVisit.visit_id == visit_id)).first()
     if not visit:
         raise HTTPException(status_code=404, detail="Visit not found")
     
-    visit.is_printed = True
-    session.add(visit)
+    if not visit.is_printed:
+        # Automatic deduction of tests from inventory
+        for order in visit.orders:
+            if order.test_id and order.status != "no_sample":
+                # Find available tests in inventory ordered by nearest expiration_date
+                inventory_items = session.exec(
+                    select(Inventory).where(
+                        Inventory.material_type == "Test",
+                        Inventory.test_id == order.test_id,
+                        Inventory.quantity > 0
+                    ).order_by(Inventory.expiration_date.asc())
+                ).all()
+                
+                if inventory_items:
+                    # Deduct 1 from the nearest expiring item
+                    inventory_items[0].quantity -= 1
+                    session.add(inventory_items[0])
+                    
+        visit.is_printed = True
+        session.add(visit)
 
     # ---------------------------------------------------------
     # ✅ INJECT AUDIT LOG HERE (Tracking Results Print)
@@ -312,17 +333,18 @@ def send_whatsapp_results(visit_id: str, request: Request, payload: Optional[Wha
             raise HTTPException(status_code=400, detail="Patient phone number not found")
         
         to_phone = to_phone.strip().replace(" ", "")
+        country_code = getattr(lab_info, 'phone_country_code', '964') or '964'
         if not to_phone.startswith('+'):
-            to_phone = "+" + (to_phone if to_phone.startswith('964') else '964' + to_phone.lstrip('0'))
+            to_phone = "+" + (to_phone if to_phone.startswith(country_code) else country_code + to_phone.lstrip('0'))
 
         safe_name = "".join(c for c in patient.full_name if c.isalnum() or c in (' ', '_', '-')).strip()
         filename = f"{safe_name}.pdf"
         caption = f"{patient.full_name}"
         
         # Using dynamic lab_info credentials!
-        report = send_ultramsg_pdf(to_phone, pdf_bytes, filename, caption, jsonable_encoder(lab_info))
+        report = send_wati_pdf(to_phone, pdf_bytes, filename, caption, jsonable_encoder(lab_info))
         
-        if report.get('sent') == 'true' or report.get('id') or report.get('success'):
+        if report.get('status') != 'error' and not str(report.get('result')).lower() == 'error':
             visit.is_whatsapp_sent = True
             session.add(visit)
 
@@ -359,6 +381,8 @@ def send_whatsapp_results(visit_id: str, request: Request, payload: Optional[Wha
 # ==========================================
 @router.post("/api/ai-analyse")
 async def ai_analyse_results(req: AIRequest):
+    if not _gemini_key:
+        return {"success": False, "error": "AI service not configured. Set GEMINI_API_KEY environment variable."}
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(req.prompt)

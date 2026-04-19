@@ -1,8 +1,8 @@
 # routes/printing.py
 # Print barcode/receipt, designer pages, and print template API.
 
-from fastapi import APIRouter, Depends, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, Depends, Request, status, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload
 from datetime import datetime
@@ -15,8 +15,11 @@ from fastapi.encoders import jsonable_encoder
 from fastapi import File, UploadFile
 import os
 import uuid
+import logging
 from routes.helpers import templates, get_current_user, generate_barcode_base64, calculate_age, log_audit_action, log_activity_action, require_permission
 from fastapi.responses import RedirectResponse
+from routes.generate_pdf import generate_native_barcode_pdf
+from io import BytesIO
 
 router = APIRouter()
 
@@ -508,6 +511,45 @@ def print_barcode(patient_id: str, request: Request, session: Session = Depends(
         "visit_id": visit_id,
         "visit_date": visit_date
     })
+
+@router.get("/api/print-barcode-pdf/{patient_id}")
+def api_print_barcode_pdf(patient_id: str, request: Request, session: Session = Depends(get_session)):
+    """
+    Returns a mathematically perfect, native PDF generation of the barcode label using ReportLab.
+     Bypasses all client-side browser/HTML rendering for optimal thermal printer compatibility.
+    """
+    patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+        
+    # Get orders with test + sample_type eagerly loaded
+    orders = session.exec(
+        select(Order).options(
+            selectinload(Order.test).selectinload(TestDefinition.sample_type)
+        ).where(Order.patient_id == patient.id)
+    ).all()
+    
+    tests_by_sample_type = {}
+    for order in orders:
+        if order.test:
+            sample_type_name = order.test.sample_type.sample_name if order.test.sample_type else "Unknown"
+            if sample_type_name not in tests_by_sample_type:
+                tests_by_sample_type[sample_type_name] = []
+            test_display = order.test.test_short_name if order.test.test_short_name else order.test.test_name
+            tests_by_sample_type[sample_type_name].append(test_display)
+        
+    barcode_template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "barcode")).first()
+    if not barcode_template:
+        raise HTTPException(status_code=404, detail="No barcode template configured in the database")
+        
+    try:
+        pdf_buffer = generate_native_barcode_pdf(patient, tests_by_sample_type, barcode_template)
+        response = StreamingResponse(pdf_buffer, media_type="application/pdf")
+        response.headers["Content-Disposition"] = f"attachment; filename=barcode_{patient_id}.pdf"
+        return response
+    except Exception as e:
+        logging.error(f"Failed to generate native barcode PDF: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/print-receipt/{patient_id}", response_class=HTMLResponse)
 def print_receipt(patient_id: str, request: Request, session: Session = Depends(get_session)):

@@ -736,4 +736,43 @@ class MessageReceipt(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id", index=True)
     chat_id: int = Field(foreign_key="chat.id", index=True)
     status: str = Field(default="delivered")  # delivered, read
-    updated_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+# ===========================
+# 36. SUPPLY (New - Inventory Management)
+# ===========================
+class Supply(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True)
+    note: Optional[str] = None
+    is_active: bool = Field(default=True)
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.now)
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+
+# ===========================
+# 37. INVENTORY (New - Inventory Management)
+# ===========================
+class Inventory(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    material_type: str = Field(index=True)  # "Test" or "Supply"
+    
+    test_id: Optional[int] = Field(default=None, foreign_key="testdefinition.id")
+    supply_id: Optional[int] = Field(default=None, foreign_key="supply.id")
+    
+    test: Optional["TestDefinition"] = Relationship()
+    supply: Optional["Supply"] = Relationship()
+    
+    quantity: float = Field(default=0.0)
+    unit: str = Field(default="Test")
+    expiration_date: datetime
+    note: Optional[str] = None
+    is_active: bool = Field(default=True)
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.now)
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+

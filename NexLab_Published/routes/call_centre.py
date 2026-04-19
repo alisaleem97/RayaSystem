@@ -11,11 +11,11 @@ import traceback
 from datetime import datetime
 
 from database import get_session
-from models import Patient, PatientVisit, Order, Result, TestRange, LabInfo, PrintTemplate
+from models import Patient, PatientVisit, Order, Result, TestRange, LabInfo, PrintTemplate, Inventory
 # ✅ Shared templates (with AutoUserTemplates) + helpers
 from routes.helpers import templates, get_current_user, log_audit_action, log_activity_action, require_permission
 from fastapi.responses import RedirectResponse, JSONResponse
-from routes.whatsapp_utils import generate_report_pdf, send_ultramsg_pdf
+from routes.whatsapp_utils import generate_report_pdf, send_wati_pdf
 
 # --- Google Gemini AI Setup ---
 import os
@@ -209,12 +209,30 @@ def mark_called(visit_id: str, request: Request, session: Session = Depends(get_
 @router.post("/api/mark-printed/{visit_id}")
 def mark_printed(visit_id: str, request: Request, session: Session = Depends(get_session)):
     current_user = get_current_user(request, session)
-    visit = session.exec(select(PatientVisit).where(PatientVisit.visit_id == visit_id)).first()
+    visit = session.exec(select(PatientVisit).options(selectinload(PatientVisit.orders)).where(PatientVisit.visit_id == visit_id)).first()
     if not visit:
         raise HTTPException(status_code=404, detail="Visit not found")
     
-    visit.is_printed = True
-    session.add(visit)
+    if not visit.is_printed:
+        # Automatic deduction of tests from inventory
+        for order in visit.orders:
+            if order.test_id and order.status != "no_sample":
+                # Find available tests in inventory ordered by nearest expiration_date
+                inventory_items = session.exec(
+                    select(Inventory).where(
+                        Inventory.material_type == "Test",
+                        Inventory.test_id == order.test_id,
+                        Inventory.quantity > 0
+                    ).order_by(Inventory.expiration_date.asc())
+                ).all()
+                
+                if inventory_items:
+                    # Deduct 1 from the nearest expiring item
+                    inventory_items[0].quantity -= 1
+                    session.add(inventory_items[0])
+                    
+        visit.is_printed = True
+        session.add(visit)
 
     # ---------------------------------------------------------
     # ✅ INJECT AUDIT LOG HERE (Tracking Results Print)
@@ -320,9 +338,9 @@ def send_whatsapp_results(visit_id: str, request: Request, payload: Optional[Wha
         caption = f"{patient.full_name}"
         
         # Using dynamic lab_info credentials!
-        report = send_ultramsg_pdf(to_phone, pdf_bytes, filename, caption, jsonable_encoder(lab_info))
+        report = send_wati_pdf(to_phone, pdf_bytes, filename, caption, jsonable_encoder(lab_info))
         
-        if report.get('sent') == 'true' or report.get('id') or report.get('success'):
+        if report.get('status') != 'error' and not str(report.get('result')).lower() == 'error':
             visit.is_whatsapp_sent = True
             session.add(visit)
 

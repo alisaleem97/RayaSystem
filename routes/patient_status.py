@@ -26,9 +26,9 @@ def patient_status_page(request: Request, session: Session = Depends(get_session
     
     query = query.join(PatientVisit)
     if from_date:
-        query = query.where(PatientVisit.visit_date >= f"{from_date} 00:00:00")
+        query = query.where(PatientVisit.visit_date >= datetime.strptime(f"{from_date} 00:00:00", "%Y-%m-%d %H:%M:%S"))
     if to_date:
-        query = query.where(PatientVisit.visit_date <= f"{to_date} 23:59:59")
+        query = query.where(PatientVisit.visit_date <= datetime.strptime(f"{to_date} 23:59:59", "%Y-%m-%d %H:%M:%S"))
         
     if name:
         query = query.where(Patient.full_name.ilike(f"%{name}%"))
@@ -55,9 +55,9 @@ def patient_status_page(request: Request, session: Session = Depends(get_session
         # Get latest visit
         visit_query = select(PatientVisit).options(selectinload(PatientVisit.orders).selectinload(Order.test)).where(PatientVisit.patient_id == patient.id)
         if from_date:
-            visit_query = visit_query.where(PatientVisit.visit_date >= f"{from_date} 00:00:00")
+            visit_query = visit_query.where(PatientVisit.visit_date >= datetime.strptime(f"{from_date} 00:00:00", "%Y-%m-%d %H:%M:%S"))
         if to_date:
-            visit_query = visit_query.where(PatientVisit.visit_date <= f"{to_date} 23:59:59")
+            visit_query = visit_query.where(PatientVisit.visit_date <= datetime.strptime(f"{to_date} 23:59:59", "%Y-%m-%d %H:%M:%S"))
             
         visit = session.exec(visit_query.order_by(PatientVisit.id.desc())).first()
         

@@ -16,6 +16,11 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.now)
     last_seen: Optional[datetime] = None
     is_online: bool = Field(default=False)
+    
+    # --- Security & Session Fields ---
+    failed_login_attempts: int = Field(default=0)
+    locked_until: Optional[datetime] = None
+    session_token: Optional[str] = None
 
 # ===========================
 # 1b. USER PERMISSION (Granular Page+Button Access)
@@ -192,6 +197,7 @@ class TestDefinition(SQLModel, table=True):
     test_note: Optional[str] = None
     test_condition: Optional[str] = None
     is_available: bool = Field(default=True)
+    print_separately: bool = Field(default=False)
     
     created_by: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.now)
@@ -267,20 +273,6 @@ class FormulaItem(SQLModel, table=True):
     order_index: int = Field(default=0)
     
     formula: Formula = Relationship(back_populates="items")
-
-# ===========================
-# 13. TEST CATALOG (Legacy)
-# ===========================
-class TestCatalog(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    test_code: str = Field(unique=True, index=True)
-    test_name: str
-    sample_type: str
-    unit: str
-    reference_min: float
-    reference_max: float
-    price: float
-    is_active: bool = Field(default=True)
 
 # ===========================
 # 14. ORDER (UPDATED - Price Snapshot for Audit Compliance)
@@ -362,7 +354,9 @@ class TestRange(SQLModel, table=True):
     unit: str = Field(default="")
     gender_type: str = Field(default="both")
     age_from: int = Field(default=0)
+    age_from_unit: str = Field(default="year")
     age_to: int = Field(default=999)
+    age_to_unit: str = Field(default="year")
     age_unit: str = Field(default="year")
     fasting_required: bool = Field(default=False)
     range_type: str = Field(default="number")
@@ -533,6 +527,7 @@ class LabInfo(SQLModel, table=True):
     lab_website: Optional[str] = Field(default=None)
     lab_currency: str = Field(default="$")  # ✅ NEW FIELD
     tax_percentage: float = Field(default=0.0)  # ✅ Tax Percentage
+    phone_country_code: str = Field(default="964")  # Country code for WhatsApp (configurable)
     
     created_by: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.now)
@@ -736,4 +731,43 @@ class MessageReceipt(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id", index=True)
     chat_id: int = Field(foreign_key="chat.id", index=True)
     status: str = Field(default="delivered")  # delivered, read
-    updated_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+# ===========================
+# 36. SUPPLY (New - Inventory Management)
+# ===========================
+class Supply(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True)
+    note: Optional[str] = None
+    is_active: bool = Field(default=True)
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.now)
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+
+# ===========================
+# 37. INVENTORY (New - Inventory Management)
+# ===========================
+class Inventory(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    material_type: str = Field(index=True)  # "Test" or "Supply"
+    
+    test_id: Optional[int] = Field(default=None, foreign_key="testdefinition.id")
+    supply_id: Optional[int] = Field(default=None, foreign_key="supply.id")
+    
+    test: Optional["TestDefinition"] = Relationship()
+    supply: Optional["Supply"] = Relationship()
+    
+    quantity: float = Field(default=0.0)
+    unit: str = Field(default="Test")
+    expiration_date: datetime
+    note: Optional[str] = None
+    is_active: bool = Field(default=True)
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.now)
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+

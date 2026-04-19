@@ -27,32 +27,43 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
     today_end = datetime.combine(date.today(), time.max)
     today_patients_count = session.exec(select(func.count(Patient.id)).where(Patient.created_at >= today_start, Patient.created_at <= today_end)).one()
     
-    # Orders and Results logic for Pending, Done, Waiting
-    stmt_has_orders = select(Order.patient_id).distinct()
+    # Orders and Results logic for Pending, Done, Waiting — filtered to TODAY's visits for performance
+    today_visits = select(PatientVisit.id).where(
+        PatientVisit.visit_date >= today_start,
+        PatientVisit.visit_date <= today_end
+    ).scalar_subquery()
+    
+    today_orders = select(Order).where(Order.visit_id.in_(today_visits))
+    
+    stmt_has_orders = select(Order.patient_id).where(Order.visit_id.in_(today_visits)).distinct()
     has_orders_ids = set(session.exec(stmt_has_orders).all())
     
-    # Pending: at least one order has NO result OR result is NOT authorized.
-    stmt_pending = select(Order.patient_id).outerjoin(Result, Order.id == Result.order_id).where(or_(Result.id == None, Result.authorized == False)).distinct()
+    # Pending: at least one order has NO result OR result is NOT authorized (today only)
+    stmt_pending = select(Order.patient_id).outerjoin(Result, Order.id == Result.order_id).where(
+        Order.visit_id.in_(today_visits),
+        or_(Result.id == None, Result.authorized == False)
+    ).distinct()
     pending_ids = set(session.exec(stmt_pending).all())
     pending_patients_count = len(pending_ids)
     
-    # Done: ALL tests are double authorized.
-    # Means: Patient has orders AND Patient is NOT in the "not double authorized" list.
-    stmt_not_done = select(Order.patient_id).outerjoin(Result, Order.id == Result.order_id).where(or_(Result.id == None, Result.double_authorized == False)).distinct()
+    # Done: ALL tests are double authorized (today only)
+    stmt_not_done = select(Order.patient_id).outerjoin(Result, Order.id == Result.order_id).where(
+        Order.visit_id.in_(today_visits),
+        or_(Result.id == None, Result.double_authorized == False)
+    ).distinct()
     not_done_ids = set(session.exec(stmt_not_done).all())
     
     done_ids = has_orders_ids - not_done_ids
     done_patients_count = len(done_ids)
     
-    # Waiting: ALL tests are AUTH, but at least one NOT Double AUTH.
-    # This means: NOT Pending AND NOT Done.
+    # Waiting: ALL tests are AUTH, but at least one NOT Double AUTH (today only)
     waiting_ids = has_orders_ids - pending_ids - done_ids
     waiting_patients_count = len(waiting_ids)
     
     # Deleted patients
     deleted_patients_count = session.exec(select(func.count(DeletedRecord.id)).where(DeletedRecord.source_table == "patient")).one()
     
-    # Call Centre
+    # Call Centre (today only)
     call_centre_total = done_patients_count
     done_ids_list = list(done_ids) if done_ids else [-1]
     sent_count = session.exec(select(func.count(func.distinct(PatientVisit.patient_id))).where(PatientVisit.patient_id.in_(done_ids_list), PatientVisit.is_called == True)).one()
@@ -125,12 +136,27 @@ def login_page(request: Request, session: Session = Depends(get_session)):
 @router.post("/login")
 def login_submit(request: Request, username: str = Form(...), password: str = Form(...), session: Session = Depends(get_session)):
     from itsdangerous import URLSafeSerializer
+    import uuid
+    from datetime import timedelta
     s = URLSafeSerializer(SECRET_KEY)
     user = session.exec(select(User).where(User.username == username)).first()
     
+    if user:
+        if user.locked_until and user.locked_until > datetime.now():
+            return templates.TemplateResponse("login.html", {"request": request, "message_error": f"Account is locked. Try again after {user.locked_until.strftime('%H:%M')}."})
+        elif user.locked_until and user.locked_until <= datetime.now():
+            user.locked_until = None
+            user.failed_login_attempts = 0
+            session.commit()
+    
     if user and pwd_context.verify(password, user.hashed_password) and user.is_active:
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        user.session_token = uuid.uuid4().hex
+        user.last_seen = datetime.now()
+        
         # Create session cookie
-        cookie_value = s.dumps({"user_id": user.id, "username": user.username})
+        cookie_value = s.dumps({"user_id": user.id, "username": user.username, "session_token": user.session_token})
         
         log_activity_action(
             session=session,
@@ -146,19 +172,30 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
             key="nexlab_session",
             value=cookie_value,
             httponly=True,
-            max_age=60 * 60 * 24 * 7,  # 7 days
+            max_age=60 * 60 * 2,  # 2 hours
             samesite="lax"
         )
         return response
     else:
         if user: 
-            log_activity_action(
-                session=session,
-                action_type="LOGIN_FAILED",
-                description="Failed login attempt (bad password or inactive)",
-                current_user=user,
-                target_type="system"
-            )
+            user.failed_login_attempts += 1
+            if user.failed_login_attempts >= 10:
+                user.locked_until = datetime.now() + timedelta(minutes=60)
+                log_activity_action(
+                    session=session,
+                    action_type="ACCOUNT_LOCKED",
+                    description="User account locked due to 10 failed login attempts",
+                    current_user=user,
+                    target_type="system"
+                )
+            else:
+                log_activity_action(
+                    session=session,
+                    action_type="LOGIN_FAILED",
+                    description=f"Failed login attempt ({user.failed_login_attempts}/10)",
+                    current_user=user,
+                    target_type="system"
+                )
             session.commit()
         return templates.TemplateResponse("login.html", {"request": request, "message_error": "Invalid username or password"})
 
@@ -174,6 +211,7 @@ def logout(request: Request, session: Session = Depends(get_session)):
             current_user=current_user,
             target_type="system"
         )
+        current_user.session_token = None
         session.commit()
     
     response = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)

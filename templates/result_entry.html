@@ -400,7 +400,7 @@
         </td>
         <td></td>
         <td class="rerun-result-cell"></td>
-        <td><input type="text" class="remark-input parent-remark" data-order-id="${row.order_id}" value="${escAttr(row.note || '')}" placeholder="Note..." ${row.authorized ? 'disabled' : ''}></td>
+        <td><input type="text" class="remark-input parent-remark" data-order-id="${row.order_id}" data-idx="${idx}" value="${escAttr(row.note || '')}" placeholder="Note..." ${row.authorized ? 'disabled' : ''}></td>
         <td class="text-center">
             ${buildActionButtonsHTML(row)}
         </td>

@@ -38,6 +38,8 @@ def set_perms():
         'devices': ["create", "edit", "delete"],
         'parameters': ["create", "edit", "delete"],
         'report_notes': ["create", "edit", "delete"],
+        'supplies': ["create", "edit", "delete"],
+        'inventory': ["create", "edit", "delete"],
         'tests': ["create", "edit", "delete"],
         'formulas': ["create", "edit", "delete"],
         'test_ranges': ["create", "edit", "delete"],
@@ -68,7 +70,7 @@ def set_perms():
     
     conn.commit()
     conn.close()
-    print(f"✅ Successfully updated admin permissions for {len(pages)} pages")
+    print(f"Successfully updated admin permissions for {len(pages)} pages")
 
 if __name__ == "__main__":
     set_perms()

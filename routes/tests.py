@@ -58,7 +58,8 @@ def create_test(test_name: str = Form(...), test_short_name: str = Form(...),
                 department_id: int = Form(...), sample_type_id: int = Form(...),
                 report_note_id: Optional[int] = Form(None), price: float = Form(...),
                 test_note: Optional[str] = Form(None), test_condition: Optional[str] = Form(None),
-                is_available: str = Form(None), device_ids: Optional[str] = Form(""),
+                is_available: str = Form(None), print_separately: str = Form(None),
+                device_ids: Optional[str] = Form(""),
                 parameter_ids: Optional[str] = Form(""), request: Request = None,
                 session: Session = Depends(get_session)):
     if not require_permission(request, session, "tests", "create"):
@@ -71,7 +72,8 @@ def create_test(test_name: str = Form(...), test_short_name: str = Form(...),
             department_id=department_id, sample_type_id=sample_type_id,
             report_note_id=report_note_id if report_note_id and report_note_id != "" else None,
             price=price, test_note=test_note, test_condition=test_condition,
-            is_available=is_available_bool, created_by=current_user.id if current_user else None
+            is_available=is_available_bool, print_separately=(print_separately == "on"),
+            created_by=current_user.id if current_user else None
         )
         session.add(new_test)
         session.commit()
@@ -98,7 +100,8 @@ def update_test(test_id: int, test_name: str = Form(...), test_short_name: str =
                 department_id: int = Form(...), sample_type_id: int = Form(...),
                 report_note_id: Optional[int] = Form(None), price: float = Form(...),
                 test_note: Optional[str] = Form(None), test_condition: Optional[str] = Form(None),
-                is_available: str = Form(None), device_ids: Optional[str] = Form(""),
+                is_available: str = Form(None), print_separately: str = Form(None),
+                device_ids: Optional[str] = Form(""),
                 parameter_ids: Optional[str] = Form(""), request: Request = None,
                 session: Session = Depends(get_session)):
     if not require_permission(request, session, "tests", "edit"):
@@ -117,6 +120,7 @@ def update_test(test_id: int, test_name: str = Form(...), test_short_name: str =
             test.test_note = test_note
             test.test_condition = test_condition
             test.is_available = True if is_available == "on" else False
+            test.print_separately = True if print_separately == "on" else False
             test.edited_by = current_user.id if current_user else None
             test.edited_at = datetime.now()
             existing_device_links = session.exec(select(TestDevice).where(TestDevice.test_id == test_id)).all()
@@ -154,16 +158,34 @@ def delete_test(test_id: int, request: Request, session: Session = Depends(get_s
         test = session.get(TestDefinition, test_id)
         if test:
             old_values = model_to_dict(test)
-            existing_device_links = session.exec(select(TestDevice).where(TestDevice.test_id == test_id)).all()
-            for link in existing_device_links:
-                session.delete(link)
-            existing_parameter_links = session.exec(select(TestParameter).where(TestParameter.test_id == test_id)).all()
-            for link in existing_parameter_links:
-                session.delete(link)
-            session.delete(test)
-            session.commit()
-            create_audit_log(session, "testdefinition", test.id, "delete", current_user, old_values=old_values)
-            return RedirectResponse(url="/tests?success=Test deleted successfully!", status_code=status.HTTP_303_SEE_OTHER)
+            
+            # Check for existing orders referencing this test
+            from models import Order
+            order_count = session.exec(
+                select(Order).where(Order.test_id == test_id)
+            ).first()
+            
+            if order_count:
+                # Soft-delete: mark as unavailable to preserve order references
+                test.is_available = False
+                test.deleted_at = datetime.now()
+                test.deleted_by = current_user.id if current_user else None
+                session.add(test)
+                session.commit()
+                create_audit_log(session, "testdefinition", test.id, "soft_delete", current_user, old_values=old_values, new_values={"action": "Test deactivated (has existing orders)"})
+                return RedirectResponse(url="/tests?success=Test deactivated (has existing patient orders, cannot hard-delete).", status_code=status.HTTP_303_SEE_OTHER)
+            else:
+                # Safe to hard-delete: no orders reference this test
+                existing_device_links = session.exec(select(TestDevice).where(TestDevice.test_id == test_id)).all()
+                for link in existing_device_links:
+                    session.delete(link)
+                existing_parameter_links = session.exec(select(TestParameter).where(TestParameter.test_id == test_id)).all()
+                for link in existing_parameter_links:
+                    session.delete(link)
+                session.delete(test)
+                session.commit()
+                create_audit_log(session, "testdefinition", test.id, "delete", current_user, old_values=old_values)
+                return RedirectResponse(url="/tests?success=Test deleted successfully!", status_code=status.HTTP_303_SEE_OTHER)
         return RedirectResponse(url="/tests?error=Test not found", status_code=status.HTTP_303_SEE_OTHER)
     except Exception as e:
         session.rollback()
@@ -286,7 +308,7 @@ def test_ranges_page(request: Request, session: Session = Depends(get_session)):
 def create_test_range(test_id: int = Form(...), parameter_id: Optional[int] = Form(None),
                       device_id: Optional[int] = Form(None), unit: str = Form(...),
                       gender_type: str = Form(...), age_from: int = Form(...),
-                      age_to: int = Form(...), age_unit: str = Form(...),
+                      age_to: int = Form(...), age_from_unit: str = Form("year"), age_to_unit: str = Form("year"),
                       fasting_required: str = Form("false"), range_type: str = Form(...),
                       normal_from: Optional[float] = Form(None), normal_to: Optional[float] = Form(None),
                       vlow_from: Optional[float] = Form(None), vlow_to: Optional[float] = Form(None),
@@ -306,7 +328,7 @@ def create_test_range(test_id: int = Form(...), parameter_id: Optional[int] = Fo
         new_range = TestRange(
             test_id=test_id, parameter_id=parameter_id if parameter_id else None,
             device_id=device_id if device_id else None, unit=unit, gender_type=gender_type,
-            age_from=age_from, age_to=age_to, age_unit=age_unit, fasting_required=fasting_bool,
+            age_from=age_from, age_to=age_to, age_from_unit=age_from_unit, age_to_unit=age_to_unit, age_unit=age_from_unit, fasting_required=fasting_bool,
             range_type=range_type, normal_from=normal_from, normal_to=normal_to,
             vlow_from=vlow_from, vlow_to=vlow_to, low_from=low_from, low_to=low_to,
             midlow_from=midlow_from, midlow_to=midlow_to, midhigh_from=midhigh_from,
@@ -328,7 +350,7 @@ def create_test_range(test_id: int = Form(...), parameter_id: Optional[int] = Fo
 def update_test_range(range_id: int, test_id: int = Form(...), parameter_id: Optional[int] = Form(None),
                       device_id: Optional[int] = Form(None), unit: str = Form(...),
                       gender_type: str = Form(...), age_from: int = Form(...),
-                      age_to: int = Form(...), age_unit: str = Form(...),
+                      age_to: int = Form(...), age_from_unit: str = Form("year"), age_to_unit: str = Form("year"),
                       fasting_required: str = Form("false"), range_type: str = Form(...),
                       normal_from: Optional[float] = Form(None), normal_to: Optional[float] = Form(None),
                       vlow_from: Optional[float] = Form(None), vlow_to: Optional[float] = Form(None),
@@ -355,7 +377,9 @@ def update_test_range(range_id: int, test_id: int = Form(...), parameter_id: Opt
             range_item.gender_type = gender_type
             range_item.age_from = age_from
             range_item.age_to = age_to
-            range_item.age_unit = age_unit
+            range_item.age_from_unit = age_from_unit
+            range_item.age_to_unit = age_to_unit
+            range_item.age_unit = age_from_unit
             range_item.fasting_required = fasting_bool
             range_item.range_type = range_type
             range_item.normal_from = normal_from

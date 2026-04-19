@@ -224,13 +224,17 @@ def crop_pdf(pdf_path, width_str, height_str):
             w = width_pt if width_pt else orig_width
             h = height_pt if height_pt else orig_height
             
-            # PDF origin (0,0) is bottom-left, but HTML content starts top-left
-            page.mediabox.lower_left = (0, orig_height - h)
-            page.mediabox.upper_right = (w, orig_height)
+            # Physically shift the PDF contents down by (orig_height - bounding box height)
+            # This perfectly zeroes the origin to (0,0), exactly like iTextSharp/Native PDFs do,
+            # preventing label printers from getting confused by offset CropBoxes.
+            from PyPDF2 import Transformation
+            page.add_transformation(Transformation().translate(tx=0, ty=-(orig_height - h)))
             
-            # Also update cropbox to be explicit
-            page.cropbox.lower_left = (0, orig_height - h)
-            page.cropbox.upper_right = (w, orig_height)
+            page.mediabox.lower_left = (0, 0)
+            page.mediabox.upper_right = (w, h)
+            
+            page.cropbox.lower_left = (0, 0)
+            page.cropbox.upper_right = (w, h)
             
             writer = PyPDF2.PdfWriter()
             writer.add_page(page)
@@ -257,17 +261,22 @@ def print_job(server_url, patient_id, barcode_printer, receipt_printer, print_to
     temp_dir = tempfile.mkdtemp(prefix='nexprint_job_')
     
     try:
-        # --- Print Barcode ---
+        # --- Print Native Barcode ---
         if barcode_printer:
-            barcode_url = f"{server_url.rstrip('/')}/print-barcode/{patient_id}?print_token={print_token}"
+            barcode_url = f"{server_url.rstrip('/')}/api/print-barcode-pdf/{patient_id}?print_token={print_token}"
             barcode_pdf = os.path.join(temp_dir, 'barcode.pdf')
             
             try:
-                render_html_to_pdf(barcode_url, barcode_pdf, edge_path)
-                # Fallback to local defaults if client didn't refresh HTML page payload
-                if not barcode_width: barcode_width = '50mm'
-                if not barcode_height: barcode_height = '25mm'
-                crop_pdf(barcode_pdf, barcode_width, barcode_height)
+                import urllib.request
+                import ssl
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                
+                req = urllib.request.Request(barcode_url)
+                with urllib.request.urlopen(req, context=ctx) as response, open(barcode_pdf, 'wb') as out_file:
+                    out_file.write(response.read())
+                    
                 print_pdf_to_printer(barcode_pdf, barcode_printer, sumatra_path)
                 results['barcode_success'] = True
             except Exception as e:

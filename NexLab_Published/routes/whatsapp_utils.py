@@ -8,32 +8,67 @@ from playwright.sync_api import sync_playwright
 # Setup Jinja2 to point to your templates folder
 templates = Jinja2Templates(directory="templates")
 
-def send_ultramsg_pdf(phone_number, pdf_bytes, filename, caption, lab_info_dict):
-    """Sends the generated PDF via UltraMsg API using dynamic database credentials."""
+def send_wati_pdf(phone_number, pdf_bytes, filename, caption, lab_info_dict):
+    """Sends the generated PDF via Wati API using dynamic database credentials."""
     try:
         # Dynamically fetch from the LabInfo dictionary
-        instance_id = lab_info_dict.get("whatsapp_api", "") if lab_info_dict else ""
+        wati_endpoint = lab_info_dict.get("whatsapp_api", "") if lab_info_dict else ""
         token = lab_info_dict.get("whatsapp_token", "") if lab_info_dict else ""
         
+        # Clean token just in case user pasted 'Bearer ' with it
+        if token.lower().startswith("bearer "):
+            token = token[7:].strip()
+            
         # If no credentials exist in the database, abort and return a clear error
-        if not instance_id or not token:
-            print("⚠️ WhatsApp credentials missing from LabInfo database.")
+        if not wati_endpoint or not token:
+            print("⚠️ Wati credentials missing from LabInfo database.")
             return {"status": "error", "message": "WhatsApp API credentials are not configured in settings."}
 
-        url = f"https://api.ultramsg.com/{instance_id}/messages/document"
-        base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+        # Ensure the endpoint does not end with a slash and has https://
+        wati_endpoint = wati_endpoint.strip()
+        if wati_endpoint and not wati_endpoint.startswith("http"):
+            wati_endpoint = f"https://{wati_endpoint}"
+            
+        # If the user included /api/v1 in the URL, strip it to prevent duplication
+        if "/api/v1" in wati_endpoint:
+            wati_endpoint = wati_endpoint.split("/api/v1")[0]
+            
+        base_url = wati_endpoint.rstrip("/")
         
-        payload = {
-            "token": token,
-            "to": phone_number,
-            "filename": filename,
-            "document": f"data:application/pdf;base64,{base64_pdf}",
+        # Wati API expects the phone number without the '+' sign
+        clean_phone = phone_number.replace("+", "")
+
+        url = f"{base_url}/api/v1/sendSessionFile/{clean_phone}"
+        
+        headers = {
+            "Authorization": f"Bearer {token}"
+            # Requests will set Content-Type correctly for multipart/form-data
+        }
+        
+        files = {
+            'file': (filename, pdf_bytes, 'application/pdf')
+        }
+        
+        # Wati generally expects caption as a query parameter for sendSessionFile
+        params = {
             "caption": caption
         }
 
-        headers = {'content-type': 'application/x-www-form-urlencoded'}
-        response = requests.post(url, data=payload, headers=headers)
-        return response.json()
+        response = requests.post(url, headers=headers, params=params, files=files)
+        
+        print("WATI API RESPONSE CODE:", response.status_code)
+        print("WATI API RESPONSE TEXT:", response.text)
+        
+        res_json = {}
+        try:
+            res_json = response.json()
+        except Exception:
+            res_json = {"status": "success" if response.status_code in [200, 201] else "error", "message": response.text}
+            
+        if response.status_code not in [200, 201] or str(res_json.get("result", "")).lower() == "error" or res_json.get("error"):
+            res_json["status"] = "error"
+            
+        return res_json
     except Exception as e:
         print(f"WhatsApp sending failed: {e}")
         traceback.print_exc()

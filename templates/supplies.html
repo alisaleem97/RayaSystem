@@ -1,0 +1,169 @@
+<!-- templates/supplies.html -->
+{% extends "base.html" %}
+
+{% block title %}Supplies - NexLab{% endblock %}
+{% block page_title %}Lab Supplies{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="p-6 border-b border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+            <h3 class="text-lg font-semibold text-slate-800">Supply Management</h3>
+            <p class="text-sm text-slate-500">Define and manage laboratory supplies</p>
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <!-- Search Filter -->
+            <form method="GET" action="/supplies" class="relative group">
+                <input type="text" name="search" value="{{ search }}" placeholder="Search supplies..." 
+                       class="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all w-64 group-hover:border-slate-300">
+                <div class="absolute left-3 top-2.5 text-slate-400 group-hover:text-indigo-500 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+                {% if search %}
+                <a href="/supplies" class="absolute right-3 top-2.5 text-slate-400 hover:text-red-500 transition-colors" title="Clear search">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </a>
+                {% endif %}
+            </form>
+
+            {% if has_button('supplies', 'create') %}
+            <button onclick="toggleForm('addSupplyForm')" 
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200 flex items-center gap-2 shadow-sm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Add Supply
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Add/Edit Supply Form -->
+    <div id="addSupplyForm" style="display: none;" class="p-6 bg-slate-50 border-b border-slate-200">
+        <div class="max-w-3xl">
+            <h4 class="text-md font-semibold text-slate-700 mb-4 flex items-center gap-2" id="formTitle">
+                <div class="w-2 h-6 bg-indigo-500 rounded-full"></div>
+                New Supply Details
+            </h4>
+            <form method="POST" id="supplyForm" action="/supplies/create">
+                <input type="hidden" id="supply_id" name="supply_id" value="">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div class="space-y-1">
+                        <label class="block text-sm font-medium text-slate-700">Supply Name <span class="text-red-500">*</span></label>
+                        <input type="text" id="name" name="name" required placeholder="e.g., Cuvettes, Reagents" 
+                               class="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all hover:border-slate-400 shadow-sm bg-white">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="block text-sm font-medium text-slate-700">Note (Optional)</label>
+                        <input type="text" id="note" name="note" placeholder="Additional details..." 
+                               class="w-full border border-slate-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all hover:border-slate-400 shadow-sm bg-white">
+                    </div>
+                </div>
+                
+                <div class="flex gap-3 justify-end border-t border-slate-200 pt-6">
+                    <button type="button" onclick="toggleForm('addSupplyForm')" 
+                            class="bg-white border border-slate-300 text-slate-700 px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-all shadow-md active:scale-95 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                        Save Supply
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Supplies Table -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-slate-50">
+                <tr>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">ID</th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Supply Name</th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Note</th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-slate-100">
+                {% for supply in supplies %}
+                <tr class="hover:bg-slate-50/50 transition-colors group">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-mono">#{{ supply.id }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="text-sm font-semibold text-slate-800">{{ supply.name }}</span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="text-sm text-slate-600 italic">{{ supply.note or '---' }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div class="flex items-center space-x-3">
+                            {% if has_button('supplies', 'edit') %}
+                            <button onclick='editSupply({{ supplies_json[loop.index0] | tojson }})' 
+                                    class="text-indigo-600 hover:text-indigo-900" title="Edit">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </button>
+                            {% endif %}
+                            
+                            {% if has_button('supplies', 'delete') %}
+                            <a href="javascript:void(0)" 
+                               onclick="confirmDelete('/supplies/delete/{{ supply.id }}')"
+                               class="text-red-600 hover:text-red-900" title="Delete">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    {% if not supplies %}
+    <div class="text-center py-20 bg-slate-50/30">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 text-slate-400 mb-4">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+        </div>
+        <h3 class="text-lg font-medium text-slate-900">No supplies found</h3>
+        <p class="mt-1 text-slate-500 max-w-xs mx-auto">
+            {% if search %}
+            Try adjusting your search terms or clear the filter.
+            {% else %}
+            Get started by adding your first laboratory supply.
+            {% endif %}
+        </p>
+        {% if search %}
+        <a href="/supplies" class="mt-4 inline-flex items-center text-indigo-600 font-medium hover:text-indigo-700">
+            Clear Search
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{% block scripts %}
+<script>
+function toggleForm(formId) {
+    const form = document.getElementById(formId);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'none') {
+        document.getElementById('supplyForm').reset();
+        document.getElementById('supply_id').value = '';
+        document.getElementById('formTitle').innerHTML = '<div class="w-2 h-6 bg-indigo-500 rounded-full"></div> New Supply Details';
+        document.getElementById('supplyForm').action = '/supplies/create';
+    } else {
+        window.scrollTo({ top: form.offsetTop - 100, behavior: 'smooth' });
+    }
+}
+
+function editSupply(supply) {
+    document.getElementById('supply_id').value = supply.id;
+    document.getElementById('name').value = supply.name;
+    document.getElementById('note').value = supply.note || '';
+    document.getElementById('formTitle').innerHTML = '<div class="w-2 h-6 bg-blue-500 rounded-full"></div> Edit Supply Details (#' + supply.id + ')';
+    document.getElementById('addSupplyForm').style.display = 'block';
+    document.getElementById('supplyForm').action = '/supplies/update/' + supply.id;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+{% endblock %}
+{% endblock %}

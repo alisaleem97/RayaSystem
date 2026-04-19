@@ -4,7 +4,7 @@
 from fastapi.templating import Jinja2Templates
 from fastapi import Request
 from sqlmodel import Session, select
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import json
 import base64
@@ -19,10 +19,27 @@ from models import User, AuditLog, DeletedRecord, ActivityLog
 # ===========================
 # CENTRALIZED CONFIG
 # ===========================
-SECRET_KEY = os.environ.get("NEXLAB_SECRET_KEY", "nexlab-secret-key-2026")
+_env_secret = os.environ.get("NEXLAB_SECRET_KEY")
+if _env_secret:
+    SECRET_KEY = _env_secret
+else:
+    SECRET_KEY = uuid.uuid4().hex + uuid.uuid4().hex
+    import logging
+    logging.getLogger("nexlab.security").warning(
+        "NEXLAB_SECRET_KEY not set! Using auto-generated key. Sessions will NOT persist across restarts. "
+        "Set NEXLAB_SECRET_KEY environment variable for production use."
+    )
 
 from passlib.context import CryptContext
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# ===========================
+# TIMEZONE-AWARE TIMESTAMP
+# ===========================
+def local_now() -> datetime:
+    """Return current local datetime. All timestamps in the system use local timezone.
+    Use this instead of datetime.now() for consistency and documentation."""
+    return datetime.now()
 
 # Setup templates with auto-injection of current_user + permissions
 _base_templates = Jinja2Templates(directory="templates")
@@ -38,34 +55,27 @@ class AutoUserTemplates:
     def TemplateResponse(self, name, context, **kwargs):
         request = context.get("request")
         
-        # --- Resolve current_user ---
-        if "current_user" not in context and request:
-            try:
-                from itsdangerous import URLSafeSerializer
-                s = URLSafeSerializer(SECRET_KEY)
-                cookie = request.cookies.get("nexlab_session")
-                if cookie:
-                    data = s.loads(cookie)
-                    user_id = data.get("user_id")
-                    if user_id:
-                        with Session(engine) as sess:
-                            user = sess.get(User, user_id)
-                            if user:
-                                sess.expunge(user)
-                                context["current_user"] = user
-            except Exception:
-                pass
-            if "current_user" not in context:
-                context["current_user"] = None
-        
-        # --- Load permissions dict for the user ---
-        current_user = context.get("current_user")
-        is_admin = current_user and (current_user.role == "admin" or current_user.username == "admin")
-        
-        user_perms = {}  # {page_key: [btn_key, ...]}
-        if current_user and not is_admin:
-            try:
-                with Session(engine) as sess:
+        # Single session for all template-level lookups (user, perms, lab_name)
+        try:
+            with Session(engine) as sess:
+                # --- Resolve current_user ---
+                if "current_user" not in context and request:
+                    user = get_current_user(request, sess)
+                    if user:
+                        sess.expunge(user)
+                        context["current_user"] = user
+                    else:
+                        context["current_user"] = None
+                
+                if "current_user" not in context:
+                    context["current_user"] = None
+                
+                # --- Load permissions dict for the user ---
+                current_user = context.get("current_user")
+                is_admin = current_user and (current_user.role == "admin" or current_user.username == "admin")
+                
+                user_perms = {}
+                if current_user and not is_admin:
                     perms = sess.exec(
                         select(UserPermission).where(UserPermission.user_id == current_user.id)
                     ).all()
@@ -77,8 +87,20 @@ class AutoUserTemplates:
                             except Exception:
                                 buttons = []
                         user_perms[p.page_key] = buttons
-            except Exception:
-                pass
+                
+                # --- Inject global lab_name ---
+                if "global_lab_name" not in context:
+                    from models import LabInfo
+                    lab_info_obj = sess.exec(select(LabInfo).limit(1)).first()
+                    context["global_lab_name"] = lab_info_obj.lab_name if lab_info_obj and lab_info_obj.lab_name else ""
+        except Exception:
+            if "current_user" not in context:
+                context["current_user"] = None
+            current_user = context.get("current_user")
+            is_admin = current_user and (current_user.role == "admin" or current_user.username == "admin")
+            user_perms = {}
+            if "global_lab_name" not in context:
+                context["global_lab_name"] = ""
         
         # --- Inject permission helpers ---
         def has_page(page_key):
@@ -100,16 +122,6 @@ class AutoUserTemplates:
         context["is_admin"] = is_admin
         context["user_perms"] = user_perms
         
-        # --- Inject global lab_name ---
-        if "global_lab_name" not in context:
-            try:
-                from models import LabInfo
-                with Session(engine) as sess:
-                    lab_info_obj = sess.exec(select(LabInfo).limit(1)).first()
-                    context["global_lab_name"] = lab_info_obj.lab_name if lab_info_obj and lab_info_obj.lab_name else ""
-            except Exception:
-                context["global_lab_name"] = ""
-        
         return self.base.TemplateResponse(name, context, **kwargs)
 
 templates = AutoUserTemplates(_base_templates)
@@ -128,6 +140,16 @@ def calculate_age(dob: datetime) -> int:
     today = datetime.today()
     return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
 
+def age_to_days(age: int, unit: str) -> int:
+    """Convert age and unit to days for consistent comparison"""
+    if age is None or age == "": return 0
+    age = int(age)
+    u = (unit or "year").lower()
+    if "year" in u: return age * 365
+    elif "month" in u: return age * 30
+    elif "day" in u: return age
+    return age * 365
+
 def model_to_dict(model):
     """Convert SQLModel object to dict"""
     if model is None:
@@ -145,14 +167,30 @@ def get_current_user(request, session: Session) -> Optional[User]:
     """Get current logged-in user from session cookie"""
     try:
         from itsdangerous import URLSafeSerializer
+        from datetime import timedelta
         s = URLSafeSerializer(SECRET_KEY)
         cookie = request.cookies.get("nexlab_session")
         if not cookie:
             return None
         data = s.loads(cookie)
         user_id = data.get("user_id")
-        if user_id:
-            return session.get(User, user_id)
+        session_token = data.get("session_token")
+        
+        if user_id and session_token:
+            user = session.get(User, user_id)
+            if user and user.session_token == session_token:
+                # Check inactivity timeout (2 hours)
+                if user.last_seen and (datetime.now() - user.last_seen) > timedelta(hours=2):
+                    user.session_token = None # Force logout
+                    session.commit()
+                    return None
+                
+                # Update last_seen if > 5 mins to avoid spamming DB
+                if not user.last_seen or (datetime.now() - user.last_seen) > timedelta(minutes=5):
+                    user.last_seen = datetime.now()
+                    session.commit() # Note: this will impact AutoUserTemplates if session is independent but it works.
+                
+                return user
     except Exception:
         pass
     return None
@@ -344,9 +382,9 @@ def build_patient_list_query(request, defaults_today=True):
         query = query.join(PatientVisit)
     
     if start_date:
-        query = query.where(PatientVisit.visit_date >= f"{start_date} 00:00:00")
+        query = query.where(PatientVisit.visit_date >= datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S"))
     if end_date:
-        query = query.where(PatientVisit.visit_date <= f"{end_date} 23:59:59")
+        query = query.where(PatientVisit.visit_date <= datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S"))
     
     if name:
         query = query.where(Patient.full_name.ilike(f"%{name}%"))
@@ -373,6 +411,129 @@ def build_patient_list_query(request, defaults_today=True):
     }
     
     return query, filters
+
+
+def build_patient_visit_data(session, request, status_filter=None, defaults_today=True):
+    """
+    Shared helper to build patient_data list for patient list pages.
+    Eliminates N+1 queries by fetching visits directly with eager-loaded orders.
+    
+    Returns: (patient_data, filters)
+    """
+    from sqlalchemy.orm import selectinload
+    
+    today_str = datetime.today().strftime("%Y-%m-%d") if defaults_today else ""
+    start_date = request.query_params.get("start_date", today_str)
+    end_date = request.query_params.get("end_date", today_str)
+    name = request.query_params.get("name", "")
+    patient_id_q = request.query_params.get("patient_id", "")
+    test_q = request.query_params.get("test", "")
+    status_q = status_filter or request.query_params.get("status", "all")
+    
+    # Single query: fetch visits with eager-loaded patient and orders
+    visit_query = (
+        select(PatientVisit)
+        .options(
+            selectinload(PatientVisit.patient),
+            selectinload(PatientVisit.orders).selectinload(Order.test)
+        )
+        .join(Patient, PatientVisit.patient_id == Patient.id)
+        .where(Patient.is_active == True)
+    )
+    
+    if start_date:
+        visit_query = visit_query.where(PatientVisit.visit_date >= datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S"))
+    if end_date:
+        visit_query = visit_query.where(PatientVisit.visit_date <= datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S"))
+    if name:
+        visit_query = visit_query.where(Patient.full_name.ilike(f"%{name}%"))
+    if patient_id_q:
+        visit_query = visit_query.where(Patient.patient_id.ilike(f"%{patient_id_q}%"))
+    
+    if test_q:
+        visit_query = visit_query.join(Order, Order.visit_id == PatientVisit.id).join(
+            TestDefinition, Order.test_id == TestDefinition.id
+        ).where(
+            (TestDefinition.test_name.ilike(f"%{test_q}%")) |
+            (TestDefinition.test_short_name.ilike(f"%{test_q}%"))
+        )
+    
+    if status_q != "all":
+        if not test_q:
+            visit_query = visit_query.join(Order, Order.visit_id == PatientVisit.id)
+        if status_q == "pending":
+            visit_query = visit_query.where(Order.status == "ordered")
+        elif status_q in ("received", "resulted"):
+            visit_query = visit_query.where(Order.status == "resulted")
+        elif status_q in ("authorize", "authorized"):
+            visit_query = visit_query.where(Order.status == "authorized")
+        elif status_q == "double_authorized":
+            visit_query = visit_query.where(Order.status == "double_authorized")
+        elif status_q == "AD":
+            visit_query = visit_query.where(Order.status.in_(["authorized", "double_authorized"]))
+    
+    visits = session.exec(
+        visit_query.order_by(PatientVisit.visit_date.desc())
+    ).all()
+    
+    # Group by patient (latest visit per patient)
+    seen_patients = set()
+    patient_data = []
+    
+    for visit in visits:
+        patient = visit.patient
+        if not patient or patient.id in seen_patients:
+            continue
+        seen_patients.add(patient.id)
+        
+        # Build tests data from orders
+        packages = {}
+        standalones = []
+        
+        for order in visit.orders:
+            if not order.test or order.status == "no_sample":
+                continue
+            
+            status_color = "red"
+            if order.status == "resulted":
+                status_color = "blue"
+            elif order.status == "authorized":
+                status_color = "green"
+            elif order.status == "double_authorized":
+                status_color = "purple"
+            
+            test_info = {"name": order.test.test_name, "color": status_color}
+            
+            if order.package_name:
+                if order.package_name not in packages:
+                    packages[order.package_name] = []
+                packages[order.package_name].append(test_info)
+            else:
+                standalones.append(test_info)
+        
+        tests_data = []
+        for pkg_name, pkg_tests in packages.items():
+            tests_data.append({"is_package": True, "package_name": pkg_name, "tests": pkg_tests})
+        for t in standalones:
+            tests_data.append({"is_package": False, "test": t})
+        
+        patient_data.append({
+            "patient": patient,
+            "registration_date": visit.visit_date,
+            "tests": tests_data
+        })
+    
+    filters = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "name": name,
+        "patient_id": patient_id_q,
+        "test": test_q,
+        "status": status_q,
+    }
+    
+    return patient_data, filters
+
 
 # Add helper to templates
 templates.env.globals["calculate_age"] = calculate_age

@@ -1,0 +1,411 @@
+<!-- templates/inventory.html -->
+{% extends "base.html" %}
+
+{% block title %}Inventory - NexLab{% endblock %}
+{% block page_title %}Inventory Management{% endblock %}
+
+{% block content %}
+<!-- Tom Select CSS -->
+<link href="/static/vendor/tom-select/tom-select.css" rel="stylesheet">
+<style>
+/* Tom Select Dropdown with Scrollbar */
+.ts-wrapper {
+    position: relative !important;
+    width: 100%;
+    z-index: 100;
+}
+.ts-dropdown {
+    max-height: 250px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    z-index: 9999 !important;
+    position: absolute !important;
+    width: 100% !important;
+    box-sizing: border-box;
+    border: 1px solid #d1d5db !important;
+    border-top: 0 !important;
+    border-radius: 0 0 0.5rem 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    margin-top: -1px;
+}
+.ts-dropdown .option {
+    padding: 8px 12px;
+    cursor: pointer;
+}
+.ts-dropdown .option:hover {
+    background-color: #e0e7ff;
+}
+.ts-dropdown .active {
+    background-color: #e0e7ff;
+}
+/* Custom scrollbar styling */
+.ts-dropdown::-webkit-scrollbar {
+    width: 8px;
+}
+.ts-dropdown::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+.ts-dropdown::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+.ts-dropdown::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+.ts-wrapper.form-control,
+.ts-wrapper.is-invalid,
+.ts-wrapper.is-valid {
+    padding: 0;
+}
+</style>
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="p-6 border-b border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+            <h3 class="text-lg font-semibold text-slate-800">Inventory Items</h3>
+            <p class="text-sm text-slate-500">Track and manage tests and supplies</p>
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <!-- Search Filter -->
+            <form method="GET" action="/inventory" class="relative group flex items-center gap-2">
+                <div class="relative">
+                    <input type="text" name="search" value="{{ search }}" placeholder="Search items..." 
+                           class="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all w-64 group-hover:border-slate-300">
+                    <div class="absolute left-3 top-2.5 text-slate-400 group-hover:text-indigo-500 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                </div>
+                
+                <input type="hidden" name="expires_soon" id="hidden_expires_soon" value="{{ 'true' if expires_soon else '' }}">
+                
+                <button type="button" onclick="toggleExpiresSoon()" class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-2 
+                    {% if expires_soon %} bg-red-50 text-red-600 border-red-200 hover:bg-red-100 {% else %} bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 {% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Expires in 30 Days
+                </button>
+
+                <button type="submit" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition duration-200">
+                    Filter
+                </button>
+                
+                {% if search or expires_soon %}
+                <a href="/inventory" class="text-slate-400 hover:text-red-500 transition-colors p-2" title="Clear all filters">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </a>
+                {% endif %}
+            </form>
+
+            {% if has_button('inventory', 'create') %}
+            <button onclick="toggleForm('addInventoryForm')" 
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200 flex items-center gap-2 shadow-sm ml-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Add Material
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Add/Edit Inventory Form -->
+    <div id="addInventoryForm" style="display: none;" class="p-6 bg-slate-50 border-b border-slate-200">
+        <div class="max-w-4xl">
+            <h4 class="text-md font-semibold text-slate-700 mb-4 flex items-center gap-2" id="formTitle">
+                <div class="w-2 h-6 bg-indigo-500 rounded-full"></div>
+                New Inventory Material
+            </h4>
+            
+            <form method="POST" id="inventoryForm" action="/inventory/create">
+                <!-- Type Selection Tabs -->
+                <div class="mb-6 flex gap-4 p-1 bg-slate-200/50 rounded-lg w-fit" id="typeTabs">
+                    <label class="cursor-pointer">
+                        <input type="radio" name="material_type" value="Test" class="hidden peer" checked onchange="switchMaterialType('Test')">
+                        <div class="px-6 py-2 text-sm font-medium rounded-md peer-checked:bg-white peer-checked:text-indigo-600 peer-checked:shadow-sm text-slate-500 hover:text-slate-700 transition-all">
+                            Tests
+                        </div>
+                    </label>
+                    <label class="cursor-pointer">
+                        <input type="radio" name="material_type" value="Supply" class="hidden peer" onchange="switchMaterialType('Supply')">
+                        <div class="px-6 py-2 text-sm font-medium rounded-md peer-checked:bg-white peer-checked:text-indigo-600 peer-checked:shadow-sm text-slate-500 hover:text-slate-700 transition-all">
+                            Supplies
+                        </div>
+                    </label>
+                </div>
+
+                <div class="flex flex-wrap items-start gap-x-4 gap-y-4 mb-6">
+                    <!-- Selection Dropdowns -->
+                    <div class="w-full sm:flex-1 min-w-[12rem] space-y-1" id="testSelectGroup">
+                        <label class="block text-sm font-medium text-slate-700">Select Test <span class="text-red-500">*</span></label>
+                        <select id="test_id" name="test_id" class="w-full border border-slate-300 rounded-lg px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="">-- Choose Test --</option>
+                            {% for t in tests %}
+                            <option value="{{ t.id }}">{{ t.test_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="w-full sm:flex-1 min-w-[12rem] space-y-1 hidden" id="supplySelectGroup">
+                        <label class="block text-sm font-medium text-slate-700">Select Supply <span class="text-red-500">*</span></label>
+                        <select id="supply_id" name="supply_id" class="w-full border border-slate-300 rounded-lg px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="">-- Choose Supply --</option>
+                            {% for s in supplies %}
+                            <option value="{{ s.id }}">{{ s.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Quantity & Unit -->
+                    <div class="w-full sm:w-24 space-y-1">
+                        <label class="block text-sm font-medium text-slate-700">Quantity <span class="text-red-500">*</span></label>
+                        <input type="number" step="any" id="quantity" name="quantity" required placeholder="0" 
+                               class="w-full h-11 border border-slate-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all hover:border-slate-400 shadow-sm bg-white">
+                    </div>
+
+                    <div class="w-full sm:w-32 space-y-1 hidden" id="unitGroup">
+                        <label class="block text-sm font-medium text-slate-700">Unit</label>
+                        <select id="unit" name="unit" class="w-full h-11 border border-slate-300 rounded-lg px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="bottle">bottle</option>
+                            <option value="kit">kit</option>
+                            <option value="box">box</option>
+                            <option value="Test">Test</option>
+                        </select>
+                    </div>
+
+                    <!-- Expiration Date -->
+                    <div class="w-full sm:w-40 space-y-1">
+                        <label class="block text-sm font-medium text-slate-700">Expiration Date <span class="text-red-500">*</span></label>
+                        <input type="date" id="expiration_date" name="expiration_date" required
+                               class="w-full h-11 border border-slate-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all hover:border-slate-400 shadow-sm bg-white">
+                    </div>
+
+                    <!-- Note -->
+                    <div class="w-full sm:flex-1 min-w-[12rem] space-y-1">
+                        <label class="block text-sm font-medium text-slate-700">Note</label>
+                        <input type="text" id="note" name="note" placeholder="Additional details..." 
+                               class="w-full h-11 border border-slate-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all hover:border-slate-400 shadow-sm bg-white">
+                    </div>
+                </div>
+
+                
+                <div class="flex gap-3 justify-end border-t border-slate-200 pt-6">
+                    <button type="button" onclick="toggleForm('addInventoryForm')" 
+                            class="bg-white border border-slate-300 text-slate-700 px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" onclick="validateTomSelects(event)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-all shadow-md active:scale-95 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                        Save Material
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Inventory Table -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-slate-50">
+                <tr>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Item Name</th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Quantity</th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Unit</th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Expiration Date</th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Note</th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-slate-100">
+                {% for item in inventory_items %}
+                <tr class="hover:bg-slate-50/50 transition-colors {% if item.is_expiring_soon %}bg-red-100 hover:bg-red-200{% endif %}">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="text-sm font-semibold text-slate-800">{{ item.name }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        {% if item.material_type == 'Test' %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">Test</span>
+                        {% else %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-emerald-100 text-emerald-800">Supply</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="text-sm font-bold {% if item.quantity <= 0 %}text-red-500{% else %}text-slate-700{% endif %}">
+                            {{ item.quantity }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="text-sm text-slate-500">{{ item.unit }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="text-sm {% if item.is_expiring_soon %}font-bold text-red-600{% else %}text-slate-600{% endif %}">
+                            {{ item.expiration_date.strftime('%d-%m-%Y') }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="text-sm text-slate-600 italic">{{ item.note or '---' }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div class="flex items-center space-x-3">
+                            {% if has_button('inventory', 'edit') %}
+                            <button onclick='editInventory({{ inventory_json[loop.index0] | tojson | safe }})' 
+                                    class="text-indigo-600 hover:text-indigo-900" title="Edit">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </button>
+                            {% endif %}
+                            
+                            {% if has_button('inventory', 'delete') %}
+                            <a href="javascript:void(0)" 
+                               onclick="confirmDelete('/inventory/delete/{{ item.id }}')"
+                               class="text-red-600 hover:text-red-900" title="Delete">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Total Sum footer -->
+    <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end items-center">
+        <span class="text-sm font-medium text-slate-500 mr-4">Total Sum (Filtered Quantity):</span>
+        <span class="text-lg font-bold text-slate-800">{{ total_quantity }}</span>
+    </div>
+    
+    {% if not inventory_items %}
+    <div class="text-center py-20 bg-slate-50/30">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 text-slate-400 mb-4">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+        </div>
+        <h3 class="text-lg font-medium text-slate-900">No inventory found</h3>
+        <p class="mt-1 text-slate-500 max-w-xs mx-auto">
+            {% if search or expires_soon %}
+            Try adjusting your filters to find what you're looking for.
+            {% else %}
+            Get started by adding your first material.
+            {% endif %}
+        </p>
+    </div>
+    {% endif %}
+</div>
+
+{% block scripts %}
+<!-- Tom Select JS -->
+<script src="/static/vendor/tom-select/tom-select.complete.min.js"></script>
+<script>
+let testTsSelect, supplyTsSelect;
+
+document.addEventListener('DOMContentLoaded', function() {
+    testTsSelect = new TomSelect('#test_id', {
+        plugins: ['dropdown_input'],
+        placeholder: '-- Choose Test --',
+        create: false,
+        maxItems: 1
+    });
+    supplyTsSelect = new TomSelect('#supply_id', {
+        plugins: ['dropdown_input'],
+        placeholder: '-- Choose Supply --',
+        create: false,
+        maxItems: 1
+    });
+});
+
+function validateTomSelects(event) {
+    const isTest = document.querySelector('input[name="material_type"][value="Test"]').checked;
+    const testVal = document.getElementById('test_id').value;
+    const supplyVal = document.getElementById('supply_id').value;
+    
+    if (isTest && !testVal) {
+        event.preventDefault();
+        alert('Please select a Test.');
+        return false;
+    } else if (!isTest && !supplyVal) {
+        event.preventDefault();
+        alert('Please select a Supply.');
+        return false;
+    }
+    return true;
+}
+
+function toggleExpiresSoon() {
+    const hidden = document.getElementById('hidden_expires_soon');
+    hidden.value = hidden.value === 'true' ? '' : 'true';
+    hidden.form.submit();
+}
+
+function switchMaterialType(type) {
+    const testDropdown = document.getElementById('testSelectGroup');
+    const supplyDropdown = document.getElementById('supplySelectGroup');
+    const unitGroup = document.getElementById('unitGroup');
+
+    if (type === 'Test') {
+        testDropdown.classList.remove('hidden');
+        supplyDropdown.classList.add('hidden');
+        unitGroup.classList.add('hidden');
+    } else {
+        testDropdown.classList.add('hidden');
+        supplyDropdown.classList.remove('hidden');
+        unitGroup.classList.remove('hidden');
+    }
+}
+
+function toggleForm(formId) {
+    const form = document.getElementById(formId);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'none') {
+        document.getElementById('inventoryForm').reset();
+        document.getElementById('formTitle').innerHTML = '<div class="w-2 h-6 bg-indigo-500 rounded-full"></div> New Inventory Material';
+        document.getElementById('inventoryForm').action = '/inventory/create';
+        document.querySelector('input[name="material_type"][value="Test"]').checked = true;
+        
+        if(testTsSelect) testTsSelect.clear();
+        if(supplyTsSelect) supplyTsSelect.clear();
+
+        switchMaterialType('Test');
+        document.getElementById('typeTabs').style.display = 'flex'; // show tabs for new
+    } else {
+        window.scrollTo({ top: form.offsetTop - 100, behavior: 'smooth' });
+    }
+}
+
+function editInventory(item) {
+    // Reset and show form
+    toggleForm('addInventoryForm');
+    document.getElementById('addInventoryForm').style.display = 'block';
+    
+    document.getElementById('inventoryForm').action = '/inventory/update/' + item.id;
+    document.getElementById('formTitle').innerHTML = '<div class="w-2 h-6 bg-blue-500 rounded-full"></div> Edit Inventory Material (#' + item.id + ')';
+    
+    // Set material type and hide tabs as changing type on edit can be complicated
+    document.querySelector('input[name="material_type"][value="' + item.material_type + '"]').checked = true;
+    switchMaterialType(item.material_type);
+    document.getElementById('typeTabs').style.display = 'none'; // hide tabs so they don't change type during edit
+    
+    if (item.material_type === 'Test') {
+        if(testTsSelect) testTsSelect.setValue(item.test_id);
+        else document.getElementById('test_id').value = item.test_id;
+    } else {
+        if(supplyTsSelect) supplyTsSelect.setValue(item.supply_id);
+        else document.getElementById('supply_id').value = item.supply_id;
+        document.getElementById('unit').value = item.unit;
+    }
+    
+    document.getElementById('quantity').value = item.quantity;
+    
+    // Format date string as YYYY-MM-DD from the original Python isoformat or datetime object
+    // HTML5 date input expects YYYY-MM-DD
+    const d = new Date(item.expiration_date);
+    const day = ('0' + d.getDate()).slice(-2);
+    const month = ('0' + (d.getMonth() + 1)).slice(-2);
+    const year = d.getFullYear();
+    document.getElementById('expiration_date').value = `${year}-${month}-${day}`;
+    
+    document.getElementById('note').value = item.note || '';
+    
+    window.scrollTo({ top: document.getElementById('addInventoryForm').offsetTop - 100, behavior: 'smooth' });
+}
+</script>
+{% endblock %}
+{% endblock %}

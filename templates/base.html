@@ -76,6 +76,50 @@
             width: 40px;
             height: 40px;
         }
+
+        /* ─── Global Fixed-Size Table Styles ─────────────────────────────── */
+        /* Wrapper: horizontal scroll if content still overflows, but table
+           itself won't grow beyond the viewport/container width.            */
+        .overflow-x-auto {
+            overflow-x: auto;
+        }
+
+        /* Make every data table fixed-layout so columns don't stretch to
+           fit content. Combined with overflow-x-auto on the wrapper this
+           keeps the table at a stable width while allowing a horizontal
+           scrollbar only when necessary.                                     */
+        table {
+            table-layout: fixed;
+            width: 100%;
+            min-width: 600px; /* stay readable on narrow containers */
+            border-collapse: collapse;
+        }
+
+        /* All header cells: wrap text, consistent padding.                  */
+        table thead th {
+            white-space: normal !important;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            vertical-align: bottom;
+        }
+
+        /* All body cells: allow text to wrap so rows expand vertically
+           instead of pushing the table wider.                               */
+        table tbody td {
+            white-space: normal !important;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            vertical-align: top;
+        }
+
+        /* Default column width distribution – each column gets an equal
+           share. Individual pages can override with inline width/style on
+           <th> elements when they need custom proportions.                   */
+        table th,
+        table td {
+            max-width: 0;   /* forces fixed-layout to honour table-layout:fixed */
+        }
+        /* ──────────────────────────────────────────────────────────────── */
     </style>
     <script>
         tailwind.config = {
@@ -273,6 +317,18 @@
                         <a href="/report-notes" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/report-notes' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                             Report Notes
+                        </a>
+                    </li>{% endif %}
+                    {% if has_page('supplies') %}<li>
+                        <a href="/supplies" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/supplies' %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                            Supplies
+                        </a>
+                    </li>{% endif %}
+                    {% if has_page('inventory') %}<li>
+                        <a href="/inventory" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/inventory' %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                            Inventory
                         </a>
                     </li>{% endif %}
                 </ul>
@@ -671,7 +727,9 @@
                 '/activity-logs',
                 '/no-sample',
                 '/print',
-                '/view-results'
+                '/view-results',
+                '/patient-status',
+                '/view-call-centre'
             ];
             
             if (startsWithExcludes.some(p => currentPath.startsWith(p))) {
