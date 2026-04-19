@@ -271,6 +271,10 @@ def create_parameter(parameter_name: str = Form(...), parameter_short_name: str 
         return RedirectResponse(url="/parameters?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     try:
         current_user = get_current_user(request, session)
+        # Check for duplicate name before inserting
+        existing = session.exec(select(Parameter).where(Parameter.parameter_name == parameter_name)).first()
+        if existing:
+            return RedirectResponse(url=f"/parameters?error=Parameter '{parameter_name}' already exists!", status_code=status.HTTP_303_SEE_OTHER)
         is_header_bool = True if is_header == "on" else False
         new_parameter = Parameter(parameter_name=parameter_name, parameter_short_name=parameter_short_name.upper(),
                                  is_header=is_header_bool, created_by=current_user.id if current_user else None)

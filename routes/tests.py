@@ -438,13 +438,24 @@ def test_result_types_page(request: Request, session: Session = Depends(get_sess
         return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     result_types = session.exec(select(TestResultType).order_by(TestResultType.id.asc())).all()
     result_types_json = [model_to_dict(rt) for rt in result_types]
-    tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
+    # Eager-load test_parameters for building test→parameter mapping
+    tests = session.exec(
+        select(TestDefinition)
+        .where(TestDefinition.is_available == True)
+        .options(selectinload(TestDefinition.test_parameters))
+    ).all()
+    # Build test→parameter_ids mapping for dynamic parameter filtering
+    import json
+    test_param_map = {}
+    for test in tests:
+        test_param_map[str(test.id)] = [tp.parameter_id for tp in test.test_parameters]
     parameters = session.exec(select(Parameter)).all()
     success = request.query_params.get("success")
     error = request.query_params.get("error")
     return templates.TemplateResponse("test_result_types.html", {
         "request": request, "result_types": result_types, "result_types_json": result_types_json,
         "tests": tests, "parameters": parameters,
+        "test_param_map_json": json.dumps(test_param_map),
         "message_success": success, "message_error": error
     })
 
