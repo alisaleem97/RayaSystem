@@ -3,6 +3,8 @@
 {% block title %}Result Entry - NexLab{% endblock %}
 {% block page_title %}Result Entry{% endblock %}
 {% block content %}
+<!-- Quill.js Rich Text Editor CSS -->
+<link href="/static/vendor/quill/quill.snow.css" rel="stylesheet">
 <style>
     .result-grid {
         font-size: 13px;
@@ -439,6 +441,11 @@
             if (d) deviceName = d.name;
         }
 
+        let rerunHtml = escHtml(row.rerun_result || '');
+        if (row.result_type === 'paragraph' && row.rerun_result) {
+            rerunHtml = `<button type="button" class="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-medium text-xs px-2 py-1 rounded border border-indigo-200 transition-colors shadow-sm" onclick="viewRerunParagraph(${idx})">View Rerun</button>`;
+        }
+
         tr.innerHTML = `
         <td class="test-name">${escHtml(row.parameter_name)}</td>
         <td>${inputHtml}</td>
@@ -447,7 +454,7 @@
         <td class="text-xs text-slate-500 range-cell" data-idx="${idx}">${rangeDisplay}</td>
         <td class="text-center"><input type="checkbox" class="authorize-cb auth-child-cb" data-order-id="${row.order_id}" data-param-id="${row.parameter_id}" ${row.authorized ? 'checked' : ''}></td>
         <td class="text-center status-cell ${statusClass}" data-idx="${idx}">${statusText}</td>
-        <td class="text-center text-sm font-mono text-indigo-500 rerun-result-cell" data-idx="${idx}">${escHtml(row.rerun_result || '')}</td>
+        <td class="text-center text-sm font-mono text-indigo-500 rerun-result-cell" data-idx="${idx}">${rerunHtml}</td>
         <td></td>
         <td></td>
     `;
@@ -475,6 +482,11 @@
         const unitText = rng.unit || '';
         const devOptions = buildDeviceOptions(row.devices, row.selected_device_id);
         const { statusText, statusClass, inputClass } = computeStatus(row.result_value, rng);
+        
+        let rerunHtml = escHtml(row.rerun_result || '');
+        if (row.result_type === 'paragraph' && row.rerun_result) {
+            rerunHtml = `<button type="button" class="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-medium text-xs px-2 py-1 rounded border border-indigo-200 transition-colors shadow-sm" onclick="viewRerunParagraph(${idx})">View Rerun</button>`;
+        }
 
         tr.innerHTML = `
         <td class="test-name font-semibold text-slate-800">${escHtml(row.test_name)}</td>
@@ -486,7 +498,7 @@
             <input type="checkbox" class="authorize-cb auth-standalone-cb" data-order-id="${row.order_id}" ${row.authorized ? 'checked' : ''}>
         </td>
         <td class="text-center status-cell ${statusClass}" data-idx="${idx}">${statusText}</td>
-        <td class="text-center text-sm font-mono text-indigo-500 rerun-result-cell" data-idx="${idx}">${escHtml(row.rerun_result || '')}</td>
+        <td class="text-center text-sm font-mono text-indigo-500 rerun-result-cell" data-idx="${idx}">${rerunHtml}</td>
         <td><input type="text" class="remark-input" data-idx="${idx}" value="${escAttr(row.note || '')}" placeholder="Note..." ${row.authorized ? 'disabled' : ''}></td>
         <td class="text-center">
             ${buildActionButtonsHTML(row)}
@@ -566,6 +578,11 @@
             return html;
         } else if (rt === 'upload') {
             return `<div class="flex items-center"><input type="file" class="result-input text-xs ${extraClass}" data-idx="${idx}" style="width:140px;" ${disabledAttr} ${formulaAttr}></div>`;
+        } else if (rt === 'paragraph') {
+            return `<div class="flex items-center justify-center">
+                        <textarea class="result-input hidden" data-idx="${idx}" id="paragraph_val_${idx}">${val}</textarea>
+                        <button type="button" class="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-medium text-xs px-3 py-1.5 rounded border border-indigo-200 transition-colors shadow-sm" onclick="openParagraphEditor(${idx})" ${disabledAttr}>Paragraph</button>
+                    </div>`;
         } else if (rt === 'text') {
             return `<div class="flex items-center"><input type="text" class="result-input ${extraClass}" data-idx="${idx}" value="${val}" oninput="onResultChange(this)" placeholder="Enter text..." ${disabledAttr} ${formulaAttr}></div>`;
         } else {
@@ -585,7 +602,9 @@
 
     function formatRangeDisplay(rng) {
         if (!rng) return '—';
-        if (rng.range_type === 'text' && rng.text_range) return escHtml(rng.text_range);
+        if (rng.range_type === 'text' && rng.text_range) {
+            return `<span class="range-hover-wrapper"><span class="range-hover-btn">Range</span><span class="range-hover-bubble">${rng.text_range}</span></span>`;
+        }
         if (rng.normal_from != null && rng.normal_to != null) return `${rng.normal_from} - ${rng.normal_to}`;
         if (rng.normal_from != null) return `≥ ${rng.normal_from}`;
         if (rng.normal_to != null) return `≤ ${rng.normal_to}`;
@@ -1322,8 +1341,107 @@
     // ===========================
     // INIT
     // ===========================
-    document.addEventListener('DOMContentLoaded', loadGridData);
+    document.addEventListener('DOMContentLoaded', function() {
+        loadGridData();
+        initParagraphEditor();
+    });
+
+    // ===========================
+    // PARAGRAPH EDITOR
+    // ===========================
+    let paragraphQuill = null;
+    let currentParagraphIdx = null;
+
+    function initParagraphEditor() {
+        if (!paragraphQuill) {
+            paragraphQuill = new Quill('#paragraphQuillEditor', {
+                theme: 'snow',
+                modules: {
+                    toolbar: [
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        [{ 'align': [] }],
+                        ['clean']
+                    ]
+                }
+            });
+        }
+    }
+
+    function openParagraphEditor(idx) {
+        currentParagraphIdx = idx;
+        const hiddenInput = document.getElementById('paragraph_val_' + idx);
+        
+        // Ensure Quill is initialized
+        initParagraphEditor();
+        
+        // Load current content
+        paragraphQuill.root.innerHTML = hiddenInput.value || '';
+        
+        // Show modal
+        const modal = document.getElementById('paragraphModal');
+        const modalContent = document.getElementById('paragraphModalContent');
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            modal.classList.remove('opacity-0');
+            modalContent.classList.remove('scale-95', 'opacity-0');
+            modalContent.classList.add('scale-100', 'opacity-100');
+        }, 10);
+    }
+
+    function closeParagraphEditor() {
+        const modal = document.getElementById('paragraphModal');
+        const modalContent = document.getElementById('paragraphModalContent');
+        modal.classList.remove('opacity-100');
+        modalContent.classList.remove('scale-100', 'opacity-100');
+        modalContent.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            modal.classList.add('hidden');
+            currentParagraphIdx = null;
+        }, 200);
+    }
+
+    function saveParagraph() {
+        if (currentParagraphIdx !== null) {
+            const hiddenInput = document.getElementById('paragraph_val_' + currentParagraphIdx);
+            const content = paragraphQuill.root.innerHTML;
+            hiddenInput.value = content;
+            onResultChange(hiddenInput); // Trigger changes
+        }
+        closeParagraphEditor();
+    }
+
+    // View Rerun Paragraph
+    function viewRerunParagraph(idx) {
+        const row = gridData.grid_rows[idx];
+        if (!row) return;
+        
+        const content = row.rerun_result || '<p class="text-slate-500 italic">No rerun content</p>';
+        document.getElementById('viewRerunParagraphContent').innerHTML = content;
+        
+        const modal = document.getElementById('viewRerunParagraphModal');
+        const modalContent = document.getElementById('viewRerunParagraphModalContent');
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            modal.classList.remove('opacity-0');
+            modalContent.classList.remove('scale-95', 'opacity-0');
+            modalContent.classList.add('scale-100', 'opacity-100');
+        }, 10);
+    }
+
+    function closeViewRerunParagraph() {
+        const modal = document.getElementById('viewRerunParagraphModal');
+        const modalContent = document.getElementById('viewRerunParagraphModalContent');
+        modal.classList.remove('opacity-100');
+        modalContent.classList.remove('scale-100', 'opacity-100');
+        modalContent.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            modal.classList.add('hidden');
+        }, 200);
+    }
 </script>
+<!-- Quill.js Rich Text Editor JS -->
+<script src="/static/vendor/quill/quill.js"></script>
 
 <!-- No Sample Reason Modal -->
 <div id="noSampleReasonModal"
@@ -1362,6 +1480,63 @@
             <button onclick="closeNoSampleModal()"
                 class="px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-lg shadow-sm transition-colors text-sm">
                 Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Paragraph Editor Modal -->
+<div id="paragraphModal"
+    class="hidden fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity opacity-0">
+    <div class="bg-white rounded-[20px] shadow-2xl w-full max-w-3xl overflow-hidden transform scale-95 opacity-0 transition-all duration-200"
+        id="paragraphModalContent">
+        <!-- Header -->
+        <div class="bg-indigo-50 px-6 py-4 border-b border-indigo-100 flex justify-between items-center">
+            <div class="flex items-center gap-2 text-indigo-800 font-bold text-lg tracking-tight">
+                <i class="fas fa-align-left"></i>
+                Paragraph Editor
+            </div>
+            <button onclick="closeParagraphEditor()" class="text-indigo-400 hover:text-indigo-600 transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-6">
+            <div id="paragraphQuillEditor" class="h-64 rounded-b-lg text-slate-700"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-6 py-4 bg-white border-t border-slate-100 flex justify-end gap-3 flex-row-reverse pb-6">
+            <button onclick="saveParagraph()"
+                class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm transition-colors text-sm flex items-center gap-2">
+                <i class="fas fa-check"></i> Save
+            </button>
+            <button onclick="closeParagraphEditor()"
+                class="px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-lg shadow-sm transition-colors text-sm">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- View Rerun Paragraph Modal -->
+<div id="viewRerunParagraphModal" class="hidden fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity opacity-0">
+    <div class="bg-white rounded-[20px] shadow-2xl w-full max-w-3xl overflow-hidden transform scale-95 opacity-0 transition-all duration-200" id="viewRerunParagraphModalContent">
+        <div class="bg-indigo-50 px-6 py-4 border-b border-indigo-100 flex justify-between items-center">
+            <div class="flex items-center gap-2 text-indigo-800 font-bold text-lg">
+                <i class="fas fa-history"></i> ReRun Paragraph Result
+            </div>
+            <button onclick="closeViewRerunParagraph()" class="text-indigo-400 hover:text-indigo-600">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        <div class="p-6 max-h-[70vh] overflow-y-auto">
+            <div id="viewRerunParagraphContent" class="prose max-w-none text-slate-700"></div>
+        </div>
+        <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+            <button onclick="closeViewRerunParagraph()" class="px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-lg shadow-sm">
+                Close
             </button>
         </div>
     </div>

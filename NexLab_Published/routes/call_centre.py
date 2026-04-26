@@ -20,8 +20,9 @@ from routes.whatsapp_utils import generate_report_pdf, send_wati_pdf
 # --- Google Gemini AI Setup ---
 import os
 import google.generativeai as genai
-_gemini_key = os.environ.get("GEMINI_API_KEY", "AIzaSyBjeyiRZzUqyVHLa7CsWrg861E5pyP0t4U")
-genai.configure(api_key=_gemini_key)
+_gemini_key = os.environ.get("GEMINI_API_KEY")
+if _gemini_key:
+    genai.configure(api_key=_gemini_key)
 
 class AIRequest(BaseModel):
     prompt: str
@@ -208,6 +209,8 @@ def mark_called(visit_id: str, request: Request, session: Session = Depends(get_
 
 @router.post("/api/mark-printed/{visit_id}")
 def mark_printed(visit_id: str, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "call_centre", "mark_printed"):
+        return JSONResponse({"success": False, "message": "Permission Denied"}, status_code=403)
     current_user = get_current_user(request, session)
     visit = session.exec(select(PatientVisit).options(selectinload(PatientVisit.orders)).where(PatientVisit.visit_id == visit_id)).first()
     if not visit:
@@ -330,8 +333,9 @@ def send_whatsapp_results(visit_id: str, request: Request, payload: Optional[Wha
             raise HTTPException(status_code=400, detail="Patient phone number not found")
         
         to_phone = to_phone.strip().replace(" ", "")
+        country_code = getattr(lab_info, 'phone_country_code', '964') or '964'
         if not to_phone.startswith('+'):
-            to_phone = "+" + (to_phone if to_phone.startswith('964') else '964' + to_phone.lstrip('0'))
+            to_phone = "+" + (to_phone if to_phone.startswith(country_code) else country_code + to_phone.lstrip('0'))
 
         safe_name = "".join(c for c in patient.full_name if c.isalnum() or c in (' ', '_', '-')).strip()
         filename = f"{safe_name}.pdf"
@@ -377,6 +381,8 @@ def send_whatsapp_results(visit_id: str, request: Request, payload: Optional[Wha
 # ==========================================
 @router.post("/api/ai-analyse")
 async def ai_analyse_results(req: AIRequest):
+    if not _gemini_key:
+        return {"success": False, "error": "AI service not configured. Set GEMINI_API_KEY environment variable."}
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(req.prompt)

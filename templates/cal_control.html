@@ -1,0 +1,302 @@
+<!-- templates/cal_control.html -->
+{% extends "base.html" %}
+
+{% block title %}Cal & Control - NexLab{% endblock %}
+{% block page_title %}Calibration & Control{% endblock %}
+
+{% block content %}
+<!-- Tom Select CSS -->
+<link href="/static/vendor/tom-select/tom-select.css" rel="stylesheet">
+<style>
+/* Tom Select Dropdown with Scrollbar */
+.ts-wrapper {
+    position: relative !important;
+    width: 100%;
+    z-index: 100;
+}
+.ts-dropdown {
+    max-height: 250px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    z-index: 9999 !important;
+    position: absolute !important;
+    width: 100% !important;
+    box-sizing: border-box;
+    border: 1px solid #d1d5db !important;
+    border-top: 0 !important;
+    border-radius: 0 0 0.5rem 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    margin-top: -1px;
+}
+.ts-dropdown .option {
+    padding: 8px 12px;
+    cursor: pointer;
+}
+.ts-dropdown .option:hover {
+    background-color: #e0e7ff;
+}
+.ts-dropdown .active {
+    background-color: #e0e7ff;
+}
+.ts-dropdown::-webkit-scrollbar {
+    width: 8px;
+}
+.ts-dropdown::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+.ts-dropdown::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+.ts-dropdown::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+.ts-wrapper.form-control,
+.ts-wrapper.is-invalid,
+.ts-wrapper.is-valid {
+    padding: 0;
+}
+/* Force Tom Select to match h-11 (44px) */
+.ts-control {
+    min-height: 44px !important;
+    display: flex !important;
+    align-items: center !important;
+    border-radius: 0.5rem !important;
+    border: 1px solid #cbd5e1 !important;
+    background-color: #fff !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+.ts-wrapper.focus .ts-control {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2) !important;
+    outline: none !important;
+}
+</style>
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
+    <div class="p-6 border-b border-slate-200">
+        <h3 class="text-lg font-semibold text-slate-800">Record Cal / Control</h3>
+        <p class="text-sm text-slate-500 mb-4">Record a calibration or control process. Tests will be automatically deducted from inventory.</p>
+        
+        <form method="POST" action="/cal-control/create" id="calControlForm">
+            <div class="flex flex-wrap items-start gap-x-4 gap-y-4">
+                
+                <div class="w-full sm:flex-1 min-w-[12rem] space-y-1 relative">
+                    <label class="block text-sm font-medium text-slate-700">Select Test <span class="text-red-500">*</span></label>
+                    <select id="test_id" name="test_id" required class="w-full border border-slate-300 rounded-lg px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="">-- Choose Test --</option>
+                        {% for t in tests %}
+                        <option value="{{ t.id }}">{{ t.test_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="w-full sm:w-48 space-y-1">
+                    <label class="block text-sm font-medium text-slate-700">Process <span class="text-red-500">*</span></label>
+                    <select id="process_type" name="process_type" required class="w-full h-11 border border-slate-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="">Select Process...</option>
+                        <option value="Cal" class="text-blue-600 bg-blue-50 font-medium">Calibration</option>
+                        <option value="Control" class="text-emerald-600 bg-emerald-50 font-medium">Control</option>
+                    </select>
+                </div>
+
+                <div class="w-full sm:flex-1 min-w-[12rem] space-y-1 relative">
+                    <label class="block text-sm font-medium text-slate-700">Select Device <span class="text-red-500">*</span></label>
+                    <select id="device_id" name="device_id" required class="w-full border border-slate-300 rounded-lg px-3 py-2.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="">-- Choose Device --</option>
+                        {% for d in devices %}
+                        <option value="{{ d.id }}">{{ d.device_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="w-full sm:w-32 space-y-1">
+                    <label class="block text-sm font-medium text-slate-700">Qty (Tests) <span class="text-red-500">*</span></label>
+                    <input type="number" step="any" min="0.01" id="quantity" name="quantity" required placeholder="0" 
+                           class="w-full h-11 border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all hover:border-slate-400 shadow-sm bg-white">
+                </div>
+
+                <div class="w-full sm:flex-[2] min-w-[12rem] space-y-1">
+                    <label class="block text-sm font-medium text-slate-700">Note</label>
+                    <input type="text" id="note" name="note" placeholder="Additional details..." 
+                           class="w-full h-11 border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all hover:border-slate-400 shadow-sm bg-white">
+                </div>
+            </div>
+            
+            <div class="flex justify-end pt-6 mt-2 border-t border-slate-100">
+                <button type="submit" onclick="return validateCalControl(event)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-2.5 rounded-lg text-sm font-medium transition-all shadow-md active:scale-95 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Save & Deduct
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+         <h3 class="text-lg font-semibold text-slate-800">Cal & Control History</h3>
+    </div>
+    
+    <!-- Search Form -->
+    <div class="p-5 bg-slate-50/80 border-b border-slate-200">
+        <form method="GET" action="/cal-control" class="flex flex-wrap items-end gap-4">
+            <input type="hidden" name="search" value="true">
+            <div class="w-full sm:w-36 space-y-1 border-slate-300">
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Date From</label>
+                <input type="date" name="date_from" value="{{ date_from }}" class="w-full h-11 border border-slate-300 rounded-lg px-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white">
+            </div>
+            <div class="w-full sm:w-36 space-y-1">
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Date To</label>
+                <input type="date" name="date_to" value="{{ date_to }}" class="w-full h-11 border border-slate-300 rounded-lg px-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white">
+            </div>
+            <div class="w-full sm:flex-1 min-w-[200px] space-y-1 relative">
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Test</label>
+                <select id="search_test_id" name="search_test_id" class="w-full border border-slate-300 rounded-lg px-3 bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                    <option value="">All Tests...</option>
+                    {% for t in tests %}
+                    <option value="{{ t.id }}" {% if search_test_id == t.id|string %}selected{% endif %}>{{ t.test_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="w-full sm:flex-1 min-w-[200px] space-y-1 relative">
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Device</label>
+                <select id="search_device_id" name="search_device_id" class="w-full border border-slate-300 rounded-lg px-3 bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                    <option value="">All Devices...</option>
+                    {% for d in devices %}
+                    <option value="{{ d.id }}" {% if search_device_id == d.id|string %}selected{% endif %}>{{ d.device_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="w-full sm:w-32 space-y-1">
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Process</label>
+                <select name="search_process_type" class="w-full h-11 border border-slate-300 rounded-lg px-3 bg-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+                    <option value="">All</option>
+                    <option value="Cal" {% if search_process_type == 'Cal' %}selected{% endif %}>Cal</option>
+                    <option value="Control" {% if search_process_type == 'Control' %}selected{% endif %}>Control</option>
+                </select>
+            </div>
+            <div class="w-full sm:w-auto flex items-center gap-2">
+                <button type="submit" class="h-11 bg-slate-800 hover:bg-slate-900 text-white px-6 rounded-lg text-sm font-medium transition-all shadow-sm">Search</button>
+                {% if is_search %}
+                <a href="/cal-control" class="h-11 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-6 rounded-lg text-sm font-medium flex items-center transition-all shadow-sm">Clear</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+    
+    {% if is_search %}
+    <div class="overflow-x-auto border-t border-slate-200">
+        <table class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-slate-50">
+                <tr>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Process</th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Test Name</th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Device</th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Qty Deducted</th>
+                    <th class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Note</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-slate-100">
+                {% for item in history %}
+                <tr class="hover:bg-slate-50/50 transition-colors">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="text-sm text-slate-600">{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        {% if item.process_type == 'Cal' %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">Calibration</span>
+                        {% else %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-emerald-100 text-emerald-800">Control</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="text-sm font-semibold text-slate-800">{{ item.test.test_name if item.test else 'Unknown' }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="text-sm text-slate-700">{{ item.device.device_name if item.device else 'Unknown' }}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="text-sm font-bold text-red-500">-{{ item.quantity }}</span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="text-sm text-slate-600 italic">{{ item.note or '---' }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if not history %}
+    <div class="text-center py-10 bg-white">
+        <p class="text-slate-500">No records found matching your criteria.</p>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="text-center py-16 bg-white">
+        <svg class="mx-auto h-12 w-12 text-slate-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 14h4m-2-2v4"></path></svg>
+        <h3 class="text-lg font-medium text-slate-800 mb-1">Search History</h3>
+        <p class="text-slate-500">Select filters and click search to view calibration and control records.</p>
+    </div>
+    {% endif %}
+</div>
+
+{% block scripts %}
+<!-- Tom Select JS -->
+<script src="/static/vendor/tom-select/tom-select.complete.min.js"></script>
+<script>
+let testTsSelect, deviceTsSelect;
+
+document.addEventListener('DOMContentLoaded', function() {
+    testTsSelect = new TomSelect('#test_id', {
+        plugins: ['dropdown_input'],
+        placeholder: '-- Choose Test --',
+        create: false,
+        maxItems: 1
+    });
+    
+    deviceTsSelect = new TomSelect('#device_id', {
+        plugins: ['dropdown_input'],
+        placeholder: '-- Choose Device --',
+        create: false,
+        maxItems: 1
+    });
+    
+    new TomSelect('#search_test_id', {
+        plugins: ['dropdown_input'],
+        placeholder: 'All Tests...',
+        create: false,
+        maxItems: 1
+    });
+    
+    new TomSelect('#search_device_id', {
+        plugins: ['dropdown_input'],
+        placeholder: 'All Devices...',
+        create: false,
+        maxItems: 1
+    });
+});
+
+function validateCalControl(event) {
+    const testVal = document.getElementById('test_id').value;
+    const deviceVal = document.getElementById('device_id').value;
+    
+    if (!testVal) {
+        event.preventDefault();
+        alert('Please select a Test.');
+        return false;
+    }
+    if (!deviceVal) {
+        event.preventDefault();
+        alert('Please select a Device.');
+        return false;
+    }
+    return true;
+}
+</script>
+{% endblock %}
+{% endblock %}

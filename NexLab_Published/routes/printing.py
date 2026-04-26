@@ -16,7 +16,7 @@ from fastapi import File, UploadFile
 import os
 import uuid
 import logging
-from routes.helpers import templates, get_current_user, generate_barcode_base64, calculate_age, log_audit_action, log_activity_action, require_permission
+from routes.helpers import templates, get_current_user, generate_barcode_base64, calculate_age, log_audit_action, log_activity_action, require_permission, age_to_days, build_patient_visit_data
 from fastapi.responses import RedirectResponse
 from routes.generate_pdf import generate_native_barcode_pdf
 from io import BytesIO
@@ -48,122 +48,15 @@ def print_result_designer(request: Request, session: Session = Depends(get_sessi
 def print_results_page(request: Request, session: Session = Depends(get_session)):
     if not require_permission(request, session, "print_results"):
         return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
-    today_str = datetime.today().strftime("%Y-%m-%d")
-    start_date = request.query_params.get("start_date", today_str)
-    end_date = request.query_params.get("end_date", today_str)
-    name = request.query_params.get("name", "")
-    patient_id_q = request.query_params.get("patient_id", "")
-    test_q = request.query_params.get("test", "")
-    status_q = request.query_params.get("status", "double_authorized") # Default to double_authorized for printing
     
-    query = select(Patient).where(Patient.is_active == True)
+    # Default status to double_authorized for printing
+    default_status = request.query_params.get("status", "double_authorized")
+    patient_data, filters = build_patient_visit_data(session, request, status_filter=default_status)
     
-    needs_visit_join = bool(start_date or end_date or test_q or status_q != "all")
-    if needs_visit_join:
-        query = query.join(PatientVisit)
-        
-    if start_date:
-        query = query.where(PatientVisit.visit_date >= f"{start_date} 00:00:00")
-    if end_date:
-        query = query.where(PatientVisit.visit_date <= f"{end_date} 23:59:59")
-        
-    if name:
-        query = query.where(Patient.full_name.ilike(f"%{name}%"))
-    if patient_id_q:
-        query = query.where(Patient.patient_id.ilike(f"%{patient_id_q}%"))
-        
-    if test_q or status_q != "all":
-        query = query.join(Order, Order.visit_id == PatientVisit.id).join(TestDefinition, Order.test_id == TestDefinition.id)
-        if test_q:
-            query = query.where(
-                (TestDefinition.test_name.ilike(f"%{test_q}%")) | 
-                (TestDefinition.test_short_name.ilike(f"%{test_q}%"))
-            )
-        if status_q == "pending":
-            query = query.where(Order.status == "ordered")
-        elif status_q == "received":
-            query = query.where(Order.status == "resulted")
-        elif status_q == "authorize":
-            query = query.where(Order.status == "authorized")
-        elif status_q == "double_authorized":
-            query = query.where(Order.status == "double_authorized")
-        elif status_q == "AD":
-            query = query.where(Order.status.in_(["authorized", "double_authorized"]))
-            
-    if needs_visit_join or not (test_q or status_q != "all"):
-        query = query.distinct()
-    
-    patients_result = session.exec(query.order_by(Patient.created_at.desc())).all()
-    
-    patient_data = []
-    for patient in patients_result:
-        visit_query = select(PatientVisit).options(selectinload(PatientVisit.orders).selectinload(Order.test)).where(PatientVisit.patient_id == patient.id)
-        if start_date:
-            visit_query = visit_query.where(PatientVisit.visit_date >= f"{start_date} 00:00:00")
-        if end_date:
-            visit_query = visit_query.where(PatientVisit.visit_date <= f"{end_date} 23:59:59")
-            
-        visit = session.exec(visit_query.order_by(PatientVisit.id.desc())).first()
-        visit_date = visit.visit_date if visit else patient.created_at
-        
-        tests_data = []
-        if visit:
-            packages = {}
-            standalones = []
-            
-            for order in visit.orders:
-                if not order.test or order.status == "no_sample":
-                    continue
-                # Determine color
-                status_color = "red"
-                if order.status == "resulted":
-                    status_color = "blue"
-                elif order.status == "authorized":
-                    status_color = "green"
-                elif order.status == "double_authorized":
-                    status_color = "purple"
-                    
-                test_info = {
-                    "name": order.test.test_name,
-                    "color": status_color
-                }
-                
-                if order.package_name:
-                    if order.package_name not in packages:
-                        packages[order.package_name] = []
-                    packages[order.package_name].append(test_info)
-                else:
-                    standalones.append(test_info)
-            
-            for pkg_name, pkg_tests in packages.items():
-                tests_data.append({
-                    "is_package": True,
-                    "package_name": pkg_name,
-                    "tests": pkg_tests
-                })
-            for t in standalones:
-                tests_data.append({
-                    "is_package": False,
-                    "test": t
-                })
-                
-        patient_data.append({
-            "patient": patient,
-            "registration_date": visit_date,
-            "tests": tests_data
-        })
-        
     return templates.TemplateResponse("print_results.html", {
         "request": request,
         "patient_data": patient_data,
-        "filters": {
-            "start_date": start_date,
-            "end_date": end_date,
-            "name": name,
-            "patient_id": patient_id_q,
-            "test": test_q,
-            "status": status_q
-        }
+        "filters": filters
     })
 
 # ===========================
@@ -301,7 +194,10 @@ async def save_print_template(request: Request, session: Session = Depends(get_s
         return {"success": False, "error": str(e)}
 
 @router.get("/api/print-template/load/{template_name}")
-def load_print_template(template_name: str, session: Session = Depends(get_session)):
+def load_print_template(template_name: str, request: Request, session: Session = Depends(get_session)):
+    current_user = get_current_user(request, session)
+    if not current_user:
+        return {"success": False, "error": "Authentication required"}
     try:
         template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == template_name)).first()
         if template:
@@ -363,10 +259,13 @@ def get_double_authorized_tests(patient_id: str, request: Request, session: Sess
             
             def find_range(param_id=None):
                 best = None
+                patient_days = age_to_days(patient.age, patient.age_unit)
                 for r in ranges:
                     if r.parameter_id == param_id:
                         gender_ok = r.gender_type == "both" or r.gender_type == patient.gender
-                        age_ok = r.age_from <= (patient.age or 0) <= r.age_to
+                        range_from_days = age_to_days(r.age_from, r.age_from_unit or "year")
+                        range_to_days = age_to_days(r.age_to, r.age_to_unit or "year")
+                        age_ok = range_from_days <= patient_days <= range_to_days
                         if gender_ok and age_ok:
                             best = r
                             break
@@ -382,7 +281,9 @@ def get_double_authorized_tests(patient_id: str, request: Request, session: Sess
                     "type": "parent",
                     "test_name": test.test_name,
                     "order_id": order.id,
-                    "status": order.status
+                    "status": order.status,
+                    "print_separately": test.print_separately,
+                    "note": res.note if res else ""
                 })
 
                 # Child rows
@@ -407,11 +308,12 @@ def get_double_authorized_tests(patient_id: str, request: Request, session: Sess
                     "test_name": test.test_name,
                     "order_id": order.id,
                     "result_value": res.result_value if res else "",
-
                     "range": rng.text_range if rng and rng.range_type == "text" else (f"{rng.normal_from} - {rng.normal_to}" if rng and rng.normal_from is not None else ""),
                     "unit": rng.unit if rng else "",
                     "flag": res.flag if res else "",
-                    "remark": res.note if res else ""
+                    "remark": res.note if res else "",
+                    "note": res.note if res else "",
+                    "print_separately": test.print_separately
                 })
                 
         return {
@@ -429,6 +331,123 @@ def get_double_authorized_tests(patient_id: str, request: Request, session: Sess
                 "visit_id": visit.visit_id,
                 "visit_date": visit.visit_date.strftime("%Y-%m-%d %H:%M")
             },
+            "results": grid_rows
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+@router.get("/api/all-visit-tests/{visit_id}")
+def get_all_visit_tests(visit_id: str, request: Request, session: Session = Depends(get_session)):
+    """Returns ALL orders for a visit with their current status for the call centre view."""
+    try:
+        visit = session.exec(
+            select(PatientVisit)
+            .options(selectinload(PatientVisit.patient))
+            .where(PatientVisit.visit_id == visit_id)
+        ).first()
+
+        if not visit:
+            return {"success": False, "error": "Visit not found"}
+
+        patient = visit.patient
+
+        orders = session.exec(
+            select(Order).options(
+                selectinload(Order.test).selectinload(TestDefinition.test_parameters).selectinload(TestParameter.parameter),
+                selectinload(Order.result).selectinload(Result.details).selectinload(ResultDetail.parameter)
+            ).where(Order.visit_id == visit.id, Order.status != "no_sample")
+        ).all()
+
+        grid_rows = []
+        for order in orders:
+            test = order.test
+            res = order.result
+            if not test:
+                continue
+
+            # Determine display status
+            if order.status == "double_authorized":
+                display_status = "Double AUTH"
+            elif order.status == "authorized":
+                display_status = "AUTH"
+            elif order.status == "resulted":
+                display_status = "Resulted"
+            else:
+                display_status = "Pending"
+
+            # Fetch ranges for this test/patient
+            ranges = session.exec(
+                select(TestRange).where(TestRange.test_id == test.id, TestRange.is_active == True)
+            ).all()
+
+            def find_range(param_id=None):
+                best = None
+                patient_days = age_to_days(patient.age, patient.age_unit)
+                for r in ranges:
+                    if r.parameter_id == param_id:
+                        gender_ok = r.gender_type == "both" or r.gender_type == patient.gender
+                        range_from_days = age_to_days(r.age_from, r.age_from_unit or "year")
+                        range_to_days = age_to_days(r.age_to, r.age_to_unit or "year")
+                        age_ok = range_from_days <= patient_days <= range_to_days
+                        if gender_ok and age_ok:
+                            best = r
+                            break
+                if not best and ranges:
+                    for r in ranges:
+                        if r.parameter_id == param_id:
+                            return r
+                return best
+
+            if test.test_parameters:
+                # Parent row
+                grid_rows.append({
+                    "type": "parent",
+                    "test_name": test.test_name,
+                    "order_id": order.id,
+                    "status": order.status,
+                    "display_status": display_status,
+                    "print_separately": test.print_separately,
+                    "note": res.note if res else ""
+                })
+                # Child rows
+                for tp in test.test_parameters:
+                    param = tp.parameter
+                    detail = next((d for d in res.details if d.parameter_id == param.id), None) if res else None
+                    rng = find_range(param.id)
+                    grid_rows.append({
+                        "type": "child",
+                        "parameter_name": param.parameter_name,
+                        "result_value": detail.result_value if detail else "",
+                        "range": rng.text_range if rng and rng.range_type == "text" else (f"{rng.normal_from} - {rng.normal_to}" if rng and rng.normal_from is not None else ""),
+                        "range_type": rng.range_type if rng else None,
+                        "unit": rng.unit if rng else "",
+                        "flag": detail.flag if detail else "",
+                        "remark": detail.remark if detail else "",
+                        "display_status": display_status
+                    })
+            else:
+                # Standalone
+                rng = find_range(None)
+                grid_rows.append({
+                    "type": "standalone",
+                    "test_name": test.test_name,
+                    "order_id": order.id,
+                    "status": order.status,
+                    "display_status": display_status,
+                    "result_value": res.result_value if res else "",
+                    "range": rng.text_range if rng and rng.range_type == "text" else (f"{rng.normal_from} - {rng.normal_to}" if rng and rng.normal_from is not None else ""),
+                    "range_type": rng.range_type if rng else None,
+                    "unit": rng.unit if rng else "",
+                    "flag": res.flag if res else "",
+                    "remark": res.note if res else "",
+                    "note": res.note if res else "",
+                    "print_separately": test.print_separately
+                })
+
+        return {
+            "success": True,
             "results": grid_rows
         }
     except Exception as e:

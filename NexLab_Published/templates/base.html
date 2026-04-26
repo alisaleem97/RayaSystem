@@ -120,7 +120,87 @@
             max-width: 0;   /* forces fixed-layout to honour table-layout:fixed */
         }
         /* ──────────────────────────────────────────────────────────────── */
+
+        /* ─── Range Hover Tooltip ─────────────────────────────────────── */
+        .range-hover-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+        .range-hover-btn {
+            background: #64748b;
+            color: #fff;
+            border: none;
+            padding: 2px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: default;
+            letter-spacing: 0.3px;
+            transition: background 0.2s;
+        }
+        .range-hover-wrapper:hover .range-hover-btn {
+            background: #3b82f6;
+        }
+        .range-hover-bubble {
+            display: none;
+            position: fixed;
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fcd34d;
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: normal;
+            word-break: break-word;
+            width: max-content;
+            max-width: 320px;
+            min-width: 120px;
+            text-align: center;
+            line-height: 1.5;
+            z-index: 9999;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            pointer-events: none;
+        }
+        .range-hover-bubble::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: #fcd34d;
+        }
+        /* ──────────────────────────────────────────────────────────────── */
     </style>
+    <script>
+        /* Range hover tooltip positioning — uses position:fixed so the
+           bubble escapes any overflow:hidden / overflow:auto ancestor. */
+        document.addEventListener('mouseenter', function(e) {
+            const wrapper = e.target.closest('.range-hover-wrapper');
+            if (!wrapper) return;
+            const bubble = wrapper.querySelector('.range-hover-bubble');
+            if (!bubble) return;
+            const rect = wrapper.getBoundingClientRect();
+            bubble.style.display = 'block';
+            /* Position above the button, centered */
+            const bubbleRect = bubble.getBoundingClientRect();
+            let left = rect.left + rect.width / 2 - bubbleRect.width / 2;
+            let top = rect.top - bubbleRect.height - 8;
+            /* Keep within viewport */
+            if (left < 4) left = 4;
+            if (left + bubbleRect.width > window.innerWidth - 4) left = window.innerWidth - bubbleRect.width - 4;
+            if (top < 4) top = rect.bottom + 8; /* flip below if no room above */
+            bubble.style.left = left + 'px';
+            bubble.style.top = top + 'px';
+        }, true);
+        document.addEventListener('mouseleave', function(e) {
+            const wrapper = e.target.closest('.range-hover-wrapper');
+            if (!wrapper) return;
+            const bubble = wrapper.querySelector('.range-hover-bubble');
+            if (bubble) bubble.style.display = 'none';
+        }, true);
+    </script>
     <script>
         tailwind.config = {
             theme: {
@@ -329,6 +409,12 @@
                         <a href="/inventory" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/inventory' %}active{% endif %}">
                             <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
                             Inventory
+                        </a>
+                    </li>{% endif %}
+                    {% if has_page('inventory') or has_page('tests') %}<li>
+                        <a href="/cal-control" class="sidebar-link flex items-center px-6 py-3 transition-colors {% if request.url.path == '/cal-control' %}active{% endif %}">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                            Cal & Control
                         </a>
                     </li>{% endif %}
                 </ul>
@@ -727,7 +813,9 @@
                 '/activity-logs',
                 '/no-sample',
                 '/print',
-                '/view-results'
+                '/view-results',
+                '/patient-status',
+                '/view-call-centre'
             ];
             
             if (startsWithExcludes.some(p => currentPath.startsWith(p))) {

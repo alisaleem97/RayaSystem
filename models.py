@@ -525,6 +525,9 @@ class LabInfo(SQLModel, table=True):
     lab_note_1: Optional[str] = Field(default=None)
     lab_note_2: Optional[str] = Field(default=None)
     lab_website: Optional[str] = Field(default=None)
+    welcome_message: Optional[str] = Field(default=None)
+    welcome_template_name: Optional[str] = Field(default=None)  # Wati template name for new contacts
+    province_id: Optional[int] = Field(default=None, foreign_key="province.id")
     lab_currency: str = Field(default="$")  # ✅ NEW FIELD
     tax_percentage: float = Field(default=0.0)  # ✅ Tax Percentage
     phone_country_code: str = Field(default="964")  # Country code for WhatsApp (configurable)
@@ -770,4 +773,22 @@ class Inventory(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.now)
     edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
     edited_at: Optional[datetime] = None
+
+# ===========================
+# 38. CAL & CONTROL
+# ===========================
+class CalControl(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    test_id: int = Field(foreign_key="testdefinition.id", index=True)
+    device_id: int = Field(foreign_key="device.id", index=True)
+    process_type: str = Field(index=True)  # "Cal" or "Control"
+    quantity: float
+    note: Optional[str] = None
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.now)
+    
+    # Relationships
+    test: "TestDefinition" = Relationship()
+    device: "Device" = Relationship()
 

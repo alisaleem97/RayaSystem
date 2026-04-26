@@ -347,6 +347,11 @@ def update_user(
         # Update password only if provided
         if password and password.strip():
             user.hashed_password = pwd_context.hash(password.strip())
+            user.session_token = None  # Force logout on password change
+            
+        # If user is deactivated, force logout
+        if not user.is_active:
+            user.session_token = None
         
         session.add(user)
         session.commit()

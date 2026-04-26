@@ -332,7 +332,7 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.age_to }} {{ range.age_unit }}s</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.normal_from if range.normal_from is not none else '-' }}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.normal_to if range.normal_to is not none else '-' }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.text_range if range.text_range else '-' }}</td>
+                    <td class="px-6 py-4 text-sm text-slate-500">{% if range.text_range and range.text_range != '' %}<span class="range-hover-wrapper"><span class="range-hover-btn">Range</span><span class="range-hover-bubble">{{ range.text_range|safe }}</span></span>{% else %}-{% endif %}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div class="flex items-center space-x-3">
                             <button onclick='editRange({{ ranges_json[loop.index0] | tojson }})' 

@@ -200,7 +200,7 @@ async def update_expense(
             if expense.file_path and os.path.exists(expense.file_path):
                 try:
                     os.remove(expense.file_path)
-                except:
+                except Exception:
                     pass
             
             ext = os.path.splitext(file.filename)[1].lower()
@@ -217,7 +217,7 @@ async def update_expense(
         try:
             exp_dt = datetime.strptime(expense_date, "%Y-%m-%d")
             expense.expense_date = exp_dt
-        except:
+        except Exception:
             pass
             
         expense.type_id = type_id
@@ -250,7 +250,7 @@ def delete_expense(expense_id: int, request: Request, session: Session = Depends
             if expense.file_path and os.path.exists(expense.file_path):
                 try:
                     os.remove(expense.file_path)
-                except:
+                except Exception:
                     pass
             
             create_audit_log(session, "expense", expense.id, "delete", current_user, old_values=old_values)

@@ -33,7 +33,7 @@ from routes.messages import router as messages_router
 from routes.websockets import router as websockets_router
 from routes.supplies import router as supplies_router
 from routes.inventory import router as inventory_router
-
+from routes.cal_control import router as cal_control_router
 
 # ===========================
 # APP LIFESPAN (Startup/Shutdown)
@@ -69,7 +69,7 @@ async def lifespan(app: FastAPI):
             )
             session.add(admin)
             session.commit()
-            print("✅ Admin user created (admin / admin123)")
+            print("WARNING: Default admin user created with password 'admin123'. Change this immediately in production!")
         else:
             print("✅ Admin user already exists")
     
@@ -156,3 +156,4 @@ app.include_router(messages_router)
 app.include_router(websockets_router)
 app.include_router(supplies_router)
 app.include_router(inventory_router)
+app.include_router(cal_control_router)

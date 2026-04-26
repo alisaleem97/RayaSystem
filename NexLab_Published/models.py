@@ -16,6 +16,11 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.now)
     last_seen: Optional[datetime] = None
     is_online: bool = Field(default=False)
+    
+    # --- Security & Session Fields ---
+    failed_login_attempts: int = Field(default=0)
+    locked_until: Optional[datetime] = None
+    session_token: Optional[str] = None
 
 # ===========================
 # 1b. USER PERMISSION (Granular Page+Button Access)
@@ -192,6 +197,7 @@ class TestDefinition(SQLModel, table=True):
     test_note: Optional[str] = None
     test_condition: Optional[str] = None
     is_available: bool = Field(default=True)
+    print_separately: bool = Field(default=False)
     
     created_by: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.now)
@@ -267,20 +273,6 @@ class FormulaItem(SQLModel, table=True):
     order_index: int = Field(default=0)
     
     formula: Formula = Relationship(back_populates="items")
-
-# ===========================
-# 13. TEST CATALOG (Legacy)
-# ===========================
-class TestCatalog(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    test_code: str = Field(unique=True, index=True)
-    test_name: str
-    sample_type: str
-    unit: str
-    reference_min: float
-    reference_max: float
-    price: float
-    is_active: bool = Field(default=True)
 
 # ===========================
 # 14. ORDER (UPDATED - Price Snapshot for Audit Compliance)
@@ -362,7 +354,9 @@ class TestRange(SQLModel, table=True):
     unit: str = Field(default="")
     gender_type: str = Field(default="both")
     age_from: int = Field(default=0)
+    age_from_unit: str = Field(default="year")
     age_to: int = Field(default=999)
+    age_to_unit: str = Field(default="year")
     age_unit: str = Field(default="year")
     fasting_required: bool = Field(default=False)
     range_type: str = Field(default="number")
@@ -531,8 +525,11 @@ class LabInfo(SQLModel, table=True):
     lab_note_1: Optional[str] = Field(default=None)
     lab_note_2: Optional[str] = Field(default=None)
     lab_website: Optional[str] = Field(default=None)
+    welcome_message: Optional[str] = Field(default=None)
+    province_id: Optional[int] = Field(default=None, foreign_key="province.id")
     lab_currency: str = Field(default="$")  # ✅ NEW FIELD
     tax_percentage: float = Field(default=0.0)  # ✅ Tax Percentage
+    phone_country_code: str = Field(default="964")  # Country code for WhatsApp (configurable)
     
     created_by: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.now)
@@ -775,4 +772,22 @@ class Inventory(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.now)
     edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
     edited_at: Optional[datetime] = None
+
+# ===========================
+# 38. CAL & CONTROL
+# ===========================
+class CalControl(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    test_id: int = Field(foreign_key="testdefinition.id", index=True)
+    device_id: int = Field(foreign_key="device.id", index=True)
+    process_type: str = Field(index=True)  # "Cal" or "Control"
+    quantity: float
+    note: Optional[str] = None
+    
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.now)
+    
+    # Relationships
+    test: "TestDefinition" = Relationship()
+    device: "Device" = Relationship()
 

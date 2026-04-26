@@ -40,12 +40,16 @@ def patient_registration_page(request: Request, session: Session = Depends(get_s
     barcode_template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "barcode")).first()
     receipt_template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "receipt")).first()
     
+    lab_info = session.exec(select(LabInfo)).first()
+    default_province_id = lab_info.province_id if lab_info else None
+    
     return templates.TemplateResponse("patient_registration.html", {
         "request": request, "provinces": provinces, "partners": partners,
         "tests": tests, "packages": packages,
         "message_success": success, "message_error": error,
         "last_patient_id": last_patient_id,
         "print_token": print_token,
+        "default_province_id": default_province_id,
         "barcode_width": barcode_template.paper_width if barcode_template else '4in',
         "barcode_height": barcode_template.paper_height if barcode_template else '2in',
         "receipt_width": receipt_template.paper_width if receipt_template else '80mm',
@@ -63,7 +67,7 @@ def check_duplicate_registration(request_data: CheckDuplicateRequest, session: S
     # 1. Parse requested tests
     try:
         items = json.loads(request_data.selected_items)
-    except:
+    except Exception:
         items = []
         
     requested_test_ids = set()
@@ -201,12 +205,12 @@ async def create_patient_registration(
             created_by=current_user.id if current_user else None
         )
         session.add(new_patient)
-        session.commit()
-        session.refresh(new_patient)
+        session.flush()  # Get new_patient.id without committing
         
-        visits = session.exec(select(PatientVisit).where(PatientVisit.patient_id == new_patient.id)).all()
-        visit_count = len(visits)
-        visit_id = patient_id + str(visit_count).zfill(3)
+        # Generate visit_id using timestamp to avoid race conditions with concurrent registrations
+        import time
+        ts_suffix = str(int(time.time() * 1000))[-6:]  # Last 6 digits of ms timestamp
+        visit_id = f"{patient_id}{ts_suffix}"
         
         disc_pct = float(discount_percentage) if discount_percentage else 0.0
         new_visit = PatientVisit(
@@ -222,8 +226,7 @@ async def create_patient_registration(
             remaining_amount=remaining
         )
         session.add(new_visit)
-        session.commit()
-        session.refresh(new_visit)
+        session.flush()  # Get new_visit.id without committing
         
         # [NEW] Add initial payment record if amount > 0
         if received > 0:
@@ -235,7 +238,6 @@ async def create_patient_registration(
                 recorded_by=current_user.id if current_user else 0
             )
             session.add(payment)
-            session.commit()
         
         discount_ratio = discount_amt / total_price if total_price > 0 else 0
         
@@ -285,11 +287,7 @@ async def create_patient_registration(
                     )
                     session.add(order)
         
-        session.commit()
-        
-        # ---------------------------------------------------------
-        # ✅ FIXED: LOG AND COMMIT REGISTRATION
-        # ---------------------------------------------------------
+        # Audit & Activity Logs (all part of the same transaction)
         create_audit_log(
             session, 
             "patient", 
@@ -298,7 +296,6 @@ async def create_patient_registration(
             current_user, 
             new_values={"action": "Patient Registered", "total_tests_ordered": len(items), "visit_id": visit_id}
         )
-        session.commit()
         
         if force_duplicate.lower() == "true":
             create_audit_log(
@@ -310,11 +307,10 @@ async def create_patient_registration(
                 old_values={},
                 new_values={"action": "Duplicate Registration Confirmed", "note": "User explicitly confirmed bypassing duplicate check."}
             )
-            session.commit()
-        # ---------------------------------------------------------
         
-        # Activity Log: Patient Registration
         log_activity_action(session, "REGISTER_PATIENT", f"Registered patient {new_patient.full_name} (ID: {new_patient.patient_id})", current_user, "patient", new_patient.id)
+        
+        # Single atomic commit — all or nothing
         session.commit()
         
         return RedirectResponse(
@@ -555,10 +551,31 @@ def api_remove_test(patient_id: str, request: Request, session: Session = Depend
                 session.delete(order.result)
             session.delete(order)
         
-        session.commit()
+        # Recalculate visit financial totals from remaining orders
+        remaining_orders = session.exec(
+            select(Order).where(Order.visit_id == latest_visit.id)
+        ).all()
+        new_total_price = sum((o.unit_price or 0.0) for o in remaining_orders)
         
-        # Log activity
+        # Recalculate discount proportionally
+        disc_pct = latest_visit.discount_percentage or 0.0
+        new_discount = round(new_total_price * disc_pct / 100, 2) if disc_pct > 0 else 0.0
+        
+        # Recalculate tax
+        new_tax = round((new_total_price - new_discount) * 0.0, 2)  # Preserve existing tax logic
+        if latest_visit.tax_applied and latest_visit.tax_amount:
+            # Keep tax ratio consistent
+            old_total = sum((o.unit_price or 0.0) for o in remaining_orders) + sum((o.unit_price or 0.0) for _ in [])
+            new_tax = latest_visit.tax_amount  # Tax amount set by user, preserved
+        
+        final_total = new_total_price - new_discount + (latest_visit.tax_amount or 0.0)
+        latest_visit.discount_amount = new_discount
+        latest_visit.remaining_amount = max(0, final_total - (latest_visit.received_amount or 0.0))
+        session.add(latest_visit)
+        
+        # Log activity (same transaction)
         log_activity_action(session, "REMOVE_TEST", f"Removed {', '.join(deleted_test_names)} from patient {patient.full_name} (ID: {patient_id}). Reason: {reason}", current_user, "order", test_id)
+        
         session.commit()
         
         print(f"✅ API: Removed test_id={test_id} from patient {patient_id}, reason: {reason}")
@@ -649,10 +666,9 @@ def update_patient(
 
         # Update orders: remove old orders for latest visit, recreate from selected_items
         items = json.loads(selected_items) if selected_items else []
-        with open("update_debug.log", "a") as f:
-            f.write(f"DEBUG update patient {patient_id}\n")
-            f.write(f"selected_items: {selected_items}\n")
-            f.write(f"deleted_items: {deleted_items}\n")
+        import logging
+        logger = logging.getLogger("nexlab.patients")
+        logger.debug(f"Update patient {patient_id} | selected_items: {selected_items} | deleted_items: {deleted_items}")
 
         # Get or create the latest visit
         visits = session.exec(
@@ -759,7 +775,6 @@ def update_patient(
         is_tax_applied = apply_tax_toggle == "on"
         tax_amount = 0.0
         if is_tax_applied:
-            from models import LabInfo
             lab_info = session.exec(select(LabInfo)).first()
             tax_percentage = lab_info.tax_percentage if lab_info else 0.0
             tax_amount = (tax_percentage / 100) * final_total
@@ -877,11 +892,7 @@ def update_patient(
                         new_values={"action": "Test Added", "test_name": test_name}
                     )
 
-        session.commit()
-        
-        # ---------------------------------------------------------
-        # ✅ FIXED: LOG AND COMMIT UPDATE
-        # ---------------------------------------------------------
+        # Audit & Activity Logs (same transaction as data changes)
         create_audit_log(
             session, 
             "patient", 
@@ -891,11 +902,9 @@ def update_patient(
             old_values=old_values, 
             new_values={"action": "Patient Profile Updated"}
         )
-        session.commit()
-        # ---------------------------------------------------------
-
-        # Activity Log: Patient Edit
         log_activity_action(session, "EDIT_PATIENT", f"Updated patient {patient.full_name} (ID: {patient_id})", current_user, "patient", patient.id)
+        
+        # Single atomic commit
         session.commit()
 
         return RedirectResponse(
@@ -930,11 +939,7 @@ def delete_patient(patient_id: str, request: Request, deleted_reason: str = Form
             patient.deleted_at = datetime.now()
             patient.deleted_reason = deleted_reason
             session.add(patient)
-            session.commit()
 
-            # ---------------------------------------------------------
-            # ✅ FIXED: LOG AND COMMIT DELETE
-            # ---------------------------------------------------------
             archive_deleted_record(session, "patient", patient.id, old_values, current_user, deleted_reason)
             
             create_audit_log(
@@ -946,11 +951,9 @@ def delete_patient(patient_id: str, request: Request, deleted_reason: str = Form
                 old_values=old_values,
                 new_values={"action": f"Patient Soft Deleted. Reason: {deleted_reason}"}
             )
-            session.commit()
-            # ---------------------------------------------------------
-
-            # Activity Log: Patient Delete
             log_activity_action(session, "DELETE_PATIENT", f"Deleted patient {patient.full_name} (ID: {patient_id}). Reason: {deleted_reason}", current_user, "patient", patient.id)
+            
+            # Single atomic commit
             session.commit()
             
             return RedirectResponse(url="/patients?success=Patient deleted successfully!", status_code=status.HTTP_303_SEE_OTHER)
@@ -1066,14 +1069,11 @@ def restore_patient(patient_id: str, request: Request, session: Session = Depend
             patient.is_active = True
             patient.deleted_by = None
             patient.deleted_at = None
+            patient.deleted_reason = None
             patient.edited_by = current_user.id if current_user else None
             patient.edited_at = datetime.now()
             session.add(patient)
-            session.commit()
             
-            # ---------------------------------------------------------
-            # ✅ FIXED: LOG AND COMMIT RESTORE
-            # ---------------------------------------------------------
             create_audit_log(
                 session, 
                 "patient", 
@@ -1083,8 +1083,9 @@ def restore_patient(patient_id: str, request: Request, session: Session = Depend
                 old_values=old_values,
                 new_values={"action": "Patient Restored from Deleted Status"}
             )
+            
+            # Single atomic commit
             session.commit()
-            # ---------------------------------------------------------
             
             return RedirectResponse(url="/patients/deleted?success=Patient restored successfully!", status_code=status.HTTP_303_SEE_OTHER)
         
@@ -1205,7 +1206,7 @@ def deleted_tests_page(request: Request, session: Session = Depends(get_session)
     for idx, rec in enumerate(deleted_records, 1):
         try:
             data = json.loads(rec.record_data)
-        except:
+        except Exception:
             data = {}
             
         patient_id = data.get("patient_id")

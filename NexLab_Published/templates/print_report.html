@@ -37,26 +37,13 @@
             font-family: 'FormaDJRArabic', 'Inter', sans-serif;
         }
 
-        #reportCanvas {
+        .report-canvas {
             background: white;
             position: relative;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-            margin: 20px 0;
+            margin: 20px auto;
             overflow: hidden;
-        }
-
-        .size-a4 {
-            width: 210mm;
-            height: 297mm;
-            min-width: 210mm;
-            min-height: 297mm;
-        }
-
-        .size-a5 {
-            width: 148mm;
-            height: 210mm;
-            min-width: 148mm;
-            min-height: 210mm;
+            /* width and min-height set via inline style */
         }
 
         .design-element {
@@ -68,22 +55,24 @@
         }
 
         @page {
-            size: auto;
+            size: {{ template.paper_width if template and template.paper_width else '210mm' }} {{ template.paper_height if template and template.paper_height else '297mm' }};
             margin: 0;
         }
 
         @media print {
-            body {
-                background: white;
-                margin: 0;
-                padding: 0;
+            html, body {
+                background: white !important;
+                margin: 0 !important;
+                padding: 0 !important;
                 display: block;
             }
 
-            #reportCanvas {
-                box-shadow: none;
-                margin: 0;
+            .report-canvas {
+                box-shadow: none !important;
+                border: none !important;
+                margin: 0 !important;
                 page-break-after: always;
+                overflow: visible !important;
             }
 
             .no-print {
@@ -106,7 +95,7 @@
         </button>
     </div>
 
-    <div id="reportCanvas" class="size-a4"></div>
+    <div id="pagesContainer" class="flex flex-col items-center w-full"></div>
 
     <script>
         // Safely convert Python dictionaries into JavaScript Objects
@@ -118,7 +107,8 @@
         let testResults = {{ results | default ([]) | tojson | safe }};
 
         let designElements = [];
-        let paperSize = 'A4';
+        let paperWidth = "{{ template.paper_width if template and template.paper_width else '210mm' }}";
+        let paperHeight = "{{ template.paper_height if template and template.paper_height else '297mm' }}";
 
         try {
             console.log("Parsing template data...");
@@ -130,14 +120,14 @@
             }
 
             designElements = parsed.elements || [];
-            paperSize = parsed.paperSize || 'A4';
+            if (parsed.paperWidth) paperWidth = parsed.paperWidth;
+            if (parsed.paperHeight) paperHeight = parsed.paperHeight;
             console.log(`Loaded ${designElements.length} elements.`);
         } catch (e) {
             console.error("Template parse error:", e);
         }
 
-        const canvas = document.getElementById('reportCanvas');
-        canvas.className = `size-${paperSize.toLowerCase()}`;
+        // The canvas creation logic has been moved to renderCanvas to support multiple pages
 
         function formatDate(dateStr) {
             if (!dateStr) return '';
@@ -175,31 +165,83 @@
 
         function renderCanvas() {
             console.log("Drawing canvas elements...");
-            canvas.innerHTML = '';
+            const container = document.getElementById('pagesContainer');
+            container.innerHTML = '';
+            
+            // Group the tests based on print_separately
+            let groups = [];
+            let currentGroup = [];
+            let isSeparateGroup = false;
 
-            designElements.forEach(el => {
-                const div = document.createElement('div');
-                div.className = 'design-element';
+            testResults.forEach(row => {
+                if (row.type === 'parent' || row.type === 'standalone') {
+                    if (row.print_separately) {
+                        if (currentGroup.length > 0) {
+                            groups.push(currentGroup);
+                            currentGroup = [];
+                        }
+                        groups.push([row]);
+                        isSeparateGroup = true;
+                    } else {
+                        if (isSeparateGroup) {
+                            isSeparateGroup = false;
+                        }
+                        currentGroup.push(row);
+                    }
+                } else if (row.type === 'child') {
+                    if (isSeparateGroup) {
+                        groups[groups.length - 1].push(row);
+                    } else {
+                        currentGroup.push(row);
+                    }
+                }
+            });
+            if (currentGroup.length > 0) groups.push(currentGroup);
+            
+            if (groups.length === 0) {
+                // If there are no results, still render one blank template page
+                groups = [[]];
+            }
 
-                div.style.left = el.x + 'px';
-                div.style.top = el.y + 'px';
-                div.style.width = el.width + 'px';
-                div.style.height = el.height + 'px';
-                div.style.fontSize = el.fontSize + 'px';
-                div.style.fontWeight = el.fontWeight || 'normal';
-                div.style.fontFamily = el.fontFamily || "'FormaDJRArabic', sans-serif";
-                div.style.textAlign = el.align || 'left';
-                div.style.color = el.color || '#0f172a';
-                div.style.zIndex = el.zIndex || 10;
-                div.style.opacity = el.opacity || 1.0;
+            groups.forEach((groupResults) => {
+                const canvas = document.createElement('div');
+                canvas.className = `report-canvas`;
+                canvas.style.width = paperWidth;
+                canvas.style.minHeight = paperHeight;
+                
+                designElements.forEach(el => {
+                    const div = document.createElement('div');
+                    div.className = 'design-element';
 
-                div.innerHTML = `<div style="width:100%; height:100%;">${getElementHtml(el)}</div>`;
-                canvas.appendChild(div);
+                    div.style.left = el.x + 'px';
+                    div.style.top = el.y + 'px';
+                    div.style.width = el.width + 'px';
+                    
+                    if (el.type === 'result_table') {
+                        div.style.height = 'auto';
+                        div.style.overflow = 'visible';
+                    } else {
+                        div.style.height = el.height + 'px';
+                    }
+                    
+                    div.style.fontSize = el.fontSize + 'px';
+                    div.style.fontWeight = el.fontWeight || 'normal';
+                    div.style.fontFamily = el.fontFamily || "'FormaDJRArabic', sans-serif";
+                    div.style.textAlign = el.align || 'left';
+                    div.style.color = el.color || '#0f172a';
+                    div.style.zIndex = el.zIndex || 10;
+                    div.style.opacity = el.opacity || 1.0;
+
+                    div.innerHTML = `<div style="width:100%; height:100%;">${getElementHtml(el, groupResults)}</div>`;
+                    canvas.appendChild(div);
+                });
+                
+                container.appendChild(canvas);
             });
             console.log("Drawing complete!");
         }
 
-        function getElementHtml(el) {
+        function getElementHtml(el, groupResults) {
             const labelHtml = el.label ? `<span style="font-weight: 600; margin-right: 6px; opacity: 0.8;">${el.label}</span>` : '';
 
             if (el.type === 'patient_name') return `${labelHtml}<span>${patient.full_name || ''}</span>`;
@@ -221,8 +263,8 @@
             if (el.type === 'lab_email') return `${labelHtml}<span>${labInfo.lab_email || ''}</span>`;
             if (el.type === 'lab_website') return `${labelHtml}<span>${labInfo.lab_website || ''}</span>`;
             if (el.type === 'lab_currency') return `${labelHtml}<span>${labInfo.lab_currency || ''}</span>`;
-            if (el.type === 'first_doctor_name') return `${labelHtml}<span>${labInfo.first_doctor_name || ''}</span>`;
-            if (el.type === 'second_doctor_name') return `${labelHtml}<span>${labInfo.second_doctor_name || ''}</span>`;
+            if (el.type === 'first_doctor_name') return `${labelHtml}<div style="white-space: pre-wrap; display: inline-block; vertical-align: top;">${labInfo.first_doctor_name || ''}</div>`;
+            if (el.type === 'second_doctor_name') return `${labelHtml}<div style="white-space: pre-wrap; display: inline-block; vertical-align: top;">${labInfo.second_doctor_name || ''}</div>`;
 
             if (['lab_logo', 'lab_stamp_1', 'lab_stamp_2', 'lab_signature_1', 'lab_signature_2', 'lab_image_1', 'lab_image_2', 'lab_qr_1', 'lab_qr_2'].includes(el.type)) {
                 const imgVal = labInfo[el.type];
@@ -245,12 +287,12 @@
                 return '';
             }
 
-            if (el.type === 'result_table') return buildResultTable(el);
+            if (el.type === 'result_table') return buildResultTable(el, groupResults);
 
             return '';
         }
 
-        function buildResultTable(el) {
+        function buildResultTable(el, groupResults) {
             const cols = (el.columns || ['test', 'result', 'flag', 'range', 'unit']).filter(c => c.trim() !== '');
             if (cols.length === 0) return '';
 
@@ -265,11 +307,7 @@
             const bWidth = el.borderWidth !== undefined ? el.borderWidth : 1;
             let cellStyle = `padding: ${el.cellPadding !== undefined ? el.cellPadding : 8}px; border: ${bWidth}px solid ${el.borderColor || '#e2e8f0'};`;
 
-            if (el.wordWrap === false) {
-                cellStyle += ` white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
-            } else {
-                cellStyle += ` white-space: normal; word-break: break-word;`;
-            }
+            cellStyle += ` white-space: pre-wrap; word-break: break-word; vertical-align: top;`;
 
             let html = `<table style="${tableStyle}">${colGroupHtml}`;
             html += `<thead style="background:${el.headerBg || '#f8fafc'}; color:${el.headerColor || '#1e293b'}"><tr>`;
@@ -282,10 +320,50 @@
             });
             html += `</tr></thead><tbody style="color:${el.rowTextColor || '#334155'}">`;
 
-            if (testResults.length === 0) {
+            if (groupResults.length === 0) {
                 html += `<tr><td colspan="${cols.length}" style="text-align:center; ${cellStyle}">No results found</td></tr>`;
+                html += `</tbody></table>`;
             } else {
-                testResults.forEach((row, index) => {
+                let pendingRemark = null;
+                let tableOpen = true;
+
+                const flushRemark = (isEnd = false) => {
+                    if (pendingRemark) {
+                        if (tableOpen) {
+                            html += `</tbody></table>`;
+                            tableOpen = false;
+                        }
+                        
+                        // Add the remark DIV with darkred, centered, bold styles in a full width box
+                        html += `<div style="width: 100%; border: ${bWidth}px solid ${el.borderColor || '#e2e8f0'}; padding: 10px; margin-top: 5px; margin-bottom: 5px; text-align: center; color: darkred; font-weight: bold; background: #fff; box-sizing: border-box;">
+                            ${pendingRemark}
+                        </div>`;
+                        
+                        if (!isEnd) {
+                            html += `<table style="${tableStyle}">${colGroupHtml}`;
+                            html += `<thead style="background:${el.headerBg || '#f8fafc'}; color:${el.headerColor || '#1e293b'}"><tr>`;
+                            cols.forEach(c => {
+                                html += `<th style="${cellStyle} font-size: ${el.headerFontSize || 12}px; font-weight: bold; text-align: left;">
+                                            ${headers[c.toLowerCase()] || c.toUpperCase()}
+                                         </th>`;
+                            });
+                            html += `</tr></thead><tbody style="color:${el.rowTextColor || '#334155'}">`;
+                            tableOpen = true;
+                        }
+                        
+                        pendingRemark = null;
+                    }
+                };
+
+                groupResults.forEach((row, index) => {
+                    if (row.type === 'parent' || row.type === 'standalone') {
+                        flushRemark();
+                        let cleanNote = row.note ? row.note.replace(/(<([^>]+)>)/gi, "").trim() : '';
+                        if (cleanNote !== '' || (row.note && row.note.includes('<img'))) {
+                            pendingRemark = row.note;
+                        }
+                    }
+
                     let trBg = (el.zebraStripes && index % 2 !== 0) ? `background-color: ${el.zebraColor || '#f8fafc'};` : '';
                     html += `<tr style="${trBg}">`;
 
@@ -314,8 +392,12 @@
                     }
                     html += `</tr>`;
                 });
+
+                flushRemark(true);
+                if (tableOpen) {
+                    html += `</tbody></table>`;
+                }
             }
-            html += `</tbody></table>`;
             return html;
         }
 

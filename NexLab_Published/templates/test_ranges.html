@@ -7,6 +7,8 @@
 {% block content %}
 <!-- Tom Select CSS -->
 <link href="/static/vendor/tom-select/tom-select.css" rel="stylesheet">
+<!-- Quill.js Rich Text Editor CSS -->
+<link href="/static/vendor/quill/quill.snow.css" rel="stylesheet">
 
 <div class="bg-white rounded-xl shadow-sm border border-slate-200">
     <div class="p-6 border-b border-slate-200 flex justify-between items-center">
@@ -90,20 +92,23 @@
             <!-- Age Range -->
             <div class="mb-4 p-4 bg-white rounded-lg border border-slate-200">
                 <h5 class="text-sm font-semibold text-slate-700 mb-3">Age Range</h5>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="grid grid-cols-2 gap-4 max-w-sm">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">From</label>
-                        <input type="number" id="age_from" name="age_from" min="0" max="999" value="0"
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Age</label>
+                        <input type="number" id="age_from" name="age_from" min="0" value="0"
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2 mb-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <input type="number" id="age_to" name="age_to" min="0" value="999"
                                class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">To</label>
-                        <input type="number" id="age_to" name="age_to" min="0" max="999" value="999"
-                               class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Age Unit</label>
-                        <select id="age_unit" name="age_unit" 
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Unit</label>
+                        <select id="age_from_unit" name="age_from_unit" 
+                                class="w-full border border-slate-300 rounded-lg px-3 py-2 mb-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="year">Years</option>
+                            <option value="month">Months</option>
+                            <option value="day">Days</option>
+                        </select>
+                        <select id="age_to_unit" name="age_to_unit" 
                                 class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                             <option value="year">Years</option>
                             <option value="month">Months</option>
@@ -221,9 +226,9 @@
             <div id="textRangeSection" class="mb-4 p-4 bg-white rounded-lg border border-slate-200 hidden">
                 <h5 class="text-sm font-semibold text-slate-700 mb-3">Text Range Value</h5>
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Text Range</label>
-                    <input type="text" id="text_range" name="text_range" placeholder="e.g., Positive, Negative, Present, Absent" 
-                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Text Range (Rich Text)</label>
+                    <div id="quillEditor" class="bg-white" style="height: 150px;"></div>
+                    <textarea id="text_range" name="text_range" class="hidden"></textarea>
                 </div>
             </div>
             
@@ -243,10 +248,10 @@
     <!-- Search Boxes -->
     <div class="p-6 border-b border-slate-200 bg-slate-50">
         <h5 class="text-sm font-semibold text-slate-700 mb-3">Search Ranges</h5>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
             <div>
                 <label class="block text-xs font-medium text-slate-600 mb-1">Test</label>
-                <select id="searchTest" onchange="filterTable()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <select id="searchTest" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                     <option value="">All Tests</option>
                     {% for test in tests %}
                     <option value="{{ test.test_name|lower }}">{{ test.test_name }}</option>
@@ -255,7 +260,7 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-slate-600 mb-1">Parameter</label>
-                <select id="searchParameter" onchange="filterTable()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <select id="searchParameter" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                     <option value="">All Parameters</option>
                     {% for param in parameters %}
                     <option value="{{ param.parameter_name|lower }}">{{ param.parameter_name }}</option>
@@ -264,7 +269,7 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-slate-600 mb-1">Device</label>
-                <select id="searchDevice" onchange="filterTable()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <select id="searchDevice" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                     <option value="">All Devices</option>
                     {% for device in devices %}
                     <option value="{{ device.device_name|lower }}">{{ device.device_name }}</option>
@@ -273,12 +278,18 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-slate-600 mb-1">Department</label>
-                <select id="searchDepartment" onchange="filterTable()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <select id="searchDepartment" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                     <option value="">All Departments</option>
                     {% for dept in departments %}
                     <option value="{{ dept.department_name|lower }}">{{ dept.department_name }}</option>
                     {% endfor %}
                 </select>
+            </div>
+            <div>
+                <button onclick="filterTable()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    Search
+                </button>
             </div>
         </div>
     </div>
@@ -303,7 +314,7 @@
             </thead>
             <tbody class="bg-white divide-y divide-slate-200" id="rangesTableBody">
                 {% for range in ranges %}
-                <tr class="hover:bg-slate-50" 
+                <tr class="hover:bg-slate-50" style="display: none;" 
                     data-test="{{ range.test.test_name|lower }}"
                     data-parameter="{{ range.parameter.parameter_name|lower if range.parameter else '' }}"
                     data-device="{{ range.device.device_name|lower if range.device else '' }}"
@@ -321,7 +332,7 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.age_to }} {{ range.age_unit }}s</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.normal_from if range.normal_from is not none else '-' }}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.normal_to if range.normal_to is not none else '-' }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ range.text_range if range.text_range else '-' }}</td>
+                    <td class="px-6 py-4 text-sm text-slate-500">{% if range.text_range and range.text_range != '' %}<span class="range-hover-wrapper"><span class="range-hover-btn">Range</span><span class="range-hover-bubble">{{ range.text_range|safe }}</span></span>{% else %}-{% endif %}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div class="flex items-center space-x-3">
                             <button onclick='editRange({{ ranges_json[loop.index0] | tojson }})' 
@@ -352,13 +363,31 @@
     {% endif %}
 </div>
 
+<!-- Quill.js Rich Text Editor JS -->
+<script src="/static/vendor/quill/quill.js"></script>
 <!-- Tom Select JS -->
 <script src="/static/vendor/tom-select/tom-select.complete.min.js"></script>
 <script>
-// Initialize Tom Select for searchable dropdowns
 let searchTestSelect, searchParamSelect, searchDeviceSelect, searchDeptSelect;
+let quill;
 
 document.addEventListener('DOMContentLoaded', function() {
+    quill = new Quill('#quillEditor', {
+        theme: 'snow',
+        modules: {
+            toolbar: [
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                [{ 'align': [] }],
+                ['clean']
+            ]
+        }
+    });
+
+    document.getElementById('rangeForm').addEventListener('submit', function() {
+        document.getElementById('text_range').value = quill.root.innerHTML;
+    });
+
     // Initialize search dropdowns with Tom Select
     searchTestSelect = new TomSelect('#searchTest', {
         plugins: ['dropdown_input'],
@@ -387,12 +416,6 @@ document.addEventListener('DOMContentLoaded', function() {
         create: false,
         maxItems: 1
     });
-    
-    // Add change event listeners
-    searchTestSelect.on('change', filterTable);
-    searchParamSelect.on('change', filterTable);
-    searchDeviceSelect.on('change', filterTable);
-    searchDeptSelect.on('change', filterTable);
 });
 
 function toggleForm(formId) {
@@ -403,6 +426,8 @@ function toggleForm(formId) {
         document.getElementById('range_id').value = '';
         document.getElementById('formTitle').textContent = 'New Range Details';
         document.getElementById('parameter_id').value = '';
+        document.getElementById('range_type_numeric').checked = true;
+        if (quill) quill.root.innerHTML = '';
         toggleRangeType();
     }
 }
@@ -469,7 +494,8 @@ function editRange(range) {
     document.getElementById('gender_type').value = range.gender_type;
     document.getElementById('age_from').value = range.age_from;
     document.getElementById('age_to').value = range.age_to;
-    document.getElementById('age_unit').value = range.age_unit;
+    document.getElementById('age_from_unit').value = range.age_from_unit || 'year';
+    document.getElementById('age_to_unit').value = range.age_to_unit || 'year';
     document.getElementById('fasting_required').value = range.fasting_required.toString();
     document.getElementById('range_type_' + range.range_type).checked = true;
     
@@ -491,8 +517,9 @@ function editRange(range) {
     document.getElementById('panic_less_than').value = range.panic_less_than || '';
     document.getElementById('panic_more_than').value = range.panic_more_than || '';
     
-    // Set text value
+    // Set text range
     document.getElementById('text_range').value = range.text_range || '';
+    if (quill) quill.root.innerHTML = range.text_range || '';
     
     // Toggle sections
     toggleRangeType();

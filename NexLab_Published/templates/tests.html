@@ -69,7 +69,6 @@
         </button>
     </div>
 
-    <!-- Add/Edit Test Form (unchanged) -->
     <div id="addTestForm" style="display: none;" class="p-6 bg-slate-50 border-b border-slate-200">
         <h4 class="text-md font-semibold text-slate-700 mb-4" id="formTitle">New Test Details</h4>
         <form method="POST" id="testForm" action="/tests/create">
@@ -167,6 +166,14 @@
                 </label>
             </div>
 
+            <div class="mb-4">
+                <label class="flex items-center">
+                    <input type="checkbox" id="print_separately" name="print_separately"
+                        class="rounded text-indigo-600 focus:ring-indigo-500">
+                    <span class="ml-2 text-sm text-slate-700">Print Separately (Print this test on its own page)</span>
+                </label>
+            </div>
+
             <div class="flex gap-2">
                 <button type="submit"
                     class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
@@ -183,6 +190,38 @@
                 </button>
             </div>
         </form>
+    </div>
+
+    <!-- Search/Filter Section -->
+    <div class="p-6 border-b border-slate-200 bg-slate-50">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Search by Test</label>
+                <select id="search_test" placeholder="Search tests..."
+                    class="w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">All Tests...</option>
+                    {% for test in tests %}
+                    <option value="{{ test.test_name }}">{{ test.test_name }} ({{ test.test_short_name }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Search by Department</label>
+                <select id="search_department" placeholder="Search departments..."
+                    class="w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">All Departments...</option>
+                    {% for dept in departments %}
+                    <option value="{{ dept.department_name }}">{{ dept.department_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <button onclick="filterTestsTable()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    Search
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Tests Table – Actions header is empty, column is ultra-narrow -->
@@ -207,9 +246,9 @@
                         style="width:1%"><!-- No header text --></th>
                 </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-slate-200">
+            <tbody class="bg-white divide-y divide-slate-200" id="testsTableBody">
                 {% for test in tests %}
-                <tr class="hover:bg-slate-50">
+                <tr class="hover:bg-slate-50 test-row" style="display: none;" data-test-name="{{ test.test_name }}" data-department-name="{{ test.department.department_name }}">
                     <td class="px-4 py-3 text-sm text-slate-500">#{{ test.id }}</td>
                     <td class="px-4 py-3 text-sm font-medium text-slate-800 break-words">{{ test.test_name }}</td>
                     <td class="px-4 py-3 text-sm font-bold text-indigo-600">{{ test.test_short_name }}</td>
@@ -271,7 +310,7 @@
 <!-- Tom Select JS -->
 <script src="/static/vendor/tom-select/tom-select.complete.min.js"></script>
 <script>
-    let deviceSelect, parameterSelect;
+    let deviceSelect, parameterSelect, testSearchSelect, departmentSearchSelect;
 
     function initTomSelect() {
         deviceSelect = new TomSelect('#device_ids_select', {
@@ -289,6 +328,42 @@
             maxItems: null,
             onChange: function (value) {
                 document.getElementById('parameter_ids').value = Array.isArray(value) ? value.join(',') : value;
+            }
+        });
+
+        // Search Selectors
+        testSearchSelect = new TomSelect('#search_test', {
+            plugins: ['dropdown_input', 'clear_button'],
+            placeholder: 'Search tests...',
+            create: false,
+            maxItems: 1
+        });
+
+        departmentSearchSelect = new TomSelect('#search_department', {
+            plugins: ['dropdown_input', 'clear_button'],
+            placeholder: 'Search departments...',
+            create: false,
+            maxItems: 1
+        });
+    }
+
+    function filterTestsTable() {
+        const testFilter = document.getElementById('search_test').value.toLowerCase();
+        const deptFilter = document.getElementById('search_department').value.toLowerCase();
+        
+        const rows = document.querySelectorAll('.test-row');
+        
+        rows.forEach(row => {
+            const testName = row.dataset.testName.toLowerCase();
+            const deptName = row.dataset.departmentName.toLowerCase();
+            
+            const matchTest = !testFilter || testName === testFilter;
+            const matchDept = !deptFilter || deptName === deptFilter;
+            
+            if (matchTest && matchDept) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
             }
         });
     }
@@ -320,6 +395,7 @@
         document.getElementById('test_note').value = test.test_note || '';
         document.getElementById('test_condition').value = test.test_condition || '';
         document.getElementById('is_available').checked = test.is_available;
+        document.getElementById('print_separately').checked = test.print_separately;
 
         if (deviceSelect) {
             deviceSelect.clear();

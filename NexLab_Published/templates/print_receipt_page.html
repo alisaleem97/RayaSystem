@@ -72,10 +72,10 @@
             overflow: hidden;
         }
         @media print {
-            body { 
-                background: white; 
-                padding: 0; 
-                margin: 0;
+            html, body { 
+                background: white !important; 
+                padding: 0 !important; 
+                margin: 0 !important;
                 align-items: flex-start;
                 justify-content: flex-start;
                 display: block;
@@ -88,9 +88,10 @@
             .receipt-page {
                 border: none;
                 box-shadow: none;
-                position: absolute;
-                top: 0;
-                left: 0;
+                position: relative;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
             }
         }
     </style>

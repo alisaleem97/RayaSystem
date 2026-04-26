@@ -400,7 +400,7 @@
         </td>
         <td></td>
         <td class="rerun-result-cell"></td>
-        <td><input type="text" class="remark-input parent-remark" data-order-id="${row.order_id}" value="${escAttr(row.note || '')}" placeholder="Note..." ${row.authorized ? 'disabled' : ''}></td>
+        <td><input type="text" class="remark-input parent-remark" data-order-id="${row.order_id}" data-idx="${idx}" value="${escAttr(row.note || '')}" placeholder="Note..." ${row.authorized ? 'disabled' : ''}></td>
         <td class="text-center">
             ${buildActionButtonsHTML(row)}
         </td>
@@ -585,7 +585,9 @@
 
     function formatRangeDisplay(rng) {
         if (!rng) return '—';
-        if (rng.range_type === 'text' && rng.text_range) return escHtml(rng.text_range);
+        if (rng.range_type === 'text' && rng.text_range) {
+            return `<span class="range-hover-wrapper"><span class="range-hover-btn">Range</span><span class="range-hover-bubble">${rng.text_range}</span></span>`;
+        }
         if (rng.normal_from != null && rng.normal_to != null) return `${rng.normal_from} - ${rng.normal_to}`;
         if (rng.normal_from != null) return `≥ ${rng.normal_from}`;
         if (rng.normal_to != null) return `≤ ${rng.normal_to}`;

@@ -5,15 +5,80 @@
 {% block page_title %}Test Result Type Definition{% endblock %}
 
 {% block content %}
+<!-- Tom Select CSS -->
+<link href="/static/vendor/tom-select/tom-select.css" rel="stylesheet">
+<style>
+    /* ✅ Tom Select Dropdown with Scrollbar - Matching Registration Page */
+    .ts-wrapper {
+        position: relative !important;
+        width: 100%;
+        z-index: 100;
+    }
+
+    .ts-dropdown {
+        max-height: 250px !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        z-index: 9999 !important;
+        position: absolute !important;
+        width: 100% !important;
+        box-sizing: border-box;
+        border: 1px solid #d1d5db !important;
+        border-top: 0 !important;
+        border-radius: 0 0 0.5rem 0.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        margin-top: -1px;
+    }
+
+    .ts-dropdown .option {
+        padding: 8px 12px;
+        cursor: pointer;
+    }
+
+    .ts-dropdown .option:hover {
+        background-color: #e0e7ff;
+    }
+
+    .ts-dropdown .active {
+        background-color: #e0e7ff;
+    }
+
+    /* Custom scrollbar styling */
+    .ts-dropdown::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .ts-dropdown::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+
+    .ts-dropdown::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+
+    .ts-dropdown::-webkit-scrollbar-thumb:hover {
+        background: #a1a1a1;
+    }
+
+    .ts-wrapper.form-control,
+    .ts-wrapper.is-invalid,
+    .ts-wrapper.is-valid {
+        padding: 0;
+    }
+</style>
 <div class="bg-white rounded-xl shadow-sm border border-slate-200">
     <div class="p-6 border-b border-slate-200 flex justify-between items-center">
         <div>
             <h3 class="text-lg font-semibold text-slate-800">Test Result Type Definition</h3>
             <p class="text-sm text-slate-500">Define how test results should be entered</p>
         </div>
-        <button onclick="toggleForm('addResultTypeForm')" 
-                class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200">
-            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        <button onclick="toggleForm('addResultTypeForm')"
+            class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200">
+            <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
             Add Result Type
         </button>
     </div>
@@ -23,79 +88,91 @@
         <h4 class="text-md font-semibold text-slate-700 mb-4" id="formTitle">New Result Type Details</h4>
         <form method="POST" id="resultTypeForm" action="/test-result-types/create">
             <input type="hidden" id="result_type_id" name="result_type_id" value="">
-            
+
             <!-- Basic Info -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Test *</label>
-                    <select id="test_id" name="test_id" required onchange="updateParameterDropdown()" 
-                            class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <select id="test_id" name="test_id" required placeholder="Search tests..."
+                        class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                         <option value="">Select Test...</option>
                         {% for test in tests %}
-                        <option value="{{ test.id }}" data-has-params="{{ 'yes' if test.test_parameters else 'no' }}">{{ test.test_name }} ({{ test.test_short_name }})</option>
+                        <option value="{{ test.id }}">{{ test.test_name }} ({{ test.test_short_name }})</option>
                         {% endfor %}
                     </select>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Parameter</label>
-                    <select id="parameter_id" name="parameter_id" disabled
-                            class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-100">
+                    <select id="parameter_id" name="parameter_id" placeholder="Search parameters..."
+                        class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                         <option value="">Select Parameter...</option>
                         {% for param in parameters %}
                         <option value="{{ param.id }}">{{ param.parameter_name }}</option>
                         {% endfor %}
                     </select>
-                    <p class="text-xs text-slate-500 mt-1 hidden" id="no_params_message">This test has no parameters.</p>
+                    <p class="text-xs text-slate-500 mt-1 hidden" id="no_params_message">This test has no parameters.
+                    </p>
                 </div>
             </div>
-            
+
             <!-- Result Type Selection -->
             <div class="mb-4 p-4 bg-white rounded-lg border border-slate-200">
                 <h5 class="text-sm font-semibold text-slate-700 mb-3">Result Type *</h5>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label class="flex items-center p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
-                        <input type="radio" id="type_number" name="result_type" value="number" checked onchange="toggleResultType()" 
-                               class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
+                    <label
+                        class="flex items-center p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" id="type_number" name="result_type" value="number" checked
+                            onchange="toggleResultType()"
+                            class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
                         <span class="ml-3 text-sm text-slate-700">
                             <span class="font-medium">Only Numbers</span>
                             <span class="block text-xs text-slate-500">Numeric values only</span>
                         </span>
                     </label>
-                    <label class="flex items-center p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
-                        <input type="radio" id="type_text" name="result_type" value="text" onchange="toggleResultType()" 
-                               class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
+                    <label
+                        class="flex items-center p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" id="type_text" name="result_type" value="text" onchange="toggleResultType()"
+                            class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
                         <span class="ml-3 text-sm text-slate-700">
                             <span class="font-medium">Text</span>
                             <span class="block text-xs text-slate-500">Short text input</span>
                         </span>
                     </label>
-                    <label class="flex items-center p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
-                        <input type="radio" id="type_selection" name="result_type" value="selection" onchange="toggleResultType()" 
-                               class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
+                    <label
+                        class="flex items-center p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" id="type_selection" name="result_type" value="selection"
+                            onchange="toggleResultType()"
+                            class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
                         <span class="ml-3 text-sm text-slate-700">
                             <span class="font-medium">Selection</span>
                             <span class="block text-xs text-slate-500">Predefined options</span>
                         </span>
                     </label>
-                    <label class="flex items-center p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
-                        <input type="radio" id="type_paragraph" name="result_type" value="paragraph" onchange="toggleResultType()" 
-                               class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
+                    <label
+                        class="flex items-center p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" id="type_paragraph" name="result_type" value="paragraph"
+                            onchange="toggleResultType()"
+                            class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
                         <span class="ml-3 text-sm text-slate-700">
                             <span class="font-medium">Paragraph</span>
                             <span class="block text-xs text-slate-500">Long text description</span>
                         </span>
                     </label>
-                    <label class="flex items-center p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
-                        <input type="radio" id="type_attachment" name="result_type" value="attachment" onchange="toggleResultType()" 
-                               class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
+                    <label
+                        class="flex items-center p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" id="type_attachment" name="result_type" value="attachment"
+                            onchange="toggleResultType()"
+                            class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
                         <span class="ml-3 text-sm text-slate-700">
                             <span class="font-medium">Attachment</span>
                             <span class="block text-xs text-slate-500">File upload</span>
                         </span>
                     </label>
-                    <label class="flex items-center p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
-                        <input type="radio" id="type_image" name="result_type" value="image" onchange="toggleResultType()" 
-                               class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
+                    <label
+                        class="flex items-center p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" id="type_image" name="result_type" value="image"
+                            onchange="toggleResultType()"
+                            class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500">
                         <span class="ml-3 text-sm text-slate-700">
                             <span class="font-medium">Image</span>
                             <span class="block text-xs text-slate-500">Image upload</span>
@@ -103,29 +180,73 @@
                     </label>
                 </div>
             </div>
-            
+
             <!-- Selection Options (Hidden by default) -->
             <div id="selectionOptionsSection" class="mb-4 p-4 bg-white rounded-lg border border-slate-200 hidden">
                 <h5 class="text-sm font-semibold text-slate-700 mb-3">Selection Options</h5>
                 <p class="text-xs text-slate-500 mb-2">Type an option and press Enter to add it</p>
-                <input type="text" id="selection_input" 
-                       class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                       placeholder="Enter selection option and press Enter...">
+                <input type="text" id="selection_input"
+                    class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    placeholder="Enter selection option and press Enter...">
                 <input type="hidden" id="selection_options" name="selection_options" value="">
                 <div id="selectionTags" class="mt-3 flex flex-wrap gap-2"></div>
             </div>
-            
+
             <div class="flex gap-2">
-                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                    <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                <button type="submit"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                    <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4">
+                        </path>
+                    </svg>
                     Save Result Type
                 </button>
-                <button type="button" onclick="toggleForm('addResultTypeForm')" 
-                        class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50">
+                <button type="button" onclick="toggleForm('addResultTypeForm')"
+                    class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50">
                     Cancel
                 </button>
             </div>
         </form>
+    </div>
+
+    <!-- Search/Filter Section -->
+    <div class="p-6 border-b border-slate-200 bg-slate-50">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Search by Test</label>
+                <select id="search_test" placeholder="Search tests..."
+                    class="w-full border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">All Tests...</option>
+                    {% for test in tests %}
+                    <option value="{{ test.test_name }}">{{ test.test_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Search by Result Type</label>
+                <select id="search_type"
+                    class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">All Types...</option>
+                    <option value="number">Number</option>
+                    <option value="text">Text</option>
+                    <option value="selection">Selection</option>
+                    <option value="paragraph">Paragraph</option>
+                    <option value="attachment">Attachment</option>
+                    <option value="image">Image</option>
+                </select>
+            </div>
+            <div>
+                <button onclick="filterResultTypesTable()"
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    Search
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Test Result Types Table -->
@@ -134,19 +255,27 @@
             <thead class="bg-slate-50">
                 <tr>
                     <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ID</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Test</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Parameter</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Result Type</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Selection Options</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Test
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                        Parameter</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Result
+                        Type</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                        Selection Options</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions
+                    </th>
                 </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-slate-200">
+            <tbody class="bg-white divide-y divide-slate-200" id="resultTypesTableBody">
                 {% for result_type in result_types %}
-                <tr class="hover:bg-slate-50">
+                <tr class="hover:bg-slate-50 result-type-row" style="display: none;"
+                    data-test-name="{{ result_type.test.test_name }}" data-result-type="{{ result_type.result_type }}">
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">#{{ result_type.id }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{{ result_type.test.test_name }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ result_type.parameter.parameter_name if result_type.parameter else '-' }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{{
+                        result_type.test.test_name }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{
+                        result_type.parameter.parameter_name if result_type.parameter else '-' }}</td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                             {% if result_type.result_type == 'number' %}bg-blue-100 text-blue-800
@@ -160,21 +289,29 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 max-w-md truncate">
                         {% if result_type.selection_options %}
-                            {{ result_type.selection_options }}
+                        {{ result_type.selection_options }}
                         {% else %}
-                            -
+                        -
                         {% endif %}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div class="flex items-center space-x-3">
-                            <button onclick='editResultType({{ result_types_json[loop.index0] | tojson }})' 
-                                    class="text-blue-600 hover:text-blue-900" title="Edit">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            <button onclick='editResultType({{ result_types_json[loop.index0] | tojson }})'
+                                class="text-blue-600 hover:text-blue-900" title="Edit">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z">
+                                    </path>
+                                </svg>
                             </button>
-                            <a href="javascript:void(0)" 
-                               onclick="confirmDelete('/test-result-types/delete/{{ result_type.id }}')"
-                               class="text-red-600 hover:text-red-900" title="Delete">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            <a href="javascript:void(0)"
+                                onclick="confirmDelete('/test-result-types/delete/{{ result_type.id }}')"
+                                class="text-red-600 hover:text-red-900" title="Delete">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                                    </path>
+                                </svg>
                             </a>
                         </div>
                     </td>
@@ -183,11 +320,13 @@
             </tbody>
         </table>
     </div>
-    
+
     {% if not result_types %}
     <div class="text-center py-12">
         <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+            </path>
         </svg>
         <h3 class="mt-2 text-sm font-medium text-slate-900">No result types defined</h3>
         <p class="mt-1 text-sm text-slate-500">Get started by adding a new result type definition.</p>
@@ -195,54 +334,154 @@
     {% endif %}
 </div>
 
+<!-- Tom Select JS -->
+<script src="/static/vendor/tom-select/tom-select.complete.min.js"></script>
 <script>
-let selectionTags = [];
+    let selectionTags = [];
+    let testSearchSelect, formTestSelect, formParamSelect;
 
-function toggleForm(formId) {
-    const form = document.getElementById(formId);
-    form.style.display = form.style.display === 'none' ? 'block' : 'none';
-    if (form.style.display === 'none') {
-        document.getElementById('resultTypeForm').reset();
-        document.getElementById('result_type_id').value = '';
-        document.getElementById('formTitle').textContent = 'New Result Type Details';
-        document.getElementById('parameter_id').value = '';
-        selectionTags = [];
-        renderSelectionTags();
-        toggleResultType();
+    // ✅ Test → Parameter mapping from backend
+    const testParamMap = {{ test_param_map_json | safe }};
+
+    // ✅ All parameters for reference
+    const allParameters = [
+        {% for param in parameters %}
+    { id: {{ param.id }}, name: "{{ param.parameter_name }}" },
+    {% endfor %}
+];
+
+    function initTomSelect() {
+        // ✅ Search filter - Test dropdown with searchable input
+        testSearchSelect = new TomSelect('#search_test', {
+            plugins: ['dropdown_input', 'clear_button'],
+            placeholder: 'Search tests...',
+            create: false,
+            maxItems: 1
+        });
+
+        // ✅ Form - Test dropdown with searchable input (matching registration page pattern)
+        formTestSelect = new TomSelect('#test_id', {
+            plugins: ['dropdown_input'],
+            placeholder: 'Search tests...',
+            create: false,
+            maxItems: 1,
+            onChange: function (value) {
+                updateParameterDropdown(value);
+            }
+        });
+
+        // ✅ Form - Parameter dropdown with searchable input
+        formParamSelect = new TomSelect('#parameter_id', {
+            plugins: ['dropdown_input'],
+            placeholder: 'Search parameters...',
+            create: false,
+            maxItems: 1
+        });
+
+        // Initially disable parameter select (no test chosen yet)
+        formParamSelect.disable();
     }
-}
 
-function updateParameterDropdown() {
-    const testSelect = document.getElementById('test_id');
-    const paramSelect = document.getElementById('parameter_id');
-    const message = document.getElementById('no_params_message');
-    const selectedOption = testSelect.options[testSelect.selectedIndex];
-    const hasParams = selectedOption.dataset.hasParams === 'yes';
-    
-    paramSelect.disabled = !hasParams;
-    
-    if (!hasParams) {
-        message.classList.remove('hidden');
-        paramSelect.value = '';
-    } else {
-        message.classList.add('hidden');
+    // ✅ Dynamic parameter filtering based on selected test
+    function updateParameterDropdown(testId) {
+        const message = document.getElementById('no_params_message');
+
+        if (!testId) {
+            // No test selected - disable parameter dropdown
+            formParamSelect.clear();
+            formParamSelect.clearOptions();
+            formParamSelect.addOption({ value: '', text: 'Select Parameter...' });
+            formParamSelect.disable();
+            message.classList.add('hidden');
+            return;
+        }
+
+        const paramIds = testParamMap[testId] || [];
+
+        // Clear existing options
+        formParamSelect.clear();
+        formParamSelect.clearOptions();
+
+        if (paramIds.length === 0) {
+            // Test has no parameters
+            formParamSelect.addOption({ value: '', text: 'No parameters available' });
+            formParamSelect.disable();
+            message.classList.remove('hidden');
+        } else {
+            // Filter parameters to only those linked to this test
+            formParamSelect.addOption({ value: '', text: 'Select Parameter...' });
+            const filteredParams = allParameters.filter(p => paramIds.includes(p.id));
+            filteredParams.forEach(param => {
+                formParamSelect.addOption({ value: String(param.id), text: param.name });
+            });
+            formParamSelect.enable();
+            message.classList.add('hidden');
+        }
     }
-}
 
-function toggleResultType() {
-    const isSelection = document.getElementById('type_selection').checked;
-    const selectionSection = document.getElementById('selectionOptionsSection');
-    
-    if (isSelection) {
-        selectionSection.classList.remove('hidden');
-    } else {
-        selectionSection.classList.add('hidden');
+    document.addEventListener('DOMContentLoaded', initTomSelect);
+
+    function filterResultTypesTable() {
+        const testFilter = document.getElementById('search_test').value.toLowerCase();
+        const typeFilter = document.getElementById('search_type').value.toLowerCase();
+
+        const rows = document.querySelectorAll('.result-type-row');
+
+        rows.forEach(row => {
+            const testName = row.dataset.testName.toLowerCase();
+            const resultType = row.dataset.resultType.toLowerCase();
+
+            const matchTest = !testFilter || testName === testFilter;
+            const matchType = !typeFilter || resultType === typeFilter;
+
+            if (matchTest && matchType) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
     }
-}
 
-function renderSelectionTags() {
-    const container = document.getElementById('selectionTags');
-    container.innerHTML = selectionTags.map((tag, index) => `
+    function toggleForm(formId) {
+        const form = document.getElementById(formId);
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        if (form.style.display === 'none') {
+            document.getElementById('resultTypeForm').reset();
+            document.getElementById('result_type_id').value = '';
+            document.getElementById('formTitle').textContent = 'New Result Type Details';
+            // Reset TomSelect instances
+            if (formTestSelect) {
+                formTestSelect.clear();
+            }
+            if (formParamSelect) {
+                formParamSelect.clear();
+                formParamSelect.clearOptions();
+                formParamSelect.addOption({ value: '', text: 'Select Parameter...' });
+                formParamSelect.disable();
+            }
+            document.getElementById('no_params_message').classList.add('hidden');
+            selectionTags = [];
+            renderSelectionTags();
+            toggleResultType();
+            // Reset form action back to create
+            document.getElementById('resultTypeForm').action = '/test-result-types/create';
+        }
+    }
+
+    function toggleResultType() {
+        const isSelection = document.getElementById('type_selection').checked;
+        const selectionSection = document.getElementById('selectionOptionsSection');
+
+        if (isSelection) {
+            selectionSection.classList.remove('hidden');
+        } else {
+            selectionSection.classList.add('hidden');
+        }
+    }
+
+    function renderSelectionTags() {
+        const container = document.getElementById('selectionTags');
+        container.innerHTML = selectionTags.map((tag, index) => `
         <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
             ${tag}
             <button type="button" onclick="removeSelectionTag(${index})" class="ml-2 text-indigo-600 hover:text-indigo-900">
@@ -250,94 +489,106 @@ function renderSelectionTags() {
             </button>
         </span>
     `).join('');
-    
-    // Update hidden input
-    document.getElementById('selection_options').value = JSON.stringify(selectionTags);
-}
 
-function removeSelectionTag(index) {
-    selectionTags.splice(index, 1);
-    renderSelectionTags();
-}
-
-// Handle Enter key on selection input
-document.addEventListener('DOMContentLoaded', function() {
-    const selectionInput = document.getElementById('selection_input');
-    if (selectionInput) {
-        selectionInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && this.value.trim() !== '') {
-                e.preventDefault();
-                const value = this.value.trim();
-                if (!selectionTags.includes(value)) {
-                    selectionTags.push(value);
-                    renderSelectionTags();
-                }
-                this.value = '';
-            }
-        });
+        // Update hidden input
+        document.getElementById('selection_options').value = JSON.stringify(selectionTags);
     }
-});
-function editResultType(resultType) {
-    console.log('Editing result type:', resultType);
-    console.log('Result type value:', resultType.result_type);
-    
-    try {
-        document.getElementById('result_type_id').value = resultType.id;
-        document.getElementById('test_id').value = resultType.test_id;
-        document.getElementById('parameter_id').value = resultType.parameter_id || '';
-        
-        // Clear all radio buttons first
-        document.querySelectorAll('input[name="result_type"]').forEach(radio => {
-            radio.checked = false;
-        });
-        
-        // Set the correct radio button
-        const radioValue = resultType.result_type.toLowerCase();
-        const radioBtn = document.querySelector(`input[name="result_type"][value="${radioValue}"]`);
-        
-        if (radioBtn) {
-            radioBtn.checked = true;
-            console.log('✓ Set radio button to:', radioValue);
-        } else {
-            console.error('✗ Radio button not found for value:', radioValue);
-            console.log('Available radio buttons:');
-            document.querySelectorAll('input[name="result_type"]').forEach(radio => {
-                console.log('  -', radio.value, '(id:', radio.id + ')');
+
+    function removeSelectionTag(index) {
+        selectionTags.splice(index, 1);
+        renderSelectionTags();
+    }
+
+    // Handle Enter key on selection input
+    document.addEventListener('DOMContentLoaded', function () {
+        const selectionInput = document.getElementById('selection_input');
+        if (selectionInput) {
+            selectionInput.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter' && this.value.trim() !== '') {
+                    e.preventDefault();
+                    const value = this.value.trim();
+                    if (!selectionTags.includes(value)) {
+                        selectionTags.push(value);
+                        renderSelectionTags();
+                    }
+                    this.value = '';
+                }
             });
         }
-        
-        // Handle selection options if exists
-        if (resultType.result_type === 'selection' && resultType.selection_options) {
-            try {
-                const options = JSON.parse(resultType.selection_options);
-                if (Array.isArray(options)) {
-                    selectionTags = options;
-                    renderSelectionTags();
-                    console.log('Loaded selection tags:', selectionTags);
+    });
+    function editResultType(resultType) {
+        console.log('Editing result type:', resultType);
+        console.log('Result type value:', resultType.result_type);
+
+        try {
+            document.getElementById('result_type_id').value = resultType.id;
+
+            // Set test via TomSelect
+            if (formTestSelect) {
+                formTestSelect.setValue(String(resultType.test_id));
+            }
+
+            // Update parameter dropdown for this test, then set parameter value
+            updateParameterDropdown(String(resultType.test_id));
+
+            // Set parameter value after dropdown is populated
+            setTimeout(() => {
+                if (resultType.parameter_id && formParamSelect) {
+                    formParamSelect.setValue(String(resultType.parameter_id));
                 }
-            } catch(e) {
-                console.error('Error parsing selection options:', e);
+            }, 100);
+
+            // Clear all radio buttons first
+            document.querySelectorAll('input[name="result_type"]').forEach(radio => {
+                radio.checked = false;
+            });
+
+            // Set the correct radio button
+            const radioValue = resultType.result_type.toLowerCase();
+            const radioBtn = document.querySelector(`input[name="result_type"][value="${radioValue}"]`);
+
+            if (radioBtn) {
+                radioBtn.checked = true;
+                console.log('✓ Set radio button to:', radioValue);
+            } else {
+                console.error('✗ Radio button not found for value:', radioValue);
+                console.log('Available radio buttons:');
+                document.querySelectorAll('input[name="result_type"]').forEach(radio => {
+                    console.log('  -', radio.value, '(id:', radio.id + ')');
+                });
+            }
+
+            // Handle selection options if exists
+            if (resultType.result_type === 'selection' && resultType.selection_options) {
+                try {
+                    const options = JSON.parse(resultType.selection_options);
+                    if (Array.isArray(options)) {
+                        selectionTags = options;
+                        renderSelectionTags();
+                        console.log('Loaded selection tags:', selectionTags);
+                    }
+                } catch (e) {
+                    console.error('Error parsing selection options:', e);
+                    selectionTags = [];
+                }
+            } else {
                 selectionTags = [];
             }
-        } else {
-            selectionTags = [];
+
+            // Show the form
+            document.getElementById('formTitle').textContent = 'Edit Result Type Details';
+            document.getElementById('addResultTypeForm').style.display = 'block';
+            document.getElementById('resultTypeForm').action = '/test-result-types/update/' + resultType.id;
+
+            // Toggle sections
+            setTimeout(() => {
+                toggleResultType();
+            }, 150);
+
+        } catch (error) {
+            console.error('Error in editResultType:', error);
+            alert('Error editing result type. Check console for details.');
         }
-        
-        // Show the form
-        document.getElementById('formTitle').textContent = 'Edit Result Type Details';
-        document.getElementById('addResultTypeForm').style.display = 'block';
-        document.getElementById('resultTypeForm').action = '/test-result-types/update/' + resultType.id;
-        
-        // Update parameter dropdown and toggle sections
-        setTimeout(() => {
-            updateParameterDropdown();
-            toggleResultType();
-        }, 100);
-        
-    } catch(error) {
-        console.error('Error in editResultType:', error);
-        alert('Error editing result type. Check console for details.');
     }
-}
 </script>
 {% endblock %}

@@ -57,12 +57,130 @@
         font-weight: 500;
     }
 
+    .bg-high {
+        background-color: #fef3c7 !important;
+    }
+    .bg-low {
+        background-color: #dbeafe !important;
+    }
+    .bg-panic {
+        background-color: #fee2e2 !important;
+    }
+
     .action-footer {
         position: sticky;
         bottom: 0;
         z-index: 20;
         background: white;
         border-top: 1px solid #e2e8f0;
+    }
+    
+    .custom-checkbox {
+        display: inline-block;
+        position: relative;
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+    }
+
+    .custom-checkbox input {
+        position: absolute;
+        opacity: 0;
+        cursor: pointer;
+        height: 0;
+        width: 0;
+    }
+
+    .checkmark {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 24px;
+        width: 24px;
+        background-color: #e2e8f0;
+        border-radius: 6px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 2px solid #cbd5e1;
+    }
+
+    .custom-checkbox:hover input ~ .checkmark {
+        background-color: #cbd5e1;
+        border-color: #94a3b8;
+    }
+
+    .custom-checkbox input:checked ~ .checkmark {
+        background-color: #10b981;
+        border-color: #059669;
+    }
+
+    .checkmark:after {
+        content: "";
+        position: absolute;
+        display: none;
+    }
+
+    .custom-checkbox input:checked ~ .checkmark:after {
+        display: block;
+    }
+
+    .custom-checkbox .checkmark:after {
+        left: 7px;
+        top: 2px;
+        width: 6px;
+        height: 12px;
+        border: solid white;
+        border-width: 0 2.5px 2.5px 0;
+        transform: rotate(45deg);
+    }
+    .select-cell {
+        width: 50px !important;
+        min-width: 50px !important;
+        padding: 0 !important;
+        text-align: center !important;
+    }
+
+    /* Disabled checkbox styling */
+    .custom-checkbox.disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+    }
+    .custom-checkbox.disabled input {
+        cursor: not-allowed;
+    }
+    .custom-checkbox.disabled:hover input ~ .checkmark {
+        background-color: #e2e8f0;
+        border-color: #cbd5e1;
+    }
+
+    /* Status badge styling */
+    .status-badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 9999px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+    }
+    .status-badge.badge-pending {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fcd34d;
+    }
+    .status-badge.badge-resulted {
+        background: #e0e7ff;
+        color: #3730a3;
+        border: 1px solid #a5b4fc;
+    }
+    .status-badge.badge-auth {
+        background: #dbeafe;
+        color: #1e40af;
+        border: 1px solid #93c5fd;
+    }
+    .status-badge.badge-double-auth {
+        background: #d1fae5;
+        color: #065f46;
+        border: 1px solid #6ee7b7;
     }
 </style>
 
@@ -142,9 +260,17 @@
         <table class="w-full result-grid" id="resultGrid">
             <thead>
                 <tr class="bg-slate-50">
-                    <th class="w-10 text-center"><input type="checkbox" id="selectAllPrint" class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" checked></th>
+                    <th class="select-cell">
+                        <div class="flex items-center justify-center">
+                            <label class="custom-checkbox">
+                                <input type="checkbox" id="selectAllPrint">
+                                <span class="checkmark"></span>
+                            </label>
+                        </div>
+                    </th>
                     <th class="text-center">Test / Parameter</th>
                     <th>Result</th>
+                    <th>Status</th>
                     <th>Unit</th>
                     <th>Range</th>
                     <th>Remark</th>
@@ -152,7 +278,7 @@
             </thead>
             <tbody id="gridBody">
                 <tr id="loadingRow">
-                    <td colspan="6" class="py-20 text-center text-slate-400">
+                    <td colspan="7" class="py-20 text-center text-slate-400">
                         <i class="fas fa-spinner fa-spin fa-2x mb-2 text-indigo-400"></i>
                         <p class="font-medium">Fetching patient results...</p>
                     </td>
@@ -208,21 +334,32 @@
 </div>
 
 <script>
-    const patientId = "{{ patient.patient_id }}";
+    const visitId = "{{ visit.visit_id if visit else '' }}";
+
+    function getStatusBadge(displayStatus) {
+        const map = {
+            'Pending': 'badge-pending',
+            'Resulted': 'badge-resulted',
+            'AUTH': 'badge-auth',
+            'Double AUTH': 'badge-double-auth'
+        };
+        const cls = map[displayStatus] || 'badge-pending';
+        return `<span class="status-badge ${cls}">${displayStatus}</span>`;
+    }
 
     async function loadResults() {
         try {
-            const resp = await fetch(`/api/double-authorized-tests/${patientId}`);
+            const resp = await fetch(`/api/all-visit-tests/${visitId}`);
             const data = await resp.json();
             if (data.success) {
                 renderGrid(data.results);
             } else {
                 console.error('Error:', data.error);
-                document.getElementById('gridBody').innerHTML = `<tr><td colspan="5" class="py-10 text-center text-red-500">Error loading results: ${data.error}</td></tr>`;
+                document.getElementById('gridBody').innerHTML = `<tr><td colspan="7" class="py-10 text-center text-red-500">Error loading results: ${data.error}</td></tr>`;
             }
         } catch (err) {
             console.error(err);
-            document.getElementById('gridBody').innerHTML = `<tr><td colspan="5" class="py-10 text-center text-red-500">Failed to load results</td></tr>`;
+            document.getElementById('gridBody').innerHTML = `<tr><td colspan="7" class="py-10 text-center text-red-500">Failed to load results</td></tr>`;
         }
     }
 
@@ -231,53 +368,87 @@
         tbody.innerHTML = '';
 
         if (rows.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="py-10 text-center text-slate-400">No results found for this patient.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="py-10 text-center text-slate-400">No results found for this patient.</td></tr>';
             return;
         }
 
         rows.forEach((row) => {
             const tr = document.createElement('tr');
+            const isDoubleAuth = row.display_status === 'Double AUTH';
+            const disabledAttr = isDoubleAuth ? '' : 'disabled';
+            const disabledClass = isDoubleAuth ? '' : 'disabled';
+            const checkedAttr = isDoubleAuth ? 'checked' : '';
+
             if (row.type === 'parent') {
                 tr.className = 'row-parent';
                 tr.innerHTML = `
-                    <td class="text-center"><input type="checkbox" class="test-cb rounded text-indigo-600 w-4 h-4 cursor-pointer" value="${row.order_id}" checked></td>
+                    <td class="select-cell">
+                        <div class="flex items-center justify-center">
+                            <label class="custom-checkbox ${disabledClass}">
+                                <input type="checkbox" class="test-cb" value="${row.order_id}" ${checkedAttr} ${disabledAttr}>
+                                <span class="checkmark"></span>
+                            </label>
+                        </div>
+                    </td>
                     <td class="test-name">${row.test_name}</td>
-                    <td></td><td></td><td></td><td></td>
+                    <td></td>
+                    <td>${getStatusBadge(row.display_status)}</td>
+                    <td></td><td></td><td class="text-xs italic text-slate-400">${row.note || ''}</td>
                 `;
             } else if (row.type === 'child') {
                 tr.className = 'row-child';
                 const flagClass = getFlagClass(row.flag);
                 tr.innerHTML = `
-                    <td></td>
+                    <td class="select-cell"></td>
                     <td class="test-name">${row.parameter_name}</td>
-                    <td class="font-bold ${flagClass} text-base">${row.result_value}</td>
+                    <td class="font-bold ${flagClass} ${getFlagBg(row.flag)} text-base">${row.result_value}</td>
+                    <td></td>
                     <td class="text-slate-500 font-medium">${row.unit || ''}</td>
-                    <td class="text-slate-500 font-medium">${row.range || ''}</td>
+                    <td class="text-slate-500 font-medium">${rangeHtml(row)}</td>
                     <td class="text-xs italic text-slate-400">${row.remark || ''}</td>
                 `;
             } else {
                 tr.className = 'row-standalone';
                 const flagClass = getFlagClass(row.flag);
                 tr.innerHTML = `
-                    <td class="text-center"><input type="checkbox" class="test-cb rounded text-indigo-600 w-4 h-4 cursor-pointer" value="${row.order_id}" checked></td>
+                    <td class="select-cell">
+                        <div class="flex items-center justify-center">
+                            <label class="custom-checkbox ${disabledClass}">
+                                <input type="checkbox" class="test-cb" value="${row.order_id}" ${checkedAttr} ${disabledAttr}>
+                                <span class="checkmark"></span>
+                            </label>
+                        </div>
+                    </td>
                     <td class="test-name">${row.test_name}</td>
-                    <td class="font-bold ${flagClass} text-base">${row.result_value}</td>
+                    <td class="font-bold ${flagClass} ${getFlagBg(row.flag)} text-base">${row.result_value}</td>
+                    <td>${getStatusBadge(row.display_status)}</td>
                     <td class="text-slate-500 font-medium">${row.unit || ''}</td>
-                    <td class="text-slate-500 font-medium">${row.range || ''}</td>
+                    <td class="text-slate-500 font-medium">${rangeHtml(row)}</td>
                     <td class="text-xs italic text-slate-400">${row.remark || ''}</td>
                 `;
             }
             tbody.appendChild(tr);
         });
         
-        // Setup checkbox listeners
-        document.getElementById('selectAllPrint').addEventListener('change', function(e) {
-            document.querySelectorAll('.test-cb').forEach(cb => cb.checked = e.target.checked);
+        // Setup checkbox listeners — select-all only toggles enabled (Double AUTH) checkboxes
+        const selectAllCb = document.getElementById('selectAllPrint');
+        const enabledCbs = document.querySelectorAll('.test-cb:not(:disabled)');
+        // Set initial state of select-all based on enabled checkboxes
+        if (enabledCbs.length > 0) {
+            const checkedEnabled = document.querySelectorAll('.test-cb:not(:disabled):checked');
+            selectAllCb.checked = (enabledCbs.length === checkedEnabled.length);
+        } else {
+            selectAllCb.checked = false;
+            selectAllCb.disabled = true;
+        }
+
+        selectAllCb.addEventListener('change', function(e) {
+            document.querySelectorAll('.test-cb:not(:disabled)').forEach(cb => cb.checked = e.target.checked);
         });
-        document.querySelectorAll('.test-cb').forEach(cb => cb.addEventListener('change', function() {
-            const allCbs = document.querySelectorAll('.test-cb');
-            const checkedCbs = document.querySelectorAll('.test-cb:checked');
-            document.getElementById('selectAllPrint').checked = (allCbs.length === checkedCbs.length && allCbs.length > 0);
+        document.querySelectorAll('.test-cb:not(:disabled)').forEach(cb => cb.addEventListener('change', function() {
+            const allEnabled = document.querySelectorAll('.test-cb:not(:disabled)');
+            const checkedEnabled = document.querySelectorAll('.test-cb:not(:disabled):checked');
+            selectAllCb.checked = (allEnabled.length === checkedEnabled.length && allEnabled.length > 0);
         }));
     }
 
@@ -287,6 +458,23 @@
         if (f.includes('H')) return 'status-high';
         if (f.includes('L')) return 'status-low';
         return 'status-normal';
+    }
+
+    function getFlagBg(flag) {
+        if (!flag) return '';
+        const f = flag.toUpperCase();
+        if (f.includes('H')) return 'bg-high';
+        if (f.includes('L')) return 'bg-low';
+        return '';
+    }
+
+    function rangeHtml(row) {
+        const r = row.range || '';
+        if (!r) return '';
+        if (row.range_type === 'text') {
+            return `<span class="range-hover-wrapper"><span class="range-hover-btn">Range</span><span class="range-hover-bubble">${r}</span></span>`;
+        }
+        return r;
     }
 
     async function analyseResults() {
@@ -305,10 +493,11 @@
         }
 
         rows.forEach(row => {
+            // Cell order: Select(0) | Test(1) | Result(2) | Status(3) | Unit(4) | Range(5)
             const testName = row.querySelector('.test-name').innerText.trim();
-            const result = row.cells[1].innerText.trim();
-            const unit = row.cells[2].innerText.trim();
-            const range = row.cells[3].innerText.trim();
+            const result = row.cells[2].innerText.trim();
+            const unit = row.cells[4].innerText.trim();
+            const range = row.cells[5].innerText.trim();
             resultsText += `- ${testName}: ${result} ${unit} (المعدل الطبيعي: ${range})\n`;
         });
 
@@ -370,7 +559,6 @@ ${resultsText}`;
     }
 
     async function markAsCalled() {
-        const visitId = "{{ visit.visit_id if visit else '' }}";
         if (!visitId) {
             showModal('error', 'Error', 'No visit record found for this patient.');
             return;
@@ -404,7 +592,6 @@ ${resultsText}`;
     }
 
     async function sendWhatsApp() {
-        const visitId = "{{ visit.visit_id if visit else '' }}";
         if (!visitId) {
             showModal('error', 'Error', 'No visit record found for this patient.');
             return;

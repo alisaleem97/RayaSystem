@@ -9,7 +9,8 @@ from datetime import datetime
 from database import get_session
 from models import (
     Patient, PatientVisit, Order, LabInfo, PrintTemplate, 
-    Result, ResultDetail, Parameter, TestRange, TestDefinition, TestParameter
+    Result, ResultDetail, Parameter, TestRange, TestDefinition, TestParameter,
+    TestResultType
 )
 from fastapi.encoders import jsonable_encoder
 from fastapi import File, UploadFile
@@ -246,7 +247,17 @@ def get_double_authorized_tests(patient_id: str, request: Request, session: Sess
             
         orders = session.exec(query).all()
 
-        
+        test_ids = [order.test_id for order in orders if order.test_id]
+        all_result_types = session.exec(
+            select(TestResultType).where(TestResultType.test_id.in_(test_ids), TestResultType.is_active == True)
+        ).all()
+        result_type_map = {}
+        for rt in all_result_types:
+            result_type_map[(rt.test_id, rt.parameter_id)] = rt.result_type
+
+        def get_result_type(test_id, param_id=None):
+            return result_type_map.get((test_id, param_id), "number")
+            
         grid_rows = []
         for order in orders:
             test = order.test
@@ -295,6 +306,7 @@ def get_double_authorized_tests(patient_id: str, request: Request, session: Sess
                         "type": "child",
                         "parameter_name": param.parameter_name,
                         "result_value": detail.result_value if detail else "",
+                        "result_type": get_result_type(test.id, param.id),
                         "range": rng.text_range if rng and rng.range_type == "text" else (f"{rng.normal_from} - {rng.normal_to}" if rng and rng.normal_from is not None else ""),
                         "unit": rng.unit if rng else "",
                         "flag": detail.flag if detail else "",
@@ -308,6 +320,7 @@ def get_double_authorized_tests(patient_id: str, request: Request, session: Sess
                     "test_name": test.test_name,
                     "order_id": order.id,
                     "result_value": res.result_value if res else "",
+                    "result_type": get_result_type(test.id, None),
                     "range": rng.text_range if rng and rng.range_type == "text" else (f"{rng.normal_from} - {rng.normal_to}" if rng and rng.normal_from is not None else ""),
                     "unit": rng.unit if rng else "",
                     "flag": res.flag if res else "",
@@ -359,6 +372,17 @@ def get_all_visit_tests(visit_id: str, request: Request, session: Session = Depe
                 selectinload(Order.result).selectinload(Result.details).selectinload(ResultDetail.parameter)
             ).where(Order.visit_id == visit.id, Order.status != "no_sample")
         ).all()
+
+        test_ids = [order.test_id for order in orders if order.test_id]
+        all_result_types = session.exec(
+            select(TestResultType).where(TestResultType.test_id.in_(test_ids), TestResultType.is_active == True)
+        ).all()
+        result_type_map = {}
+        for rt in all_result_types:
+            result_type_map[(rt.test_id, rt.parameter_id)] = rt.result_type
+
+        def get_result_type(test_id, param_id=None):
+            return result_type_map.get((test_id, param_id), "number")
 
         grid_rows = []
         for order in orders:
@@ -420,7 +444,9 @@ def get_all_visit_tests(visit_id: str, request: Request, session: Session = Depe
                         "type": "child",
                         "parameter_name": param.parameter_name,
                         "result_value": detail.result_value if detail else "",
+                        "result_type": get_result_type(test.id, param.id),
                         "range": rng.text_range if rng and rng.range_type == "text" else (f"{rng.normal_from} - {rng.normal_to}" if rng and rng.normal_from is not None else ""),
+                        "range_type": rng.range_type if rng else None,
                         "unit": rng.unit if rng else "",
                         "flag": detail.flag if detail else "",
                         "remark": detail.remark if detail else "",
@@ -436,7 +462,9 @@ def get_all_visit_tests(visit_id: str, request: Request, session: Session = Depe
                     "status": order.status,
                     "display_status": display_status,
                     "result_value": res.result_value if res else "",
+                    "result_type": get_result_type(test.id, None),
                     "range": rng.text_range if rng and rng.range_type == "text" else (f"{rng.normal_from} - {rng.normal_to}" if rng and rng.normal_from is not None else ""),
+                    "range_type": rng.range_type if rng else None,
                     "unit": rng.unit if rng else "",
                     "flag": res.flag if res else "",
                     "remark": res.note if res else "",

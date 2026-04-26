@@ -257,10 +257,18 @@ def lab_info_page(request: Request, session: Session = Depends(get_session)):
     if not require_permission(request, session, "lab_info"):
         return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     lab_info = session.exec(select(LabInfo).limit(1)).first()
+    
+    province_name = None
+    if lab_info and lab_info.province_id:
+        province = session.get(Province, lab_info.province_id)
+        if province:
+            province_name = province.province_name
+
     success = request.query_params.get("success")
     error = request.query_params.get("error")
     return templates.TemplateResponse("lab_info.html", {
         "request": request, "lab_info": lab_info, "edit_mode": False,
+        "province_name": province_name,
         "message_success": success, "message_error": error
     })
 
@@ -269,12 +277,15 @@ def lab_info_edit_page(request: Request, session: Session = Depends(get_session)
     if not require_permission(request, session, "lab_info", "edit"):
         return RedirectResponse(url="/lab-info?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     lab_info = session.exec(select(LabInfo).limit(1)).first()
+    provinces = session.exec(select(Province).where(Province.is_active == True)).all()
     return templates.TemplateResponse("lab_info.html", {
-        "request": request, "lab_info": lab_info, "edit_mode": True
+        "request": request, "lab_info": lab_info, "edit_mode": True, "provinces": provinces
     })
 
 @router.post("/lab-info/update")
 async def update_lab_info(request: Request, lab_name: str = Form(...), lab_title: Optional[str] = Form(None),
+                          welcome_message: Optional[str] = Form(None), welcome_template_name: Optional[str] = Form(None),
+                          province_id: Optional[int] = Form(None),
                           first_doctor_name: Optional[str] = Form(None), second_doctor_name: Optional[str] = Form(None),
                           lab_address: Optional[str] = Form(None), lab_phone_1: str = Form(...),
                           lab_phone_2: Optional[str] = Form(None), whatsapp_api: Optional[str] = Form(None),
@@ -309,6 +320,9 @@ async def update_lab_info(request: Request, lab_name: str = Form(...), lab_title
         lab_info.telegram_token = telegram_token
         lab_info.lab_email = lab_email
         lab_info.lab_website = lab_website
+        lab_info.welcome_message = welcome_message
+        lab_info.welcome_template_name = welcome_template_name
+        lab_info.province_id = province_id
         lab_info.tax_percentage = tax_percentage if tax_percentage is not None else 0.0
         lab_info.lab_note_1 = lab_note_1
         lab_info.lab_note_2 = lab_note_2

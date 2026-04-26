@@ -40,12 +40,16 @@ def patient_registration_page(request: Request, session: Session = Depends(get_s
     barcode_template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "barcode")).first()
     receipt_template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "receipt")).first()
     
+    lab_info = session.exec(select(LabInfo)).first()
+    default_province_id = lab_info.province_id if lab_info else None
+    
     return templates.TemplateResponse("patient_registration.html", {
         "request": request, "provinces": provinces, "partners": partners,
         "tests": tests, "packages": packages,
         "message_success": success, "message_error": error,
         "last_patient_id": last_patient_id,
         "print_token": print_token,
+        "default_province_id": default_province_id,
         "barcode_width": barcode_template.paper_width if barcode_template else '4in',
         "barcode_height": barcode_template.paper_height if barcode_template else '2in',
         "receipt_width": receipt_template.paper_width if receipt_template else '80mm',
@@ -308,6 +312,24 @@ async def create_patient_registration(
         
         # Single atomic commit — all or nothing
         session.commit()
+        
+        # --- Send Welcome WhatsApp Message (fire-and-forget) ---
+        try:
+            lab_info = session.exec(select(LabInfo)).first()
+            if lab_info and lab_info.welcome_message and phone_number:
+                from fastapi.encoders import jsonable_encoder
+                from routes.whatsapp_utils import send_wati_text
+                
+                to_phone = phone_number.strip().replace(" ", "")
+                country_code = getattr(lab_info, 'phone_country_code', '964') or '964'
+                if not to_phone.startswith('+'):
+                    to_phone = "+" + (to_phone if to_phone.startswith(country_code) else country_code + to_phone.lstrip('0'))
+                
+                send_wati_text(to_phone, lab_info.welcome_message, jsonable_encoder(lab_info))
+                print(f"✅ Welcome message sent to {to_phone}")
+        except Exception as wa_err:
+            print(f"⚠️ Welcome message failed (non-blocking): {wa_err}")
+        # -------------------------------------------------------
         
         return RedirectResponse(
             url=f"/patient-registration?success=Patient registered successfully!&patient_id={new_patient.patient_id}",

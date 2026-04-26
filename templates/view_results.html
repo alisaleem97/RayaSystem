@@ -78,6 +78,9 @@
     .status-high { color: #dc2626; font-weight: 700; }
     .status-low { color: #2563eb; font-weight: 700; }
     .status-normal { color: #16a34a; font-weight: 500; }
+    .bg-high { background-color: #fef3c7 !important; }
+    .bg-low { background-color: #dbeafe !important; }
+    .bg-panic { background-color: #fee2e2 !important; }
     .save-footer { position: sticky; bottom: 0; z-index: 20; background: white; border-top: 1px solid #e2e8f0; }
 </style>
 
@@ -212,6 +215,16 @@
 
         rows.forEach((row, idx) => {
             const tr = document.createElement('tr');
+            
+            let resultHtml = '';
+            if (row.type !== 'parent') {
+                if (row.result_type === 'paragraph') {
+                    resultHtml = `<button onclick="viewParagraph(${idx})" class="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium text-xs px-3 py-1 rounded border border-emerald-200 transition-colors shadow-sm">View Paragraph</button>`;
+                } else {
+                    resultHtml = row.result_value || '';
+                }
+            }
+
             if (row.type === 'parent') {
                 tr.className = 'row-parent';
                 tr.innerHTML = `
@@ -233,7 +246,7 @@
                 tr.innerHTML = `
                     <td class="select-cell"></td>
                     <td class="test-name px-6">${row.parameter_name}</td>
-                    <td class="font-bold ${flagClass}">${row.result_value}</td>
+                    <td class="font-bold ${flagClass} ${getFlagBg(row.flag)}">${resultHtml}</td>
                     <td class="text-slate-500">${row.unit || ''}</td>
                     <td class="text-slate-500">${row.range || ''}</td>
                     <td class="text-xs italic text-slate-400">${row.remark || ''}</td>
@@ -252,7 +265,7 @@
                         </div>
                     </td>
                     <td class="test-name px-6"><i class="fas fa-flask mr-2 text-slate-400"></i>${row.test_name}</td>
-                    <td class="font-bold ${flagClass}">${row.result_value}</td>
+                    <td class="font-bold ${flagClass} ${getFlagBg(row.flag)}">${resultHtml}</td>
                     <td class="text-slate-500">${row.unit || ''}</td>
                     <td class="text-slate-500">${row.range || ''}</td>
                     <td class="text-xs italic text-slate-400">${row.remark || ''}</td>
@@ -270,6 +283,14 @@
         if (f.includes('H')) return 'status-high';
         if (f.includes('L')) return 'status-low';
         return 'status-normal';
+    }
+
+    function getFlagBg(flag) {
+        if (!flag) return '';
+        const f = flag.toUpperCase();
+        if (f.includes('H')) return 'bg-high';
+        if (f.includes('L')) return 'bg-low';
+        return '';
     }
 
     function onOrderSelectChange(cb) {
@@ -308,5 +329,57 @@
     }
 
     window.onload = loadResults;
+
+    // View Paragraph
+    function viewParagraph(idx) {
+        const row = gridRows[idx];
+        if (!row) return;
+        
+        const content = row.result_value || '<p class="text-slate-500 italic">No content</p>';
+        document.getElementById('viewParagraphContent').innerHTML = content;
+        
+        const modal = document.getElementById('viewParagraphModal');
+        const modalContent = document.getElementById('viewParagraphModalContent');
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            modal.classList.remove('opacity-0');
+            modalContent.classList.remove('scale-95', 'opacity-0');
+            modalContent.classList.add('scale-100', 'opacity-100');
+        }, 10);
+    }
+
+    function closeViewParagraph() {
+        const modal = document.getElementById('viewParagraphModal');
+        const modalContent = document.getElementById('viewParagraphModalContent');
+        modal.classList.remove('opacity-100');
+        modalContent.classList.remove('scale-100', 'opacity-100');
+        modalContent.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            modal.classList.add('hidden');
+        }, 200);
+    }
 </script>
+
+<!-- View Paragraph Modal -->
+<div id="viewParagraphModal" class="hidden fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity opacity-0">
+    <div class="bg-white rounded-[20px] shadow-2xl w-full max-w-3xl overflow-hidden transform scale-95 opacity-0 transition-all duration-200" id="viewParagraphModalContent">
+        <div class="bg-emerald-50 px-6 py-4 border-b border-emerald-100 flex justify-between items-center">
+            <div class="flex items-center gap-2 text-emerald-800 font-bold text-lg">
+                <i class="fas fa-file-alt"></i> Paragraph Result
+            </div>
+            <button onclick="closeViewParagraph()" class="text-emerald-400 hover:text-emerald-600">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        <div class="p-6 max-h-[70vh] overflow-y-auto">
+            <div id="viewParagraphContent" class="prose max-w-none text-slate-700"></div>
+        </div>
+        <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+            <button onclick="closeViewParagraph()" class="px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-lg shadow-sm">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
