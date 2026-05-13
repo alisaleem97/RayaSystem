@@ -80,28 +80,13 @@
             font-weight: 500;
         }
         @media print {
-            html, body { 
-                background: white !important; 
-                padding: 0 !important; 
-                margin: 0 !important; 
-                align-items: flex-start; 
-                justify-content: flex-start; 
-                display: block; 
-            }
+            body { background: white; padding: 0; margin: 0; }
             .toolbar { display: none !important; }
-            .barcode-pages { 
-                margin-top: 0; 
-                gap: 0; 
-                align-items: flex-start; 
-            }
+            .barcode-pages { margin-top: 0; gap: 0; }
             .barcode-page {
                 border: none;
                 box-shadow: none;
                 page-break-after: always;
-                position: relative;
-                margin: 0 !important;
-                padding: 0 !important;
-                overflow: visible !important;
             }
             .barcode-page:last-child {
                 page-break-after: auto;
