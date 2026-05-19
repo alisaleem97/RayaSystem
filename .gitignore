@@ -35,12 +35,25 @@ tmp/
 Thumbs.db
 desktop.ini
 
-# Environment variables
+# Environment variables (SECRETS!)
 .env
 .env.local
 
 # Logs
 *.log
 
-# Migration scripts (keep in migrations/ subfolder)
-# migrate_*.py
+# Published output
+NexLab_Published/
+
+# Backups
+backups/
+
+# Binary archives
+*.rar
+*.zip
+
+# Test/scratch files
+test_*.py
+test_*.html
+scratch/
+scratch.txt

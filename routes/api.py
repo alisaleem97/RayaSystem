@@ -9,7 +9,7 @@ from database import get_session
 from models import (
     Patient, PatientVisit, Order, TestDefinition, SampleType,
     Region, PackageTest, Parameter, Department, Device,
-    ReportNote, Formula, LabInfo, AuditLog,
+    ReportNote, Formula, LabInfo, AuditLog, ActivityLog,
 )
 from routes.helpers import generate_barcode_base64, get_current_user
 from fastapi.responses import JSONResponse
@@ -304,3 +304,49 @@ def list_audit_logs_api(request: Request, session: Session = Depends(get_session
     if not _require_login(request, session):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     return session.exec(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(500)).all()
+
+# ===========================
+# AUDIT LOG CLEANUP (Admin Only)
+# ===========================
+@router.delete("/api/audit-logs/cleanup")
+def cleanup_old_logs(request: Request, session: Session = Depends(get_session)):
+    """
+    Delete audit and activity logs older than 6 months.
+    Admin-only endpoint to prevent unbounded table growth.
+    Accepts optional ?months=N query param (default: 6).
+    """
+    from routes.helpers import require_permission
+    if not require_permission(request, session, "settings"):
+        return JSONResponse({"error": "Admin access required"}, status_code=403)
+    
+    try:
+        months = int(request.query_params.get("months", 6))
+    except (ValueError, TypeError):
+        months = 6
+    
+    from datetime import datetime, timedelta
+    cutoff_date = datetime.now() - timedelta(days=months * 30)
+    
+    # Count before deletion
+    audit_count = len(session.exec(
+        select(AuditLog).where(AuditLog.created_at < cutoff_date)
+    ).all())
+    activity_count = len(session.exec(
+        select(ActivityLog).where(ActivityLog.created_at < cutoff_date)
+    ).all())
+    
+    # Delete old records
+    from sqlalchemy import delete
+    session.exec(delete(AuditLog).where(AuditLog.created_at < cutoff_date))
+    session.exec(delete(ActivityLog).where(ActivityLog.created_at < cutoff_date))
+    session.commit()
+    
+    return {
+        "success": True,
+        "message": f"Cleaned up logs older than {months} months",
+        "deleted": {
+            "audit_logs": audit_count,
+            "activity_logs": activity_count
+        },
+        "cutoff_date": cutoff_date.isoformat()
+    }

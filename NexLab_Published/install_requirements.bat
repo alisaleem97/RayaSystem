@@ -10,7 +10,7 @@ if not exist "venv" (
     python -m venv venv
 )
 echo Installing dependencies...
-"venv\Scripts\pip.exe" install -r requirements.txt
-"venv\Scripts\python.exe" -m playwright install chromium
+"venv\\Scripts\\pip.exe" install -r requirements.txt
+"venv\\Scripts\\python.exe" -m playwright install chromium
 echo Setup Complete! Run 'start_nexlab.bat'
 pause

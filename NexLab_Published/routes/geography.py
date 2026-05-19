@@ -284,7 +284,8 @@ def lab_info_edit_page(request: Request, session: Session = Depends(get_session)
 
 @router.post("/lab-info/update")
 async def update_lab_info(request: Request, lab_name: str = Form(...), lab_title: Optional[str] = Form(None),
-                          welcome_message: Optional[str] = Form(None), province_id: Optional[int] = Form(None),
+                          welcome_message: Optional[str] = Form(None), welcome_template_name: Optional[str] = Form(None),
+                          province_id: Optional[int] = Form(None),
                           first_doctor_name: Optional[str] = Form(None), second_doctor_name: Optional[str] = Form(None),
                           lab_address: Optional[str] = Form(None), lab_phone_1: str = Form(...),
                           lab_phone_2: Optional[str] = Form(None), whatsapp_api: Optional[str] = Form(None),
@@ -320,6 +321,7 @@ async def update_lab_info(request: Request, lab_name: str = Form(...), lab_title
         lab_info.lab_email = lab_email
         lab_info.lab_website = lab_website
         lab_info.welcome_message = welcome_message
+        lab_info.welcome_template_name = welcome_template_name
         lab_info.province_id = province_id
         lab_info.tax_percentage = tax_percentage if tax_percentage is not None else 0.0
         lab_info.lab_note_1 = lab_note_1

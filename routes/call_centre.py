@@ -45,6 +45,14 @@ def call_centre_list(
 ):
     if not require_permission(request, session, "call_centre"):
         return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
+    # Pagination
+    try:
+        page = max(1, int(request.query_params.get("page", 1)))
+    except (ValueError, TypeError):
+        page = 1
+    
+    PAGE_SIZE = 50
+    
     # 1. Default dates to TODAY if not provided
     today_str = datetime.now().strftime('%Y-%m-%d')
     if not start_date:
@@ -133,9 +141,16 @@ def call_centre_list(
             "is_printed": v.is_printed
         })
     
+    # Paginate the results
+    total_count = len(patient_data)
+    total_pages = max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = min(page, total_pages)
+    offset = (page - 1) * PAGE_SIZE
+    patient_data_page = patient_data[offset:offset + PAGE_SIZE]
+    
     return templates.TemplateResponse("call_centre.html", {
         "request": request,
-        "patient_data": patient_data,
+        "patient_data": patient_data_page,
         "filters": {
             "start_date": start_date,
             "end_date": end_date,
@@ -143,7 +158,10 @@ def call_centre_list(
             "patient_id": patient_id or "",
             "test": test or "",
             "status_filter": status_filter
-        }
+        },
+        "page": page,
+        "total_pages": total_pages,
+        "total_count": total_count,
     })
 
 @router.get("/view-call-centre/{visit_id}", response_class=HTMLResponse)

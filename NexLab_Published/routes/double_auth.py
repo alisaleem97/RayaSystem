@@ -18,12 +18,15 @@ def double_auth_patients_page(request: Request, session: Session = Depends(get_s
     if not require_permission(request, session, "double_auth"):
         return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
     
-    patient_data, filters = build_patient_visit_data(session, request)
+    patient_data, filters, page, total_pages, total_count = build_patient_visit_data(session, request)
     
     return templates.TemplateResponse("double_auth_patients.html", {
         "request": request,
         "patient_data": patient_data,
-        "filters": filters
+        "filters": filters,
+        "page": page,
+        "total_pages": total_pages,
+        "total_count": total_count,
     })
 
 # 2. Double Auth Page

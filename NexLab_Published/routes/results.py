@@ -23,6 +23,8 @@ router = APIRouter()
 # ===========================
 # RESULT ENTRY PATIENT LIST
 # ===========================
+PAGE_SIZE = 50  # Patients per page for result entry
+
 @router.get("/result-entry", response_class=HTMLResponse)
 def result_entry_patients_page(request: Request, session: Session = Depends(get_session)):
     if not require_permission(request, session, "result_entry"):
@@ -35,108 +37,119 @@ def result_entry_patients_page(request: Request, session: Session = Depends(get_
     test_q = request.query_params.get("test", "")
     status_q = request.query_params.get("status", "all")
     
-    query = select(Patient).where(Patient.is_active == True)
+    # Pagination
+    try:
+        page = max(1, int(request.query_params.get("page", 1)))
+    except (ValueError, TypeError):
+        page = 1
     
-    # We join conditionally if we need to filter by visit or orders
-    needs_visit_join = bool(start_date or end_date or test_q or status_q != "all")
-    if needs_visit_join:
-        query = query.join(PatientVisit)
-        
+    # ✅ OPTIMIZED: Single visit-based query with eager loading (eliminates N+1)
+    visit_query = (
+        select(PatientVisit)
+        .options(
+            selectinload(PatientVisit.patient),
+            selectinload(PatientVisit.orders).selectinload(Order.test)
+        )
+        .join(Patient, PatientVisit.patient_id == Patient.id)
+        .where(Patient.is_active == True)
+    )
+    
     if start_date:
-        query = query.where(PatientVisit.visit_date >= datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S"))
+        visit_query = visit_query.where(PatientVisit.visit_date >= datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S"))
     if end_date:
-        query = query.where(PatientVisit.visit_date <= datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S"))
-        
+        visit_query = visit_query.where(PatientVisit.visit_date <= datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S"))
     if name:
-        query = query.where(Patient.full_name.ilike(f"%{name}%"))
+        visit_query = visit_query.where(Patient.full_name.ilike(f"%{name}%"))
     if patient_id_q:
-        query = query.where(Patient.patient_id.ilike(f"%{patient_id_q}%"))
-        
+        visit_query = visit_query.where(Patient.patient_id.ilike(f"%{patient_id_q}%"))
+    
     if test_q or status_q != "all":
-        query = query.join(Order, Order.visit_id == PatientVisit.id).join(TestDefinition, Order.test_id == TestDefinition.id)
+        visit_query = visit_query.join(Order, Order.visit_id == PatientVisit.id).join(TestDefinition, Order.test_id == TestDefinition.id)
         if test_q:
-            query = query.where(
+            visit_query = visit_query.where(
                 (TestDefinition.test_name.ilike(f"%{test_q}%")) | 
                 (TestDefinition.test_short_name.ilike(f"%{test_q}%"))
             )
         if status_q == "pending":
-            query = query.where(Order.status == "ordered")
+            visit_query = visit_query.where(Order.status == "ordered")
         elif status_q == "received":
-            query = query.where(Order.status == "resulted")
+            visit_query = visit_query.where(Order.status == "resulted")
         elif status_q == "authorize":
-            query = query.where(Order.status.in_(["authorized", "double_authorized"]))
-            
-    if needs_visit_join or not (test_q or status_q != "all"):
-        query = query.distinct()
+            visit_query = visit_query.where(Order.status.in_(["authorized", "double_authorized"]))
     
-    # Base query for patients
-    patients_result = session.exec(query.order_by(Patient.created_at.desc())).all()
+    # Fetch all matching visits ordered by date
+    visits = session.exec(visit_query.order_by(PatientVisit.visit_date.desc())).all()
     
-    # Process each patient to attach latest visit and test icons
+    # Deduplicate: keep only the latest visit per patient
+    seen_patients = set()
+    unique_visits = []
+    for visit in visits:
+        patient = visit.patient
+        if not patient or patient.id in seen_patients:
+            continue
+        seen_patients.add(patient.id)
+        unique_visits.append(visit)
+    
+    # Pagination on deduplicated result
+    total_count = len(unique_visits)
+    total_pages = max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = min(page, total_pages)
+    offset = (page - 1) * PAGE_SIZE
+    page_visits = unique_visits[offset:offset + PAGE_SIZE]
+    
+    # Build patient_data from the page slice (no extra queries needed)
     patient_data = []
-    for patient in patients_result:
-        # Get latest visit matching the date criteria if applicable
-        visit_query = select(PatientVisit).options(selectinload(PatientVisit.orders).selectinload(Order.test)).where(PatientVisit.patient_id == patient.id)
-        if start_date:
-            visit_query = visit_query.where(PatientVisit.visit_date >= datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S"))
-        if end_date:
-            visit_query = visit_query.where(PatientVisit.visit_date <= datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S"))
+    for visit in page_visits:
+        patient = visit.patient
+        
+        packages = {}
+        standalones = []
+        
+        for order in visit.orders:
+            if not order.test or order.status == "no_sample":
+                continue
             
-        visit = session.exec(visit_query.order_by(PatientVisit.id.desc())).first()
+            # Explicitly hide tests that don't match the active toggle
+            if status_q == "pending" and order.status != "ordered":
+                continue
+            elif status_q == "received" and order.status != "resulted":
+                continue
+            elif status_q == "authorize" and order.status not in ["authorized", "double_authorized"]:
+                continue
 
-        visit_date = visit.visit_date if visit else patient.created_at
+            status_color = "red"
+            if order.status == "resulted":
+                status_color = "blue"
+            elif order.status in ["authorized", "double_authorized"]:
+                status_color = "green"
+                
+            test_info = {
+                "name": order.test.test_name,
+                "color": status_color}
+            
+            if order.package_name:
+                if order.package_name not in packages:
+                    packages[order.package_name] = []
+                packages[order.package_name].append(test_info)
+            else:
+                standalones.append(test_info)
         
         tests_data = []
-        if visit:
-            packages = {}
-            standalones = []
-            
-            for order in visit.orders:
-                if not order.test or order.status == "no_sample":
-                    continue
-                
-                # Explicitly hide tests that don't match the active toggle
-                if status_q == "pending" and order.status != "ordered":
-                    continue
-                elif status_q == "received" and order.status != "resulted":
-                    continue
-                elif status_q == "authorize" and order.status not in ["authorized", "double_authorized"]:
-                    continue
-
-                # Map both auth levels to Green so it never falls back to Red
-                status_color = "red"
-                if order.status == "resulted":
-                    status_color = "blue"
-                elif order.status in ["authorized", "double_authorized"]:
-                    status_color = "green"
-                    
-                test_info = {
-                    "name": order.test.test_name,
-                    "color": status_color}
-                
-                if order.package_name:
-                    if order.package_name not in packages:
-                        packages[order.package_name] = []
-                    packages[order.package_name].append(test_info)
-                else:
-                    standalones.append(test_info)
-            
-            for pkg_name, pkg_tests in packages.items():
-                tests_data.append({
-                    "is_package": True,
-                    "package_name": pkg_name,
-                    "tests": pkg_tests
-                })
-                
-            for t in standalones:
-                tests_data.append({
-                    "is_package": False,
-                    "test": t
-                })
+        for pkg_name, pkg_tests in packages.items():
+            tests_data.append({
+                "is_package": True,
+                "package_name": pkg_name,
+                "tests": pkg_tests
+            })
+        for t in standalones:
+            tests_data.append({
+                "is_package": False,
+                "test": t
+            })
                 
         patient_data.append({
             "patient": patient,
-            "registration_date": visit_date,
+            "registration_date": visit.visit_date,
             "tests": tests_data
         })
     
@@ -150,7 +163,10 @@ def result_entry_patients_page(request: Request, session: Session = Depends(get_
             "patient_id": patient_id_q,
             "test": test_q,
             "status": status_q,
-        }
+        },
+        "page": page,
+        "total_pages": total_pages,
+        "total_count": total_count,
     })
 
 # ===========================

@@ -32,6 +32,8 @@ def load_config():
         'server_url': 'http://localhost:8000',
         'barcode_printer': '',
         'receipt_printer': '',
+        'barcode_orientation': 'auto',
+        'receipt_orientation': 'auto',
         'port': DEFAULT_PORT
     }
     try:
@@ -63,7 +65,7 @@ class SettingsDialog(tk.Toplevel):
         self.result = None
         
         # Window setup
-        self.geometry("420x480")
+        self.geometry("420x560")
         self.resizable(False, False)
         self.configure(bg='white')
         self.transient(parent)
@@ -95,31 +97,43 @@ class SettingsDialog(tk.Toplevel):
                                font=('Arial', 12), width=30, bd=2, relief=tk.GROOVE)
         server_entry.pack(pady=(0, 15))
         
-        # Barcode Printer
+        # Barcode Printer & Orientation
         tk.Label(main_frame, text="Barcode Printer", font=('Arial', 14, 'bold'),
                  bg='white', fg='#2c3e50').pack(pady=(10, 5))
         self.barcode_var = tk.StringVar(value=config.get('barcode_printer', ''))
         if available_printers:
             barcode_combo = ttk.Combobox(main_frame, textvariable=self.barcode_var,
                                         values=available_printers, font=('Arial', 12), width=28)
-            barcode_combo.pack(pady=(0, 15))
+            barcode_combo.pack(pady=(0, 5))
         else:
             barcode_entry = tk.Entry(main_frame, textvariable=self.barcode_var,
-                                    font=('Arial', 12), width=30, bd=2, relief=tk.GROOVE)
-            barcode_entry.pack(pady=(0, 15))
+                                     font=('Arial', 12), width=30, bd=2, relief=tk.GROOVE)
+            barcode_entry.pack(pady=(0, 5))
+            
+        orient_frame1 = tk.Frame(main_frame, bg='white')
+        orient_frame1.pack(pady=(0, 15))
+        tk.Label(orient_frame1, text="Orientation:", bg='white', font=('Arial', 10)).pack(side=tk.LEFT)
+        self.b_orient_var = tk.StringVar(value=config.get('barcode_orientation', 'auto'))
+        ttk.Combobox(orient_frame1, textvariable=self.b_orient_var, values=['auto', 'portrait', 'landscape'], width=10, state="readonly").pack(side=tk.LEFT, padx=5)
         
-        # Receipt Printer
+        # Receipt Printer & Orientation
         tk.Label(main_frame, text="Receipt Printer", font=('Arial', 14, 'bold'),
                  bg='white', fg='#2c3e50').pack(pady=(10, 5))
         self.receipt_var = tk.StringVar(value=config.get('receipt_printer', ''))
         if available_printers:
             receipt_combo = ttk.Combobox(main_frame, textvariable=self.receipt_var,
                                         values=available_printers, font=('Arial', 12), width=28)
-            receipt_combo.pack(pady=(0, 20))
+            receipt_combo.pack(pady=(0, 5))
         else:
             receipt_entry = tk.Entry(main_frame, textvariable=self.receipt_var,
-                                    font=('Arial', 12), width=30, bd=2, relief=tk.GROOVE)
-            receipt_entry.pack(pady=(0, 20))
+                                     font=('Arial', 12), width=30, bd=2, relief=tk.GROOVE)
+            receipt_entry.pack(pady=(0, 5))
+
+        orient_frame2 = tk.Frame(main_frame, bg='white')
+        orient_frame2.pack(pady=(0, 20))
+        tk.Label(orient_frame2, text="Orientation:", bg='white', font=('Arial', 10)).pack(side=tk.LEFT)
+        self.r_orient_var = tk.StringVar(value=config.get('receipt_orientation', 'auto'))
+        ttk.Combobox(orient_frame2, textvariable=self.r_orient_var, values=['auto', 'portrait', 'landscape'], width=10, state="readonly").pack(side=tk.LEFT, padx=5)
         
         # Save Button
         save_btn = tk.Button(main_frame, text="Save", font=('Arial', 14, 'bold'),
@@ -132,7 +146,9 @@ class SettingsDialog(tk.Toplevel):
         self.result = {
             'server_url': self.server_var.get().strip(),
             'barcode_printer': self.barcode_var.get().strip(),
-            'receipt_printer': self.receipt_var.get().strip()
+            'receipt_printer': self.receipt_var.get().strip(),
+            'barcode_orientation': self.b_orient_var.get(),
+            'receipt_orientation': self.r_orient_var.get()
         }
         self.destroy()
 

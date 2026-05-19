@@ -1,6 +1,6 @@
 {
   "server_url": "http://localhost:8000",
-  "barcode_printer": "",
-  "receipt_printer": "",
+  "barcode_printer": "HiLabel_4inch",
+  "receipt_printer": "POS-80-Series",
   "port": 13501
 }

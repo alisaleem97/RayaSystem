@@ -7,9 +7,10 @@
     <title>PrintBarcode - {{ patient.patient_id if patient else 'NexLab' }}</title>
     <style>
         /* ✅ Dynamic @page size from saved template */
+        /* When auto=1 (NexPrint Edge Headless), force zero margin to match Chrome's "None" setting */
         @page {
             size: {{ template_data.paper_width if template_data else '4in' }} {{ template_data.paper_height if template_data else '2in' }};
-            margin: {{ template_data.margin if template_data else '0.1in' }};
+            margin: {% if request.query_params.get('auto') == '1' %}0{% else %}{{ template_data.margin if template_data else '0.1in' }}{% endif %};
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {

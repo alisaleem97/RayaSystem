@@ -4,6 +4,7 @@
 from fastapi import APIRouter, Depends, Request, Form, status
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlmodel import Session, select
+from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from datetime import datetime
 from typing import Optional
@@ -313,6 +314,35 @@ async def create_patient_registration(
         # Single atomic commit — all or nothing
         session.commit()
         
+        # --- Send Welcome WhatsApp Message (background thread — non-blocking) ---
+        try:
+            lab_info = session.exec(select(LabInfo)).first()
+            if lab_info and lab_info.welcome_message and phone_number:
+                from fastapi.encoders import jsonable_encoder
+                import threading
+                
+                to_phone = phone_number.strip().replace(" ", "")
+                country_code = getattr(lab_info, 'phone_country_code', '964') or '964'
+                if not to_phone.startswith('+'):
+                    to_phone = "+" + (to_phone if to_phone.startswith(country_code) else country_code + to_phone.lstrip('0'))
+                
+                lab_info_data = jsonable_encoder(lab_info)
+                welcome_msg = lab_info.welcome_message
+                
+                def _send_welcome():
+                    try:
+                        from routes.whatsapp_utils import send_wati_text
+                        send_wati_text(to_phone, welcome_msg, lab_info_data)
+                    except Exception as e:
+                        import logging
+                        logging.getLogger("nexlab.whatsapp").warning(f"Welcome message failed: {e}")
+                
+                threading.Thread(target=_send_welcome, daemon=True).start()
+        except Exception as wa_err:
+            import logging
+            logging.getLogger("nexlab.whatsapp").warning(f"Welcome message setup failed: {wa_err}")
+        # -------------------------------------------------------
+        
         return RedirectResponse(
             url=f"/patient-registration?success=Patient registered successfully!&patient_id={new_patient.patient_id}",
             status_code=status.HTTP_303_SEE_OTHER
@@ -330,6 +360,8 @@ async def create_patient_registration(
 # ===========================
 # PATIENT MANAGEMENT ROUTES
 # ===========================
+PAGE_SIZE = 50  # Patients per page
+
 @router.get("/patients", response_class=HTMLResponse)
 def patients_page(request: Request, session: Session = Depends(get_session)):
     if not require_permission(request, session, "patients"):
@@ -340,19 +372,29 @@ def patients_page(request: Request, session: Session = Depends(get_session)):
     to_date = request.query_params.get("to_date", today_str)
     test_filter = request.query_params.get("test_filter", "")
     
+    # Pagination
+    try:
+        page = max(1, int(request.query_params.get("page", 1)))
+    except (ValueError, TypeError):
+        page = 1
+    
     query = select(Patient).where(Patient.is_active == True)
+    count_query = select(func.count(Patient.id)).where(Patient.is_active == True)
     
     if search:
-        query = query.where(
+        search_filter = (
             (Patient.full_name.ilike(f"%{search}%")) |
             (Patient.patient_id.ilike(f"%{search}%")) |
             (Patient.phone_number.ilike(f"%{search}%"))
         )
+        query = query.where(search_filter)
+        count_query = count_query.where(search_filter)
     
     if from_date:
         try:
             fd = datetime.strptime(from_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0)
             query = query.where(Patient.created_at >= fd)
+            count_query = count_query.where(Patient.created_at >= fd)
         except Exception:
             pass
             
@@ -360,16 +402,24 @@ def patients_page(request: Request, session: Session = Depends(get_session)):
         try:
             td = datetime.strptime(to_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
             query = query.where(Patient.created_at <= td)
+            count_query = count_query.where(Patient.created_at <= td)
         except Exception:
             pass
             
     if test_filter:
         try:
             query = query.join(Order, Patient.id == Order.patient_id).where(Order.test_id == int(test_filter)).distinct()
+            count_query = count_query.join(Order, Patient.id == Order.patient_id).where(Order.test_id == int(test_filter))
         except Exception:
             pass
     
-    patients = session.exec(query.order_by(Patient.created_at.desc())).all()
+    # Get total count for pagination
+    total_count = session.exec(count_query).one()
+    total_pages = max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = min(page, total_pages)
+    offset = (page - 1) * PAGE_SIZE
+    
+    patients = session.exec(query.order_by(Patient.created_at.desc()).offset(offset).limit(PAGE_SIZE)).all()
     tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
     
     success = request.query_params.get("success")
@@ -384,7 +434,10 @@ def patients_page(request: Request, session: Session = Depends(get_session)):
         "to_date": to_date,
         "test_filter": test_filter,
         "message_success": success,
-        "message_error": error
+        "message_error": error,
+        "page": page,
+        "total_pages": total_pages,
+        "total_count": total_count,
     })
 @router.get("/api/patients/{patient_id}/has-resulted-tests")
 def check_has_resulted_tests(patient_id: str, session: Session = Depends(get_session)):

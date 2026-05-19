@@ -74,6 +74,83 @@ def send_wati_pdf(phone_number, pdf_bytes, filename, caption, lab_info_dict):
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
 
+def send_wati_text(phone_number, message_text, lab_info_dict, template_name=None):
+    """Sends a WhatsApp message via Wati API.
+    Tries session message first. If contact is new (hasn't messaged first),
+    automatically falls back to template message."""
+    try:
+        wati_endpoint = lab_info_dict.get("whatsapp_api", "") if lab_info_dict else ""
+        token = lab_info_dict.get("whatsapp_token", "") if lab_info_dict else ""
+        
+        if token.lower().startswith("bearer "):
+            token = token[7:].strip()
+            
+        if not wati_endpoint or not token:
+            return {"status": "error", "message": "WhatsApp API credentials are not configured."}
+
+        wati_endpoint = wati_endpoint.strip()
+        if not wati_endpoint.startswith("http"):
+            wati_endpoint = f"https://{wati_endpoint}"
+        if "/api/v1" in wati_endpoint:
+            wati_endpoint = wati_endpoint.split("/api/v1")[0]
+        base_url = wati_endpoint.rstrip("/")
+        
+        clean_phone = phone_number.replace("+", "")
+        headers = {"Authorization": f"Bearer {token}"}
+        
+        # --- Step 1: Try session message (works if contact messaged before) ---
+        url = f"{base_url}/api/v1/sendSessionMessage/{clean_phone}"
+        response = requests.post(url, headers=headers, params={"messageText": message_text})
+        
+        print("WATI SESSION RESPONSE:", response.status_code, response.text[:200])
+        
+        res_json = {}
+        try:
+            res_json = response.json()
+        except Exception:
+            res_json = {"status": "success" if response.status_code in [200, 201] else "error"}
+        
+        # Check if session message succeeded
+        is_invalid_contact = "invalid contact" in str(res_json.get("info", "")).lower()
+        session_ok = response.status_code in [200, 201] and res_json.get("result") != False and not is_invalid_contact
+        
+        if session_ok:
+            return res_json
+        
+        # --- Step 2: Fallback to template message (works for new contacts) ---
+        if not template_name:
+            template_name = lab_info_dict.get("welcome_template_name", "") if lab_info_dict else ""
+        
+        if not template_name:
+            print("⚠️ No template name configured — cannot send to new contact")
+            return {"status": "error", "message": "Contact hasn't messaged first and no Wati template name is configured."}
+        
+        print(f"📨 Falling back to template message: {template_name}")
+        template_url = f"{base_url}/api/v1/sendTemplateMessage/{clean_phone}"
+        template_payload = {
+            "template_name": template_name,
+            "broadcast_name": "welcome_registration"
+        }
+        
+        tmpl_response = requests.post(template_url, headers={**headers, "Content-Type": "application/json"}, json=template_payload)
+        
+        print("WATI TEMPLATE RESPONSE:", tmpl_response.status_code, tmpl_response.text[:200])
+        
+        tmpl_json = {}
+        try:
+            tmpl_json = tmpl_response.json()
+        except Exception:
+            tmpl_json = {"status": "success" if tmpl_response.status_code in [200, 201] else "error", "message": tmpl_response.text}
+            
+        if tmpl_response.status_code not in [200, 201] or str(tmpl_json.get("result", "")).lower() == "error":
+            tmpl_json["status"] = "error"
+            
+        return tmpl_json
+    except Exception as e:
+        print(f"WhatsApp text sending failed: {e}")
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
+
 def generate_report_pdf(patient, visit, results, lab_info, template_data, barcode_data=None):
     """
     Optimized Playwright PDF generator for maximum speed.

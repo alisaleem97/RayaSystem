@@ -9,7 +9,8 @@ from datetime import datetime
 from database import get_session
 from models import (
     Patient, PatientVisit, Order, LabInfo, PrintTemplate, 
-    Result, ResultDetail, Parameter, TestRange, TestDefinition, TestParameter
+    Result, ResultDetail, Parameter, TestRange, TestDefinition, TestParameter,
+    TestResultType
 )
 from fastapi.encoders import jsonable_encoder
 from fastapi import File, UploadFile
@@ -51,12 +52,15 @@ def print_results_page(request: Request, session: Session = Depends(get_session)
     
     # Default status to double_authorized for printing
     default_status = request.query_params.get("status", "double_authorized")
-    patient_data, filters = build_patient_visit_data(session, request, status_filter=default_status)
+    patient_data, filters, page, total_pages, total_count = build_patient_visit_data(session, request, status_filter=default_status)
     
     return templates.TemplateResponse("print_results.html", {
         "request": request,
         "patient_data": patient_data,
-        "filters": filters
+        "filters": filters,
+        "page": page,
+        "total_pages": total_pages,
+        "total_count": total_count,
     })
 
 # ===========================
@@ -246,7 +250,17 @@ def get_double_authorized_tests(patient_id: str, request: Request, session: Sess
             
         orders = session.exec(query).all()
 
-        
+        test_ids = [order.test_id for order in orders if order.test_id]
+        all_result_types = session.exec(
+            select(TestResultType).where(TestResultType.test_id.in_(test_ids), TestResultType.is_active == True)
+        ).all()
+        result_type_map = {}
+        for rt in all_result_types:
+            result_type_map[(rt.test_id, rt.parameter_id)] = rt.result_type
+
+        def get_result_type(test_id, param_id=None):
+            return result_type_map.get((test_id, param_id), "number")
+            
         grid_rows = []
         for order in orders:
             test = order.test
@@ -295,6 +309,7 @@ def get_double_authorized_tests(patient_id: str, request: Request, session: Sess
                         "type": "child",
                         "parameter_name": param.parameter_name,
                         "result_value": detail.result_value if detail else "",
+                        "result_type": get_result_type(test.id, param.id),
                         "range": rng.text_range if rng and rng.range_type == "text" else (f"{rng.normal_from} - {rng.normal_to}" if rng and rng.normal_from is not None else ""),
                         "unit": rng.unit if rng else "",
                         "flag": detail.flag if detail else "",
@@ -308,6 +323,7 @@ def get_double_authorized_tests(patient_id: str, request: Request, session: Sess
                     "test_name": test.test_name,
                     "order_id": order.id,
                     "result_value": res.result_value if res else "",
+                    "result_type": get_result_type(test.id, None),
                     "range": rng.text_range if rng and rng.range_type == "text" else (f"{rng.normal_from} - {rng.normal_to}" if rng and rng.normal_from is not None else ""),
                     "unit": rng.unit if rng else "",
                     "flag": res.flag if res else "",
@@ -359,6 +375,17 @@ def get_all_visit_tests(visit_id: str, request: Request, session: Session = Depe
                 selectinload(Order.result).selectinload(Result.details).selectinload(ResultDetail.parameter)
             ).where(Order.visit_id == visit.id, Order.status != "no_sample")
         ).all()
+
+        test_ids = [order.test_id for order in orders if order.test_id]
+        all_result_types = session.exec(
+            select(TestResultType).where(TestResultType.test_id.in_(test_ids), TestResultType.is_active == True)
+        ).all()
+        result_type_map = {}
+        for rt in all_result_types:
+            result_type_map[(rt.test_id, rt.parameter_id)] = rt.result_type
+
+        def get_result_type(test_id, param_id=None):
+            return result_type_map.get((test_id, param_id), "number")
 
         grid_rows = []
         for order in orders:
@@ -420,6 +447,7 @@ def get_all_visit_tests(visit_id: str, request: Request, session: Session = Depe
                         "type": "child",
                         "parameter_name": param.parameter_name,
                         "result_value": detail.result_value if detail else "",
+                        "result_type": get_result_type(test.id, param.id),
                         "range": rng.text_range if rng and rng.range_type == "text" else (f"{rng.normal_from} - {rng.normal_to}" if rng and rng.normal_from is not None else ""),
                         "range_type": rng.range_type if rng else None,
                         "unit": rng.unit if rng else "",
@@ -437,6 +465,7 @@ def get_all_visit_tests(visit_id: str, request: Request, session: Session = Depe
                     "status": order.status,
                     "display_status": display_status,
                     "result_value": res.result_value if res else "",
+                    "result_type": get_result_type(test.id, None),
                     "range": rng.text_range if rng and rng.range_type == "text" else (f"{rng.normal_from} - {rng.normal_to}" if rng and rng.normal_from is not None else ""),
                     "range_type": rng.range_type if rng else None,
                     "unit": rng.unit if rng else "",
@@ -560,14 +589,22 @@ def api_print_barcode_pdf(patient_id: str, request: Request, session: Session = 
     barcode_template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "barcode")).first()
     if not barcode_template:
         raise HTTPException(status_code=404, detail="No barcode template configured in the database")
+
+    # Load visit for visit_id and visit_date fields
+    visit = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id).order_by(PatientVisit.id.desc())).first()
+    v_id = visit.visit_id if visit else ''
+    v_date = visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit and visit.visit_date else ''
         
     try:
-        pdf_buffer = generate_native_barcode_pdf(patient, tests_by_sample_type, barcode_template)
+        pdf_buffer = generate_native_barcode_pdf(patient, tests_by_sample_type, barcode_template, visit_id=v_id, visit_date=v_date)
         response = StreamingResponse(pdf_buffer, media_type="application/pdf")
         response.headers["Content-Disposition"] = f"attachment; filename=barcode_{patient_id}.pdf"
         return response
     except Exception as e:
-        logging.error(f"Failed to generate native barcode PDF: {e}")
+        import traceback
+        logging.error(f"Failed to generate native barcode PDF: {e}\n{traceback.format_exc()}")
+        print(f"❌ Barcode PDF Error for {patient_id}: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/print-receipt/{patient_id}", response_class=HTMLResponse)
@@ -629,6 +666,27 @@ def print_receipt(patient_id: str, request: Request, session: Session = Depends(
     total_amount = sum([float(o["final_price"]) if o["final_price"] else 0 for o in orders_data])
     total_after_tax = total_amount - discount_amount + tax_amount
     
+    # --- Compute page_size as a clean CSS string (MUST be done in Python, not Jinja inside CSS!) ---
+    def normalize_dim(val, default_unit='mm'):
+        """Ensure a CSS dimension string always has a unit (e.g., '210' -> '210mm')."""
+        if not val or str(val).strip() in ('auto', ''):
+            return None
+        val = str(val).strip()
+        import re
+        if re.match(r'^[\d\.]+$', val):  # pure number, no unit
+            return val + default_unit
+        return val
+
+    if template_data:
+        pw = normalize_dim(template_data.get("paper_width")) or "80mm"
+        ph = normalize_dim(template_data.get("paper_height"))
+        if ph:
+            page_size = f"{pw} {ph}"
+        else:
+            page_size = f"{pw} 210mm"
+    else:
+        page_size = "80mm 210mm"
+
     return templates.TemplateResponse("print_receipt_page.html", {
         "request": request,
         "patient": patient,
@@ -642,5 +700,6 @@ def print_receipt(patient_id: str, request: Request, session: Session = Depends(
         "tax_amount": tax_amount,
         "total_after_tax": total_after_tax,
         "paid_amount": received_amount,
-        "remain_amount": remaining_amount
+        "remain_amount": remaining_amount,
+        "page_size": page_size,
     })

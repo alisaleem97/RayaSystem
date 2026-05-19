@@ -309,47 +309,53 @@
 
             cellStyle += ` white-space: pre-wrap; word-break: break-word; vertical-align: top;`;
 
-            let html = `<table style="${tableStyle}">${colGroupHtml}`;
-            html += `<thead style="background:${el.headerBg || '#f8fafc'}; color:${el.headerColor || '#1e293b'}"><tr>`;
-
+            let html = '';
             const headers = { test: 'Test Name', result: 'Result', flag: 'Flag', range: 'Ref. Range', unit: 'Unit' };
-            cols.forEach(c => {
-                html += `<th style="${cellStyle} font-size: ${el.headerFontSize || 12}px; font-weight: bold; text-align: left;">
-                            ${headers[c.toLowerCase()] || c.toUpperCase()}
-                         </th>`;
-            });
-            html += `</tr></thead><tbody style="color:${el.rowTextColor || '#334155'}">`;
 
             if (groupResults.length === 0) {
+                html += `<table style="${tableStyle}">${colGroupHtml}`;
+                html += `<thead style="background:${el.headerBg || '#f8fafc'}; color:${el.headerColor || '#1e293b'}"><tr>`;
+                cols.forEach(c => {
+                    html += `<th style="${cellStyle} font-size: ${el.headerFontSize || 12}px; font-weight: bold; text-align: left;">
+                                ${headers[c.toLowerCase()] || c.toUpperCase()}
+                             </th>`;
+                });
+                html += `</tr></thead><tbody style="color:${el.rowTextColor || '#334155'}">`;
                 html += `<tr><td colspan="${cols.length}" style="text-align:center; ${cellStyle}">No results found</td></tr>`;
                 html += `</tbody></table>`;
             } else {
                 let pendingRemark = null;
-                let tableOpen = true;
+                let tableOpen = false;
+
+                const reopenTable = () => {
+                    if (!tableOpen) {
+                        html += `<table style="${tableStyle}">${colGroupHtml}`;
+                        html += `<thead style="background:${el.headerBg || '#f8fafc'}; color:${el.headerColor || '#1e293b'}"><tr>`;
+                        cols.forEach(c => {
+                            html += `<th style="${cellStyle} font-size: ${el.headerFontSize || 12}px; font-weight: bold; text-align: left;">
+                                        ${headers[c.toLowerCase()] || c.toUpperCase()}
+                                     </th>`;
+                        });
+                        html += `</tr></thead><tbody style="color:${el.rowTextColor || '#334155'}">`;
+                        tableOpen = true;
+                    }
+                };
+
+                const closeTable = () => {
+                    if (tableOpen) {
+                        html += `</tbody></table>`;
+                        tableOpen = false;
+                    }
+                };
 
                 const flushRemark = (isEnd = false) => {
                     if (pendingRemark) {
-                        if (tableOpen) {
-                            html += `</tbody></table>`;
-                            tableOpen = false;
-                        }
+                        closeTable();
                         
                         // Add the remark DIV with darkred, centered, bold styles in a full width box
                         html += `<div style="width: 100%; border: ${bWidth}px solid ${el.borderColor || '#e2e8f0'}; padding: 10px; margin-top: 5px; margin-bottom: 5px; text-align: center; color: darkred; font-weight: bold; background: #fff; box-sizing: border-box;">
                             ${pendingRemark}
                         </div>`;
-                        
-                        if (!isEnd) {
-                            html += `<table style="${tableStyle}">${colGroupHtml}`;
-                            html += `<thead style="background:${el.headerBg || '#f8fafc'}; color:${el.headerColor || '#1e293b'}"><tr>`;
-                            cols.forEach(c => {
-                                html += `<th style="${cellStyle} font-size: ${el.headerFontSize || 12}px; font-weight: bold; text-align: left;">
-                                            ${headers[c.toLowerCase()] || c.toUpperCase()}
-                                         </th>`;
-                            });
-                            html += `</tr></thead><tbody style="color:${el.rowTextColor || '#334155'}">`;
-                            tableOpen = true;
-                        }
                         
                         pendingRemark = null;
                     }
@@ -363,6 +369,20 @@
                             pendingRemark = row.note;
                         }
                     }
+
+                    if (row.result_type === 'paragraph' && row.type !== 'parent') {
+                        closeTable();
+                        const title = row.type === 'child' ? row.parameter_name : row.test_name;
+                        html += `<div style="text-align: left; font-weight: bold; margin-top: 15px; margin-bottom: 5px; font-size: ${el.headerFontSize || 14}px; color: ${el.headerColor || '#1e293b'};">
+                            ${title}
+                        </div>`;
+                        html += `<div style="margin-bottom: 15px; text-align: left; box-sizing: border-box; background: transparent; color: ${el.rowTextColor || '#334155'};">
+                            ${row.result_value || ''}
+                        </div>`;
+                        return; // skip the normal table row rendering
+                    }
+
+                    reopenTable();
 
                     let trBg = (el.zebraStripes && index % 2 !== 0) ? `background-color: ${el.zebraColor || '#f8fafc'};` : '';
                     html += `<tr style="${trBg}">`;
@@ -394,9 +414,7 @@
                 });
 
                 flushRemark(true);
-                if (tableOpen) {
-                    html += `</tbody></table>`;
-                }
+                closeTable();
             }
             return html;
         }

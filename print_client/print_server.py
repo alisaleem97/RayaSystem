@@ -79,6 +79,8 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
                 server_url = self.app.config.get('server_url', 'http://localhost:8000')
                 barcode_printer = self.app.config.get('barcode_printer', '')
                 receipt_printer = self.app.config.get('receipt_printer', '')
+                barcode_orient = self.app.config.get('barcode_orientation', 'auto')
+                receipt_orient = self.app.config.get('receipt_orientation', 'auto')
                 
                 if not barcode_printer and not receipt_printer:
                     self._send_error(400, 'No printers configured. Please set printer names in NexPrint.')
@@ -99,7 +101,9 @@ class PrintRequestHandler(BaseHTTPRequestHandler):
                             barcode_width=barcode_width,
                             barcode_height=barcode_height,
                             receipt_width=receipt_width,
-                            receipt_height=receipt_height
+                            receipt_height=receipt_height,
+                            barcode_orientation=barcode_orient,
+                            receipt_orientation=receipt_orient
                         )
                         
                         if results['barcode_success']:

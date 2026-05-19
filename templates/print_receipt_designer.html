@@ -699,15 +699,22 @@ renderElement(el);
 }
 
 async function saveDesign() {
-const design = {
-template_name: 'receipt',
-template_type: 'receipt',
-paper_width: document.getElementById('paperWidth').value,
-paper_height: document.getElementById('paperHeight').value,
-margin: document.getElementById('margin').value,
-currency: document.getElementById('currency').value || '$',
-elements: JSON.stringify(designElements)
-};
+    function normalizeDim(val) {
+        if (!val) return val;
+        val = val.trim();
+        if (val === 'auto') return val;
+        if (/^[\d\.]+$/.test(val)) return val + 'mm'; // add unit if missing
+        return val;
+    }
+    const design = {
+        template_name: 'receipt',
+        template_type: 'receipt',
+        paper_width: normalizeDim(document.getElementById('paperWidth').value),
+        paper_height: normalizeDim(document.getElementById('paperHeight').value),
+        margin: document.getElementById('margin').value,
+        currency: document.getElementById('currency').value || '$',
+        elements: JSON.stringify(designElements)
+    };
 try {
 const response = await fetch('/api/print-template/save', {
 method: 'POST',

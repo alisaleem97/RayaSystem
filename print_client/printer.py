@@ -10,7 +10,7 @@ import sys
 import tempfile
 import time
 import winreg
-
+import PyPDF2 # Forced global import for PyInstaller
 
 def find_edge_executable():
     """Find Microsoft Edge executable on the system."""
@@ -92,6 +92,11 @@ def render_html_to_pdf(url, output_pdf, edge_path=None):
         '--headless',
         '--disable-gpu',
         '--no-sandbox',
+        '--disable-dev-shm-usage',
+        # These two flags force Edge to fully run all JS and paint all canvases before capturing the PDF.
+        # Without them, bwip-js canvas barcodes are not yet rendered when the PDF snapshot is taken.
+        '--run-all-compositor-stages-before-draw',
+        '--virtual-time-budget=5000',
         f'--print-to-pdf={output_pdf}',
         '--no-pdf-header-footer',
         f'--user-data-dir={temp_profile}',
@@ -107,13 +112,14 @@ def render_html_to_pdf(url, output_pdf, edge_path=None):
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
         )
         
-        # Wait a moment for file to be fully written
-        time.sleep(0.5)
+        # Wait for file to be fully written (up to 5s)
+        for _ in range(10):
+            if os.path.exists(output_pdf) and os.path.getsize(output_pdf) > 0:
+                time.sleep(0.3)
+                return True
+            time.sleep(0.5)
         
-        if os.path.exists(output_pdf) and os.path.getsize(output_pdf) > 0:
-            return True
-        else:
-            raise RuntimeError(f"PDF not generated. Edge stderr: {result.stderr}")
+        raise RuntimeError(f"PDF not generated. Edge stderr: {result.stderr[-200:] if result.stderr else 'none'}")
     except subprocess.TimeoutExpired:
         raise RuntimeError("PDF generation timed out (30s)")
     finally:
@@ -125,7 +131,7 @@ def render_html_to_pdf(url, output_pdf, edge_path=None):
             pass
 
 
-def print_pdf_to_printer(pdf_path, printer_name, sumatra_path=None):
+def print_pdf_to_printer(pdf_path, printer_name, sumatra_path=None, use_fit=False, orientation=None):
     """Print a PDF file to a specific printer using SumatraPDF."""
     if not sumatra_path:
         sumatra_path = find_sumatra()
@@ -137,11 +143,17 @@ def print_pdf_to_printer(pdf_path, printer_name, sumatra_path=None):
             "and place SumatraPDF.exe in the NexPrint folder."
         )
     
+    scale_setting = 'fit' if use_fit else 'noscale'
+    if orientation in ['portrait', 'landscape']:
+        scale_setting += f',{orientation}'
+    # Label printers (like 4x2) often have width > height but are treated as portrait by the driver.
+    # Forcing ',landscape' causes SumatraPDF to rotate them 90 degrees, breaking the barcode layout!
+    
     cmd = [
         sumatra_path,
         '-print-to', printer_name,
         '-silent',
-        '-print-settings', 'noscale',
+        '-print-settings', scale_setting,
         pdf_path
     ]
     
@@ -158,7 +170,67 @@ def print_pdf_to_printer(pdf_path, printer_name, sumatra_path=None):
         raise RuntimeError("Print command timed out (30s)")
 
 
-def print_job(server_url, patient_id, barcode_printer, receipt_printer, edge_path=None, sumatra_path=None):
+def parse_dim_to_pt(dim_str):
+    """Convert a dimension string (e.g., '4in', '50mm', '80px') to PDF points (1/72 inch)."""
+    if not dim_str or dim_str.lower() == 'auto': return None
+    dim_str = str(dim_str).strip().lower()
+    try:
+        import re
+        match = re.match(r'^([\d\.]+)\s*([a-z]*)$', dim_str)
+        if not match: return None
+        val, unit = float(match.group(1)), match.group(2)
+        
+        if unit == 'mm': return val * 2.83465
+        elif unit == 'cm': return val * 28.3465
+        elif unit == 'in': return val * 72.0
+        elif unit == 'px': return val * 0.75
+        else: return val # assume points
+    except:
+        return None
+
+def crop_pdf(pdf_path, width_str, height_str):
+    """Crop the PDF to the given dimensions starting from the top left corner."""
+    width_pt = parse_dim_to_pt(width_str)
+    height_pt = parse_dim_to_pt(height_str)
+    if not width_pt and not height_pt:
+        return
+        
+    try:
+        import PyPDF2
+        with open(pdf_path, 'rb') as f:
+            reader = PyPDF2.PdfReader(f)
+            if len(reader.pages) == 0: return
+            page = reader.pages[0]
+            
+            orig_height = float(page.mediabox.height)
+            orig_width = float(page.mediabox.width)
+            
+            w = width_pt if width_pt else orig_width
+            h = height_pt if height_pt else orig_height
+            
+            # Physically shift the PDF contents down by (orig_height - bounding box height)
+            # This perfectly zeroes the origin to (0,0), exactly like Native PDFs do,
+            # preventing label printers from getting confused by offset CropBoxes.
+            from PyPDF2 import Transformation
+            page.add_transformation(Transformation().translate(tx=0, ty=-(orig_height - h)))
+            
+            page.mediabox.lower_left = (0, 0)
+            page.mediabox.upper_right = (w, h)
+            
+            page.cropbox.lower_left = (0, 0)
+            page.cropbox.upper_right = (w, h)
+            
+            writer = PyPDF2.PdfWriter()
+            writer.add_page(page)
+            
+        with open(pdf_path, 'wb') as f:
+            writer.write(f)
+    except Exception as e:
+        raise RuntimeError(f"Failed to crop PDF: {e}")
+
+
+
+def print_job(server_url, patient_id, barcode_printer, receipt_printer, print_token='', barcode_width='', barcode_height='', receipt_width='', receipt_height='', barcode_orientation='auto', receipt_orientation='auto', edge_path=None, sumatra_path=None):
     """
     Complete print job: render barcode + receipt to PDF, then print to configured printers.
     Returns dict with results.
@@ -175,24 +247,41 @@ def print_job(server_url, patient_id, barcode_printer, receipt_printer, edge_pat
     try:
         # --- Print Barcode ---
         if barcode_printer:
-            barcode_url = f"{server_url.rstrip('/')}/print-barcode/{patient_id}"
+            # We append print_token for authentication context if needed
+            barcode_url = f"{server_url.rstrip('/')}/print-barcode/{patient_id}?print_token={print_token}&auto=1"
             barcode_pdf = os.path.join(temp_dir, 'barcode.pdf')
             
             try:
+                # Use Edge Headless to render the HTML. We've added flags to wait for JS 
+                # (bwip-js) so the barcode will now render properly before capture.
                 render_html_to_pdf(barcode_url, barcode_pdf, edge_path)
-                print_pdf_to_printer(barcode_pdf, barcode_printer, sumatra_path)
+                
+                # Crop the PDF to the exact label dimensions (same as receipt path).
+                # Edge Headless may ignore @page size and produce a letter-sized PDF.
+                if barcode_width or barcode_height:
+                    crop_pdf(barcode_pdf, barcode_width, barcode_height)
+                
+                # Check orientation config
+                orient = barcode_orientation if barcode_orientation in ['portrait', 'landscape'] else None
+                print_pdf_to_printer(barcode_pdf, barcode_printer, sumatra_path, use_fit=False, orientation=orient)
                 results['barcode_success'] = True
             except Exception as e:
                 results['barcode_error'] = str(e)
+
         
         # --- Print Receipt ---
         if receipt_printer:
-            receipt_url = f"{server_url.rstrip('/')}/print-receipt/{patient_id}"
+            receipt_url = f"{server_url.rstrip('/')}/print-receipt/{patient_id}?print_token={print_token}"
             receipt_pdf = os.path.join(temp_dir, 'receipt.pdf')
             
             try:
                 render_html_to_pdf(receipt_url, receipt_pdf, edge_path)
-                print_pdf_to_printer(receipt_pdf, receipt_printer, sumatra_path)
+                if not receipt_width: receipt_width = '80mm'
+                # Do NOT force 210mm height here; let it flow naturally or use default to prevent shifting bugs
+                crop_pdf(receipt_pdf, receipt_width, receipt_height)
+                
+                orient = receipt_orientation if receipt_orientation in ['portrait', 'landscape'] else None
+                print_pdf_to_printer(receipt_pdf, receipt_printer, sumatra_path, use_fit=False, orientation=orient)
                 results['receipt_success'] = True
             except Exception as e:
                 results['receipt_error'] = str(e)

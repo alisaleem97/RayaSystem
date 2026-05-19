@@ -1,396 +1,91 @@
 # routes/helpers.py
-# Shared helpers, constants, and utilities used across all route modules.
+# ===================================================================
+# BACKWARD-COMPATIBLE BRIDGE — re-exports from new SoC locations.
+# All route files import from here; this file delegates to app/services/.
+# ===================================================================
 
-from fastapi.templating import Jinja2Templates
-from fastapi import Request
-from sqlmodel import Session, select
-from datetime import datetime, timezone
-from typing import Optional
-import json
-import base64
+# Config
+from app.config import SECRET_KEY, pwd_context
+
+# Auth
+from app.services.auth_service import get_current_user, login_required
+
+# Permissions
+from app.services.permission_service import require_permission
+
+# Audit
+from app.services.audit_service import (
+    log_audit_action, create_audit_log,
+    archive_deleted_record, log_activity_action
+)
+
+# Patient utilities
+from app.services.patient_service import (
+    calculate_age, age_to_days, model_to_dict,
+    build_patient_visit_data
+)
+
+# Barcode
+from app.services.barcode_service import generate_barcode_base64
+
+# Templates
+from app.routes.template_helpers import templates
+
+# Upload directory
 import os
-import shutil
-import tempfile
-import uuid
-
-from database import get_session, engine
-from models import User, AuditLog, DeletedRecord, ActivityLog
-
-# ===========================
-# CENTRALIZED CONFIG
-# ===========================
-_env_secret = os.environ.get("NEXLAB_SECRET_KEY")
-if _env_secret:
-    SECRET_KEY = _env_secret
-else:
-    SECRET_KEY = uuid.uuid4().hex + uuid.uuid4().hex
-    import logging
-    logging.getLogger("nexlab.security").warning(
-        "NEXLAB_SECRET_KEY not set! Using auto-generated key. Sessions will NOT persist across restarts. "
-        "Set NEXLAB_SECRET_KEY environment variable for production use."
-    )
-
-from passlib.context import CryptContext
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# ===========================
-# TIMEZONE-AWARE TIMESTAMP
-# ===========================
-def local_now() -> datetime:
-    """Return current local datetime. All timestamps in the system use local timezone.
-    Use this instead of datetime.now() for consistency and documentation."""
-    return datetime.now()
-
-# Setup templates with auto-injection of current_user + permissions
-_base_templates = Jinja2Templates(directory="templates")
-
-from models import UserPermission
-
-class AutoUserTemplates:
-    """Wrapper that auto-injects current_user, has_page(), has_button() into every template."""
-    def __init__(self, base):
-        self.base = base
-        self.env = base.env
-    
-    def TemplateResponse(self, name, context, **kwargs):
-        request = context.get("request")
-        
-        # Single session for all template-level lookups (user, perms, lab_name)
-        try:
-            with Session(engine) as sess:
-                # --- Resolve current_user ---
-                if "current_user" not in context and request:
-                    user = get_current_user(request, sess)
-                    if user:
-                        sess.expunge(user)
-                        context["current_user"] = user
-                    else:
-                        context["current_user"] = None
-                
-                if "current_user" not in context:
-                    context["current_user"] = None
-                
-                # --- Load permissions dict for the user ---
-                current_user = context.get("current_user")
-                is_admin = current_user and (current_user.role == "admin" or current_user.username == "admin")
-                
-                user_perms = {}
-                if current_user and not is_admin:
-                    perms = sess.exec(
-                        select(UserPermission).where(UserPermission.user_id == current_user.id)
-                    ).all()
-                    for p in perms:
-                        buttons = []
-                        if p.allowed_buttons:
-                            try:
-                                buttons = json.loads(p.allowed_buttons)
-                            except Exception:
-                                buttons = []
-                        user_perms[p.page_key] = buttons
-                
-                # --- Inject global lab_name ---
-                if "global_lab_name" not in context:
-                    from models import LabInfo
-                    lab_info_obj = sess.exec(select(LabInfo).limit(1)).first()
-                    context["global_lab_name"] = lab_info_obj.lab_name if lab_info_obj and lab_info_obj.lab_name else ""
-        except Exception:
-            if "current_user" not in context:
-                context["current_user"] = None
-            current_user = context.get("current_user")
-            is_admin = current_user and (current_user.role == "admin" or current_user.username == "admin")
-            user_perms = {}
-            if "global_lab_name" not in context:
-                context["global_lab_name"] = ""
-        
-        # --- Inject permission helpers ---
-        def has_page(page_key):
-            """Check if user has access to a page. Admin always True."""
-            if is_admin:
-                return True
-            return page_key in user_perms
-        
-        def has_button(page_key, button_key):
-            """Check if user has a specific button on a page. Admin always True."""
-            if is_admin:
-                return True
-            if page_key not in user_perms:
-                return False
-            return button_key in user_perms[page_key]
-        
-        context["has_page"] = has_page
-        context["has_button"] = has_button
-        context["is_admin"] = is_admin
-        context["user_perms"] = user_perms
-        
-        return self.base.TemplateResponse(name, context, **kwargs)
-
-templates = AutoUserTemplates(_base_templates)
-
-# Create uploads directory
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# ===========================
-# HELPER FUNCTIONS
-# ===========================
-def calculate_age(dob: datetime) -> int:
-    """Calculate age from date of birth"""
-    if dob is None:
-        return 0
-    today = datetime.today()
-    return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
-
-def age_to_days(age: int, unit: str) -> int:
-    """Convert age and unit to days for consistent comparison"""
-    if age is None or age == "": return 0
-    age = int(age)
-    u = (unit or "year").lower()
-    if "year" in u: return age * 365
-    elif "month" in u: return age * 30
-    elif "day" in u: return age
-    return age * 365
-
-def model_to_dict(model):
-    """Convert SQLModel object to dict"""
-    if model is None:
-        return None
-    data = {}
-    for column in model.__table__.columns.keys():
-        value = getattr(model, column)
-        if isinstance(value, datetime):
-            data[column] = value.isoformat()
-        else:
-            data[column] = value
-    return data
-
-def get_current_user(request, session: Session) -> Optional[User]:
-    """Get current logged-in user from session cookie"""
-    try:
-        from itsdangerous import URLSafeSerializer
-        from datetime import timedelta
-        s = URLSafeSerializer(SECRET_KEY)
-        cookie = request.cookies.get("nexlab_session")
-        if not cookie:
-            return None
-        data = s.loads(cookie)
-        user_id = data.get("user_id")
-        session_token = data.get("session_token")
-        
-        if user_id and session_token:
-            user = session.get(User, user_id)
-            if user and user.session_token == session_token:
-                # Check inactivity timeout (2 hours)
-                if user.last_seen and (datetime.now() - user.last_seen) > timedelta(hours=2):
-                    user.session_token = None # Force logout
-                    session.commit()
-                    return None
-                
-                # Update last_seen if > 5 mins to avoid spamming DB
-                if not user.last_seen or (datetime.now() - user.last_seen) > timedelta(minutes=5):
-                    user.last_seen = datetime.now()
-                    session.commit() # Note: this will impact AutoUserTemplates if session is independent but it works.
-                
-                return user
-    except Exception:
-        pass
-    return None
-
-def login_required(request: Request, session: Session) -> Optional[User]:
-    """Check if user is logged in, return user or None"""
-    return get_current_user(request, session)
-
-def require_permission(request: Request, session: Session, page_key: str, button_key: str = None) -> bool:
-    """Verifies if the current user has the specified page/button permission."""
-    user = get_current_user(request, session)
-    if not user:
-        return False
-        
-    # Admins always have all permissions
-    if user.role == 'admin' or user.username == 'admin':
-        return True
-        
-    # Check page permission
-    perms = session.exec(
-        select(UserPermission).where(
-            UserPermission.user_id == user.id,
-            UserPermission.page_key == page_key
-        )
-    ).first()
-    
-    if not perms:
-        return False
-        
-    # Check specific button permission if requested
-    if button_key:
-        if not perms.allowed_buttons:
-            return False
-        try:
-            buttons = json.loads(perms.allowed_buttons)
-            if button_key not in buttons:
-                return False
-        except Exception:
-            return False
-            
-    return True
-
-def log_audit_action(session, table_name: str, record_id: int, action: str, current_user, old_values: dict = None, new_values: dict = None):
-    """
-    Universal Audit Logger — single source of truth for all audit logging.
-    Safely resolves user identity and wraps in try/except to never crash the caller.
-    """
-    try:
-        username = "System"
-        user_id = None
-        if current_user:
-            user_id = current_user.id
-            username = getattr(current_user, 'full_name', current_user.username)
-
-        log_entry = AuditLog(
-            table_name=table_name.lower(),
-            record_id=record_id,
-            action=action.upper(),
-            user_id=user_id,
-            username=username,
-            old_values=json.dumps(old_values) if old_values else None,
-            new_values=json.dumps(new_values) if new_values else None,
-            created_at=datetime.now()
-        )
-        session.add(log_entry)
-    except Exception as e:
-        print(f"⚠️ Audit Log Failure: {str(e)}")
-
-# Backwards-compatible alias — older routes use this name
-create_audit_log = log_audit_action
-
-# ===========================
-# DATA ARCHIVAL HELPER
-# ===========================
-def archive_deleted_record(session, source_table: str, record_id: int, record_data: dict, current_user, deleted_reason: str = None):
-    """Saves a JSON snapshot of a record before soft or hard deletion."""
-    try:
-        user_id = current_user.id if hasattr(current_user, 'id') else 0
-        archive = DeletedRecord(
-            source_table=source_table,
-            record_id=record_id,
-            record_data=json.dumps(record_data),
-            deleted_by=user_id,
-            deleted_reason=deleted_reason
-        )
-        session.add(archive)
-    except Exception as e:
-        print(f"⚠️ Failed to archive deleted record: {str(e)}")
-
-# ===========================
-# ACTIVITY LOG HELPER
-# ===========================
-def log_activity_action(session, action_type: str, description: str, current_user, target_type: str = None, target_id: int = None):
-    """Logs non-data operational events (logins, printing, etc.)."""
-    try:
-        user_id = current_user.id if hasattr(current_user, 'id') else None
-        username = getattr(current_user, 'full_name', getattr(current_user, 'username', "System"))
-        
-        activity = ActivityLog(
-            action_type=action_type.upper(),
-            description=description,
-            user_id=user_id,
-            username=username,
-            target_type=target_type,
-            target_id=target_id
-        )
-        session.add(activity)
-    except Exception as e:
-        print(f"⚠️ Activity Log Failure: {str(e)}")
+# File upload helper (used by several routes)
+import shutil
+import uuid
 
 def save_uploaded_file(file, filename: str) -> str:
-    """Save uploaded file and return the filename"""
+    """Save uploaded file and return the filename."""
     file_path = os.path.join(UPLOAD_DIR, filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    with open(file_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
     return filename
 
-# ===========================
-# BARCODE GENERATOR (LOCAL) - 100% OFFLINE
-# ===========================
-def generate_barcode_base64(patient_id: str) -> str:
-    """Generate linear barcode (Code128) as base64 encoded image - 100% OFFLINE"""
-    try:
-        from barcode import Code128
-        from barcode.writer import ImageWriter
-        
-        code = Code128(patient_id, writer=ImageWriter())
-        
-        temp_dir = tempfile.gettempdir()
-        temp_filename = os.path.join(temp_dir, f"temp_barcode_{patient_id}")
-        
-        filepath = code.save(temp_filename, options={
-            'module_width': 0.4,
-            'module_height': 15.0,
-            'font_size': 10,
-            'text_distance': 5.0,
-            'quiet_zone': 6.5,
-            'write_text': True,
-        })
-        
-        png_path = filepath if filepath.endswith('.png') else filepath + '.png'
-        if not os.path.exists(png_path):
-            for ext in ['.png', '']:
-                test_path = filepath + ext
-                if os.path.exists(test_path):
-                    png_path = test_path
-                    break
-        
-        if not os.path.exists(png_path):
-            raise FileNotFoundError(f"Barcode file not created at: {png_path}")
-        
-        with open(png_path, 'rb') as f:
-            barcode_base64 = base64.b64encode(f.read()).decode()
-        
-        if os.path.exists(png_path):
-            os.remove(png_path)
-        
-        return f"data:image/png;base64,{barcode_base64}"
-    
-    except ImportError:
-        return f"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='40'><text x='10' y='25' fill='red' font-size='12'>Barcode Error: Install python-barcode</text></svg>"
-    
-    except Exception:
-        return f"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='40'><text x='10' y='25' fill='red' font-size='12'>Barcode Error: {patient_id}</text></svg>"
+# Timezone helper
+from datetime import datetime
+def local_now() -> datetime:
+    """Return current local datetime."""
+    return datetime.now()
+
 
 # ===========================
-# SHARED PATIENT LIST QUERY BUILDER
+# SHARED PATIENT LIST QUERY BUILDER (used by history.py)
 # ===========================
-from models import Patient, PatientVisit, Order, TestDefinition
+from sqlmodel import select
+from app.models import Patient, PatientVisit, Order, TestDefinition
 
 def build_patient_list_query(request, defaults_today=True):
-    """
-    Build a filtered patient query from common request query params.
-    Returns (query, filters_dict) where filters_dict has the parsed filter values.
-    Used by: result_entry, double_auth, print_results, call_centre, patient_history.
-    """
+    """Build a filtered patient query from common request query params."""
     today_str = datetime.today().strftime("%Y-%m-%d") if defaults_today else ""
-    
+
     start_date = request.query_params.get("start_date", today_str)
     end_date = request.query_params.get("end_date", today_str)
     name = request.query_params.get("name", "")
     patient_id_q = request.query_params.get("patient_id", "")
     test_q = request.query_params.get("test", "")
-    
+
     query = select(Patient).where(Patient.is_active == True)
-    
+
     needs_visit_join = bool(start_date or end_date or test_q)
     if needs_visit_join:
         query = query.join(PatientVisit)
-    
+
     if start_date:
         query = query.where(PatientVisit.visit_date >= datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S"))
     if end_date:
         query = query.where(PatientVisit.visit_date <= datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S"))
-    
+
     if name:
         query = query.where(Patient.full_name.ilike(f"%{name}%"))
     if patient_id_q:
         query = query.where(Patient.patient_id.ilike(f"%{patient_id_q}%"))
-    
+
     if test_q:
         if not needs_visit_join:
             query = query.join(PatientVisit)
@@ -399,9 +94,9 @@ def build_patient_list_query(request, defaults_today=True):
             (TestDefinition.test_name.ilike(f"%{test_q}%")) |
             (TestDefinition.test_short_name.ilike(f"%{test_q}%"))
         )
-    
+
     query = query.distinct().order_by(Patient.created_at.desc())
-    
+
     filters = {
         "start_date": start_date,
         "end_date": end_date,
@@ -409,131 +104,9 @@ def build_patient_list_query(request, defaults_today=True):
         "patient_id": patient_id_q,
         "test": test_q,
     }
-    
+
     return query, filters
 
 
-def build_patient_visit_data(session, request, status_filter=None, defaults_today=True):
-    """
-    Shared helper to build patient_data list for patient list pages.
-    Eliminates N+1 queries by fetching visits directly with eager-loaded orders.
-    
-    Returns: (patient_data, filters)
-    """
-    from sqlalchemy.orm import selectinload
-    
-    today_str = datetime.today().strftime("%Y-%m-%d") if defaults_today else ""
-    start_date = request.query_params.get("start_date", today_str)
-    end_date = request.query_params.get("end_date", today_str)
-    name = request.query_params.get("name", "")
-    patient_id_q = request.query_params.get("patient_id", "")
-    test_q = request.query_params.get("test", "")
-    status_q = status_filter or request.query_params.get("status", "all")
-    
-    # Single query: fetch visits with eager-loaded patient and orders
-    visit_query = (
-        select(PatientVisit)
-        .options(
-            selectinload(PatientVisit.patient),
-            selectinload(PatientVisit.orders).selectinload(Order.test)
-        )
-        .join(Patient, PatientVisit.patient_id == Patient.id)
-        .where(Patient.is_active == True)
-    )
-    
-    if start_date:
-        visit_query = visit_query.where(PatientVisit.visit_date >= datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S"))
-    if end_date:
-        visit_query = visit_query.where(PatientVisit.visit_date <= datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S"))
-    if name:
-        visit_query = visit_query.where(Patient.full_name.ilike(f"%{name}%"))
-    if patient_id_q:
-        visit_query = visit_query.where(Patient.patient_id.ilike(f"%{patient_id_q}%"))
-    
-    if test_q:
-        visit_query = visit_query.join(Order, Order.visit_id == PatientVisit.id).join(
-            TestDefinition, Order.test_id == TestDefinition.id
-        ).where(
-            (TestDefinition.test_name.ilike(f"%{test_q}%")) |
-            (TestDefinition.test_short_name.ilike(f"%{test_q}%"))
-        )
-    
-    if status_q != "all":
-        if not test_q:
-            visit_query = visit_query.join(Order, Order.visit_id == PatientVisit.id)
-        if status_q == "pending":
-            visit_query = visit_query.where(Order.status == "ordered")
-        elif status_q in ("received", "resulted"):
-            visit_query = visit_query.where(Order.status == "resulted")
-        elif status_q in ("authorize", "authorized"):
-            visit_query = visit_query.where(Order.status == "authorized")
-        elif status_q == "double_authorized":
-            visit_query = visit_query.where(Order.status == "double_authorized")
-        elif status_q == "AD":
-            visit_query = visit_query.where(Order.status.in_(["authorized", "double_authorized"]))
-    
-    visits = session.exec(
-        visit_query.order_by(PatientVisit.visit_date.desc())
-    ).all()
-    
-    # Group by patient (latest visit per patient)
-    seen_patients = set()
-    patient_data = []
-    
-    for visit in visits:
-        patient = visit.patient
-        if not patient or patient.id in seen_patients:
-            continue
-        seen_patients.add(patient.id)
-        
-        # Build tests data from orders
-        packages = {}
-        standalones = []
-        
-        for order in visit.orders:
-            if not order.test or order.status == "no_sample":
-                continue
-            
-            status_color = "red"
-            if order.status == "resulted":
-                status_color = "blue"
-            elif order.status == "authorized":
-                status_color = "green"
-            elif order.status == "double_authorized":
-                status_color = "purple"
-            
-            test_info = {"name": order.test.test_name, "color": status_color}
-            
-            if order.package_name:
-                if order.package_name not in packages:
-                    packages[order.package_name] = []
-                packages[order.package_name].append(test_info)
-            else:
-                standalones.append(test_info)
-        
-        tests_data = []
-        for pkg_name, pkg_tests in packages.items():
-            tests_data.append({"is_package": True, "package_name": pkg_name, "tests": pkg_tests})
-        for t in standalones:
-            tests_data.append({"is_package": False, "test": t})
-        
-        patient_data.append({
-            "patient": patient,
-            "registration_date": visit.visit_date,
-            "tests": tests_data
-        })
-    
-    filters = {
-        "start_date": start_date,
-        "end_date": end_date,
-        "name": name,
-        "patient_id": patient_id_q,
-        "test": test_q,
-        "status": status_q,
-    }
-    
-    return patient_data, filters
-
-
-# Add helper to templates
+# Register calculate_age as a Jinja template global
 templates.env.globals["calculate_age"] = calculate_age

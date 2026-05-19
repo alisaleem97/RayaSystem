@@ -7,8 +7,8 @@
     <title>PrintReceipt - {{ patient.patient_id if patient else 'NexLab' }}</title>
     <style>
         @page {
-            size: {{ template_data.paper_width if template_data else '80mm' }} {{ template_data.paper_height if template_data and template_data.paper_height != 'auto' else 'auto' }};
-            margin: {{ template_data.margin if template_data and template_data.margin != '0' else '0' }};
+            size: {{ page_size }};
+            margin: 0;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -78,6 +78,13 @@
             .receipt-page {
                 border: none;
                 box-shadow: none;
+            }
+            
+            /* Anti-aliasing overrides to reduce thermal dithering */
+            * {
+                -webkit-font-smoothing: none !important;
+                font-smooth: never !important;
+                text-rendering: optimizeSpeed !important;
             }
         }
     </style>

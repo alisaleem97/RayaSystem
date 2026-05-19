@@ -11,9 +11,9 @@ import traceback
 from datetime import datetime
 
 from database import get_session
-from models import Patient, PatientVisit, Order, Result, TestRange, LabInfo, PrintTemplate, Inventory
+from models import Patient, PatientVisit, Order, Result, TestRange, LabInfo, PrintTemplate, Inventory, TestDefinition, TestParameter, TestResultType
 # ✅ Shared templates (with AutoUserTemplates) + helpers
-from routes.helpers import templates, get_current_user, log_audit_action, log_activity_action, require_permission
+from routes.helpers import templates, get_current_user, log_audit_action, log_activity_action, require_permission, age_to_days
 from fastapi.responses import RedirectResponse, JSONResponse
 from routes.whatsapp_utils import generate_report_pdf, send_wati_pdf
 
@@ -45,6 +45,14 @@ def call_centre_list(
 ):
     if not require_permission(request, session, "call_centre"):
         return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
+    # Pagination
+    try:
+        page = max(1, int(request.query_params.get("page", 1)))
+    except (ValueError, TypeError):
+        page = 1
+    
+    PAGE_SIZE = 50
+    
     # 1. Default dates to TODAY if not provided
     today_str = datetime.now().strftime('%Y-%m-%d')
     if not start_date:
@@ -133,9 +141,16 @@ def call_centre_list(
             "is_printed": v.is_printed
         })
     
+    # Paginate the results
+    total_count = len(patient_data)
+    total_pages = max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = min(page, total_pages)
+    offset = (page - 1) * PAGE_SIZE
+    patient_data_page = patient_data[offset:offset + PAGE_SIZE]
+    
     return templates.TemplateResponse("call_centre.html", {
         "request": request,
-        "patient_data": patient_data,
+        "patient_data": patient_data_page,
         "filters": {
             "start_date": start_date,
             "end_date": end_date,
@@ -143,7 +158,10 @@ def call_centre_list(
             "patient_id": patient_id or "",
             "test": test or "",
             "status_filter": status_filter
-        }
+        },
+        "page": page,
+        "total_pages": total_pages,
+        "total_count": total_count,
     })
 
 @router.get("/view-call-centre/{visit_id}", response_class=HTMLResponse)
@@ -267,31 +285,79 @@ def send_whatsapp_results(visit_id: str, request: Request, payload: Optional[Wha
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     
-    query = select(Order).options(selectinload(Order.test), selectinload(Order.result).selectinload(Result.details)).where(Order.visit_id == visit.id, Order.status != "no_sample")
+    query = select(Order).options(
+        selectinload(Order.test).selectinload(TestDefinition.test_parameters).selectinload(TestParameter.parameter),
+        selectinload(Order.result).selectinload(Result.details)
+    ).where(Order.visit_id == visit.id, Order.status != "no_sample")
     if payload and payload.order_ids:
         query = query.where(Order.id.in_(payload.order_ids))
         
     orders = session.exec(query).all()
-    
+    test_ids = [order.test_id for order in orders if order.test_id]
+    all_result_types = session.exec(
+        select(TestResultType).where(TestResultType.test_id.in_(test_ids), TestResultType.is_active == True)
+    ).all()
+    result_type_map = {}
+    for rt in all_result_types:
+        result_type_map[(rt.test_id, rt.parameter_id)] = rt.result_type
+
+    def get_result_type(test_id, param_id=None):
+        return result_type_map.get((test_id, param_id), "number")
+
     structured_results = []
     for order in orders:
         test = order.test
         res = order.result
         if not test: continue
         
+        # Fetch ranges for this test/patient (same logic as print report)
+        ranges = session.exec(
+            select(TestRange).where(TestRange.test_id == test.id, TestRange.is_active == True)
+        ).all()
+        
+        patient_days = age_to_days(patient.age or 0, patient.age_unit or "year")
+        
+        def find_range(param_id=None):
+            best = None
+            for r in ranges:
+                if r.parameter_id == param_id:
+                    gender_ok = r.gender_type == "both" or r.gender_type == patient.gender
+                    range_from_days = age_to_days(r.age_from, r.age_from_unit or "year")
+                    range_to_days = age_to_days(r.age_to, r.age_to_unit or "year")
+                    age_ok = range_from_days <= patient_days <= range_to_days
+                    if gender_ok and age_ok:
+                        best = r
+                        break
+            if not best and ranges:
+                for r in ranges:
+                    if r.parameter_id == param_id:
+                        return r
+            return best
+        
         if test.test_parameters:
-            structured_results.append({"type": "parent", "test_name": test.test_name})
+            structured_results.append({"type": "parent", "test_name": test.test_name, "print_separately": test.print_separately, "note": res.note if res else ""})
             for tp in test.test_parameters:
                 p = tp.parameter
                 d = next((dt for dt in res.details if dt.parameter_id == p.id), None) if res else None
+                rng = find_range(p.id)
                 structured_results.append({
                     "type": "child", "parameter_name": p.parameter_name, "result_value": d.result_value if d else "-",
-                    "unit": "", "range": "", "flag": d.flag if d else ""
+                    "result_type": get_result_type(test.id, p.id),
+                    "unit": rng.unit if rng else "",
+                    "range": rng.text_range if rng and rng.range_type == "text" else (f"{rng.normal_from} - {rng.normal_to}" if rng and rng.normal_from is not None else ""),
+                    "flag": d.flag if d else "",
+                    "remark": d.remark if d else ""
                 })
         else:
+            rng = find_range(None)
             structured_results.append({
                 "type": "standalone", "test_name": test.test_name, "result_value": res.result_value if res else "-",
-                "unit": "", "range": "", "flag": res.flag if res else ""
+                "result_type": get_result_type(test.id, None),
+                "unit": rng.unit if rng else "",
+                "range": rng.text_range if rng and rng.range_type == "text" else (f"{rng.normal_from} - {rng.normal_to}" if rng and rng.normal_from is not None else ""),
+                "flag": res.flag if res else "",
+                "note": res.note if res else "",
+                "print_separately": test.print_separately
             })
 
     lab_info = session.exec(select(LabInfo).limit(1)).first() or LabInfo(lab_name="NexLab")

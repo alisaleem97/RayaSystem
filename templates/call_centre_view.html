@@ -270,9 +270,9 @@
                     </th>
                     <th class="text-center">Test / Parameter</th>
                     <th>Result</th>
-                    <th>Status</th>
-                    <th>Unit</th>
                     <th>Range</th>
+                    <th>Unit</th>
+                    <th>Status</th>
                     <th>Remark</th>
                 </tr>
             </thead>
@@ -404,8 +404,8 @@
                     </td>
                     <td class="test-name">${row.test_name}</td>
                     <td></td>
-                    <td>${getStatusBadge(row.display_status)}</td>
-                    <td></td><td></td><td class="text-xs italic text-slate-400">${row.note || ''}</td>
+                    <td></td>
+                    <td></td><td>${getStatusBadge(row.display_status)}</td><td class="text-xs italic text-slate-400">${row.note || ''}</td>
                 `;
             } else if (row.type === 'child') {
                 tr.className = 'row-child';
@@ -414,9 +414,9 @@
                     <td class="select-cell"></td>
                     <td class="test-name">${row.parameter_name}</td>
                     <td class="font-bold ${flagClass} ${getFlagBg(row.flag)} text-base">${resultHtml}</td>
-                    <td></td>
-                    <td class="text-slate-500 font-medium">${row.unit || ''}</td>
                     <td class="text-slate-500 font-medium">${rangeHtml(row)}</td>
+                    <td class="text-slate-500 font-medium">${row.unit || ''}</td>
+                    <td></td>
                     <td class="text-xs italic text-slate-400">${row.remark || ''}</td>
                 `;
             } else {
@@ -433,9 +433,9 @@
                     </td>
                     <td class="test-name">${row.test_name}</td>
                     <td class="font-bold ${flagClass} ${getFlagBg(row.flag)} text-base">${resultHtml}</td>
-                    <td>${getStatusBadge(row.display_status)}</td>
-                    <td class="text-slate-500 font-medium">${row.unit || ''}</td>
                     <td class="text-slate-500 font-medium">${rangeHtml(row)}</td>
+                    <td class="text-slate-500 font-medium">${row.unit || ''}</td>
+                    <td>${getStatusBadge(row.display_status)}</td>
                     <td class="text-xs italic text-slate-400">${row.remark || ''}</td>
                 `;
             }
@@ -505,11 +505,11 @@
         }
 
         rows.forEach(row => {
-            // Cell order: Select(0) | Test(1) | Result(2) | Status(3) | Unit(4) | Range(5)
+            // Cell order: Select(0) | Test(1) | Result(2) | Range(3) | Unit(4) | Status(5)
             const testName = row.querySelector('.test-name').innerText.trim();
             const result = row.cells[2].innerText.trim();
             const unit = row.cells[4].innerText.trim();
-            const range = row.cells[5].innerText.trim();
+            const range = row.cells[3].innerText.trim();
             resultsText += `- ${testName}: ${result} ${unit} (المعدل الطبيعي: ${range})\n`;
         });
 
