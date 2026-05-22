@@ -1,20 +1,20 @@
 # app/services/auth_service.py
 # Authentication helpers: session validation, user lookup, inactivity timeout.
 
+import logging
 from fastapi import Request
 from sqlmodel import Session
 from datetime import datetime, timedelta
 from typing import Optional
+from itsdangerous import URLSafeSerializer
 
 from app.config import SECRET_KEY
+from app.models import User
 
 
-def get_current_user(request: Request, session: Session) -> Optional["User"]:
+def get_current_user(request: Request, session: Session) -> Optional[User]:
     """Get current logged-in user from session cookie."""
     try:
-        from itsdangerous import URLSafeSerializer
-        from app.models import User
-
         s = URLSafeSerializer(SECRET_KEY)
         cookie = request.cookies.get("nexlab_session")
         if not cookie:
@@ -38,11 +38,11 @@ def get_current_user(request: Request, session: Session) -> Optional["User"]:
                     session.commit()
 
                 return user
-    except Exception:
-        pass
+    except Exception as e:
+        logging.error(f"Auth error in get_current_user: {e}")
     return None
 
 
-def login_required(request: Request, session: Session) -> Optional["User"]:
+def login_required(request: Request, session: Session) -> Optional[User]:
     """Check if user is logged in, return user or None."""
     return get_current_user(request, session)

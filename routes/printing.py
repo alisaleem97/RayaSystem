@@ -550,6 +550,11 @@ def print_barcode(patient_id: str, request: Request, session: Session = Depends(
     visit_id = visit.visit_id if visit else ""
     visit_date = visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit and visit.visit_date else ""
         
+    # Generate print_token for API image access
+    import hashlib
+    from app.config import SECRET_KEY
+    print_token = hashlib.sha256(SECRET_KEY.encode()).hexdigest()[:16]
+    
     return templates.TemplateResponse("print_barcode.html", {
         "request": request,
         "patient": patient,
@@ -557,7 +562,8 @@ def print_barcode(patient_id: str, request: Request, session: Session = Depends(
         "template_data": template_data,
         "tests_by_sample_type": tests_by_sample_type,
         "visit_id": visit_id,
-        "visit_date": visit_date
+        "visit_date": visit_date,
+        "print_token": print_token
     })
 
 @router.get("/api/print-barcode-pdf/{patient_id}")
@@ -605,6 +611,58 @@ def api_print_barcode_pdf(patient_id: str, request: Request, session: Session = 
         logging.error(f"Failed to generate native barcode PDF: {e}\n{traceback.format_exc()}")
         print(f"❌ Barcode PDF Error for {patient_id}: {e}")
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/print-barcode-image/{patient_id}")
+def api_print_barcode_image(patient_id: str, page: int = 0, request: Request = None, session: Session = Depends(get_session)):
+    """
+    Returns a high-DPI PNG image of the barcode label (rendered server-side with Pillow).
+    One page per sample type. Use ?page=N to get a specific page.
+    Response header X-Page-Count contains total number of pages.
+    """
+    from app.services.barcode_image_service import generate_barcode_label_image
+
+    patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    orders = session.exec(
+        select(Order).options(
+            selectinload(Order.test).selectinload(TestDefinition.sample_type)
+        ).where(Order.patient_id == patient.id)
+    ).all()
+
+    tests_by_sample_type = {}
+    for order in orders:
+        if order.test:
+            sample_type_name = order.test.sample_type.sample_name if order.test.sample_type else "Unknown"
+            if sample_type_name not in tests_by_sample_type:
+                tests_by_sample_type[sample_type_name] = []
+            test_display = order.test.test_short_name if order.test.test_short_name else order.test.test_name
+            tests_by_sample_type[sample_type_name].append(test_display)
+
+    barcode_template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "barcode")).first()
+    if not barcode_template:
+        raise HTTPException(status_code=404, detail="No barcode template configured")
+
+    visit = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id).order_by(PatientVisit.id.desc())).first()
+    v_id = visit.visit_id if visit else ''
+    v_date = visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit and visit.visit_date else ''
+
+    try:
+        pages = generate_barcode_label_image(patient, tests_by_sample_type, barcode_template, visit_id=v_id, visit_date=v_date)
+        if not pages:
+            raise HTTPException(status_code=500, detail="No barcode pages generated")
+        total = len(pages)
+        idx = max(0, min(page, total - 1))
+        return StreamingResponse(pages[idx], media_type="image/png",
+            headers={
+                "Content-Disposition": f"inline; filename=barcode_{patient_id}_p{idx}.png",
+                "X-Page-Count": str(total),
+            })
+    except Exception as e:
+        import traceback
+        logging.error(f"Barcode image generation failed: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/print-receipt/{patient_id}", response_class=HTMLResponse)

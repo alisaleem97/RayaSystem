@@ -255,9 +255,9 @@
             if (el.type === 'doctor_name') return `${labelHtml}<span>${patient.doctor || ''}</span>`;
             if (el.type === 'agent_name') return `${labelHtml}<span>${patient.agent_name || ''}</span>`;
 
-            if (el.type === 'lab_name') return `<div style="font-weight:bold; font-size:1.5em;">${labInfo.lab_name || ''}</div>`;
+            if (el.type === 'lab_name') return `<div style="font-weight:${el.fontWeight || 'bold'};">${labInfo.lab_name || ''}</div>`;
             if (el.type === 'lab_title') return `${labelHtml}<span>${labInfo.lab_title || ''}</span>`;
-            if (el.type === 'lab_address') return `<div>${labInfo.lab_address || ''}</div>`;
+            if (el.type === 'lab_address') return `${labelHtml}<span>${labInfo.lab_address || ''}</span>`;
             if (el.type === 'lab_phone_1') return `${labelHtml}<span>${labInfo.lab_phone_1 || ''}</span>`;
             if (el.type === 'lab_phone_2') return `${labelHtml}<span>${labInfo.lab_phone_2 || ''}</span>`;
             if (el.type === 'lab_email') return `${labelHtml}<span>${labInfo.lab_email || ''}</span>`;
@@ -265,6 +265,8 @@
             if (el.type === 'lab_currency') return `${labelHtml}<span>${labInfo.lab_currency || ''}</span>`;
             if (el.type === 'first_doctor_name') return `${labelHtml}<div style="white-space: pre-wrap; display: inline-block; vertical-align: top;">${labInfo.first_doctor_name || ''}</div>`;
             if (el.type === 'second_doctor_name') return `${labelHtml}<div style="white-space: pre-wrap; display: inline-block; vertical-align: top;">${labInfo.second_doctor_name || ''}</div>`;
+            if (el.type === 'lab_note_1') return `${labelHtml}<span style="white-space: pre-wrap;">${labInfo.lab_note_1 || ''}</span>`;
+            if (el.type === 'lab_note_2') return `${labelHtml}<span style="white-space: pre-wrap;">${labInfo.lab_note_2 || ''}</span>`;
 
             if (['lab_logo', 'lab_stamp_1', 'lab_stamp_2', 'lab_signature_1', 'lab_signature_2', 'lab_image_1', 'lab_image_2', 'lab_qr_1', 'lab_qr_2'].includes(el.type)) {
                 const imgVal = labInfo[el.type];
@@ -292,36 +294,62 @@
             return '';
         }
 
+
         function buildResultTable(el, groupResults) {
             const cols = (el.columns || ['test', 'result', 'flag', 'range', 'unit']).filter(c => c.trim() !== '');
             if (cols.length === 0) return '';
 
-            let tableStyle = `width: 100%; border-collapse: collapse; table-layout: ${el.tableLayout || 'auto'};`;
-            let colGroupHtml = '';
+            // Generate a unique scope ID for this table instance
+            const scopeId = 'rt_' + Math.random().toString(36).substr(2, 6);
 
+            const bWidth = el.borderWidth !== undefined ? el.borderWidth : 1;
+            const hAlign = el.headerAlign || 'left';
+            const rAlign = el.rowAlign || 'left';
+            const hHeight = el.headerHeight > 0 ? el.headerHeight + 'px' : 'auto';
+            const rHeight = el.rowHeight > 0 ? el.rowHeight + 'px' : 'auto';
+
+            // Build a scoped <style> block — guaranteed to override any inherited or default styles
+            let scopeStyle = `<style>
+                .${scopeId} { width: 100%; border-collapse: collapse; table-layout: ${el.tableLayout || 'auto'}; }
+                .${scopeId} th {
+                    padding: ${el.cellPadding !== undefined ? el.cellPadding : 8}px;
+                    border: ${bWidth}px solid ${el.borderColor || '#e2e8f0'};
+                    white-space: pre-wrap; word-break: break-word; vertical-align: middle;
+                    background: ${el.headerBg || '#f8fafc'};
+                    color: ${el.headerColor || '#1e293b'};
+                    font-size: ${el.headerFontSize || 12}px;
+                    font-weight: bold;
+                    text-align: ${hAlign} !important;
+                    height: ${hHeight};
+                }
+                .${scopeId} td {
+                    padding: ${el.cellPadding !== undefined ? el.cellPadding : 8}px;
+                    border: ${bWidth}px solid ${el.borderColor || '#e2e8f0'};
+                    white-space: pre-wrap; word-break: break-word; vertical-align: middle;
+                    font-size: ${el.rowFontSize || 12}px;
+                    color: ${el.rowTextColor || '#334155'};
+                    text-align: ${rAlign} !important;
+                    height: ${rHeight};
+                }
+                .${scopeId} .zebra-row { background-color: ${el.zebraColor || '#f8fafc'}; }
+                .${scopeId} .parent-row td { font-weight: 700; background: rgba(0,0,0,0.04); color: #000; }
+            </style>`;
+
+            let colGroupHtml = '';
             if (el.tableLayout === 'fixed' && el.colWidths) {
                 const widths = el.colWidths.split(',').map(s => s.trim());
                 colGroupHtml = '<colgroup>' + widths.map(w => `<col style="width: ${w};">`).join('') + '</colgroup>';
             }
 
-            const bWidth = el.borderWidth !== undefined ? el.borderWidth : 1;
-            let cellStyle = `padding: ${el.cellPadding !== undefined ? el.cellPadding : 8}px; border: ${bWidth}px solid ${el.borderColor || '#e2e8f0'};`;
-
-            cellStyle += ` white-space: pre-wrap; word-break: break-word; vertical-align: top;`;
-
-            let html = '';
             const headers = { test: 'Test Name', result: 'Result', flag: 'Flag', range: 'Ref. Range', unit: 'Unit' };
+            let html = scopeStyle;
 
             if (groupResults.length === 0) {
-                html += `<table style="${tableStyle}">${colGroupHtml}`;
-                html += `<thead style="background:${el.headerBg || '#f8fafc'}; color:${el.headerColor || '#1e293b'}"><tr>`;
-                cols.forEach(c => {
-                    html += `<th style="${cellStyle} font-size: ${el.headerFontSize || 12}px; font-weight: bold; text-align: left;">
-                                ${headers[c.toLowerCase()] || c.toUpperCase()}
-                             </th>`;
-                });
-                html += `</tr></thead><tbody style="color:${el.rowTextColor || '#334155'}">`;
-                html += `<tr><td colspan="${cols.length}" style="text-align:center; ${cellStyle}">No results found</td></tr>`;
+                html += `<table class="${scopeId}">${colGroupHtml}`;
+                html += `<thead><tr>`;
+                cols.forEach(c => { html += `<th>${headers[c.toLowerCase()] || c.toUpperCase()}</th>`; });
+                html += `</tr></thead><tbody>`;
+                html += `<tr><td colspan="${cols.length}" style="text-align:center !important;">No results found</td></tr>`;
                 html += `</tbody></table>`;
             } else {
                 let pendingRemark = null;
@@ -329,14 +357,10 @@
 
                 const reopenTable = () => {
                     if (!tableOpen) {
-                        html += `<table style="${tableStyle}">${colGroupHtml}`;
-                        html += `<thead style="background:${el.headerBg || '#f8fafc'}; color:${el.headerColor || '#1e293b'}"><tr>`;
-                        cols.forEach(c => {
-                            html += `<th style="${cellStyle} font-size: ${el.headerFontSize || 12}px; font-weight: bold; text-align: left;">
-                                        ${headers[c.toLowerCase()] || c.toUpperCase()}
-                                     </th>`;
-                        });
-                        html += `</tr></thead><tbody style="color:${el.rowTextColor || '#334155'}">`;
+                        html += `<table class="${scopeId}">${colGroupHtml}`;
+                        html += `<thead><tr>`;
+                        cols.forEach(c => { html += `<th>${headers[c.toLowerCase()] || c.toUpperCase()}</th>`; });
+                        html += `</tr></thead><tbody>`;
                         tableOpen = true;
                     }
                 };
@@ -351,12 +375,9 @@
                 const flushRemark = (isEnd = false) => {
                     if (pendingRemark) {
                         closeTable();
-                        
-                        // Add the remark DIV with darkred, centered, bold styles in a full width box
                         html += `<div style="width: 100%; border: ${bWidth}px solid ${el.borderColor || '#e2e8f0'}; padding: 10px; margin-top: 5px; margin-bottom: 5px; text-align: center; color: darkred; font-weight: bold; background: #fff; box-sizing: border-box;">
                             ${pendingRemark}
                         </div>`;
-                        
                         pendingRemark = null;
                     }
                 };
@@ -379,18 +400,17 @@
                         html += `<div style="margin-bottom: 15px; text-align: left; box-sizing: border-box; background: transparent; color: ${el.rowTextColor || '#334155'};">
                             ${row.result_value || ''}
                         </div>`;
-                        return; // skip the normal table row rendering
+                        return;
                     }
 
                     reopenTable();
 
-                    let trBg = (el.zebraStripes && index % 2 !== 0) ? `background-color: ${el.zebraColor || '#f8fafc'};` : '';
-                    html += `<tr style="${trBg}">`;
+                    let zebraClass = (el.zebraStripes && index % 2 !== 0) ? 'zebra-row' : '';
+                    let parentClass = (row.type === 'parent') ? 'parent-row' : '';
+                    html += `<tr class="${zebraClass} ${parentClass}">`;
 
                     if (row.type === 'parent') {
-                        html += `<td colspan="${cols.length}" style="${cellStyle} font-size: ${el.rowFontSize || 12}px; font-weight: 700; background: rgba(0,0,0,0.04); color: #000;">
-                                    ${row.test_name}
-                                 </td>`;
+                        html += `<td colspan="${cols.length}">${row.test_name}</td>`;
                     } else {
                         cols.forEach(c => {
                             let val = '';
@@ -407,7 +427,7 @@
                             else if (c === 'range') { val = row.range || ''; }
                             else if (c === 'unit') { val = row.unit || ''; }
 
-                            html += `<td style="${cellStyle} font-size: ${el.rowFontSize || 12}px; ${styleAdd}">${val}</td>`;
+                            html += `<td style="${styleAdd}">${val}</td>`;
                         });
                     }
                     html += `</tr>`;

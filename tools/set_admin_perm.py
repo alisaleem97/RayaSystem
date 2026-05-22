@@ -53,6 +53,7 @@ def set_perms():
         'payment_records': ["view"],
         'patients_number': ["view"],
         'tests_number': ["view"],
+        'expenses_report': ["view", "edit", "delete"],
         'partners': ["create", "edit", "delete"],
         'provinces': ["create", "edit", "delete"],
         'regions': ["create", "edit", "delete"],

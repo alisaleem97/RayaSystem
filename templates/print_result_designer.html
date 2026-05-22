@@ -146,6 +146,15 @@
             transition: none;
         }
 
+        .design-element.locked {
+            cursor: default;
+            border-style: dotted;
+        }
+
+        .design-element.locked:hover {
+            border: 1px dotted #94a3b8;
+        }
+
         .resize-handle {
             position: absolute;
             bottom: -5px;
@@ -164,12 +173,16 @@
             display: block;
         }
 
+        .design-element.locked .resize-handle {
+            display: none !important;
+        }
+
         .delete-btn {
             position: absolute;
-            top: -10px;
-            right: -10px;
-            width: 20px;
-            height: 20px;
+            top: -12px;
+            right: -12px;
+            width: 24px;
+            height: 24px;
             background: #ef4444;
             color: white;
             border-radius: 50%;
@@ -179,17 +192,40 @@
             font-size: 12px;
             cursor: pointer;
             border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            z-index: 1001;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            z-index: 1002;
             transition: transform 0.2s;
         }
 
         .delete-btn:hover {
-            transform: scale(1.15);
+            transform: scale(1.2);
             background: #dc2626;
         }
 
         .design-element.selected .delete-btn {
+            display: flex;
+        }
+
+        .lock-badge {
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            width: 22px;
+            height: 22px;
+            background: #f59e0b;
+            color: white;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            z-index: 1002;
+            pointer-events: none;
+        }
+
+        .design-element.locked .lock-badge {
             display: flex;
         }
 
@@ -292,6 +328,47 @@
             display: flex;
         }
 
+        .element-list-item {
+            padding: 6px 10px;
+            margin: 2px 0;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.15s;
+            border: 1px solid transparent;
+            color: #475569;
+        }
+
+        .element-list-item:hover {
+            background: #f1f5f9;
+            border-color: #e2e8f0;
+        }
+
+        .element-list-item.active {
+            background: #eff6ff;
+            border-color: #3b82f6;
+            color: #1d4ed8;
+        }
+
+        .shortcuts-panel {
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        .shortcuts-panel kbd {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 1px 5px;
+            font-size: 10px;
+            font-weight: 700;
+            font-family: monospace;
+        }
+
         @page {
             size: auto;
             margin: 0;
@@ -343,7 +420,8 @@
             }
 
             .resize-handle,
-            .delete-btn {
+            .delete-btn,
+            .lock-badge {
                 display: none !important;
             }
         }
@@ -483,9 +561,14 @@
                     <div id="propSelectionName"
                         class="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100 tracking-wider">
                         ELEMENT</div>
-                    <button onclick="duplicateSelected()"
-                        class="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg font-bold text-slate-600 transition"
-                        title="Duplicate (Ctrl+D)"><i class="fas fa-copy mr-1"></i> Clone</button>
+                    <div class="flex gap-1">
+                        <button onclick="toggleLockSelected()"
+                            class="text-xs bg-slate-100 hover:bg-slate-200 px-2 py-2 rounded-lg font-bold text-slate-600 transition"
+                            title="Lock/Unlock" id="lockBtn"><i class="fas fa-lock-open"></i></button>
+                        <button onclick="duplicateSelected()"
+                            class="text-xs bg-slate-100 hover:bg-slate-200 px-2 py-2 rounded-lg font-bold text-slate-600 transition"
+                            title="Duplicate (Ctrl+D)"><i class="fas fa-copy"></i></button>
+                    </div>
                 </div>
 
                 <div class="bg-slate-50 p-3 rounded-lg border border-slate-100 mb-4">
@@ -499,6 +582,15 @@
                         <div class="property-group !mb-0"><label>Height</label><input type="number" id="propH" min="2"
                                 onchange="updateElementProperty('height', this.value)"></div>
                     </div>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div class="property-group !mb-0"><label>Z-Index</label><input type="number" id="propZIndex"
+                                onchange="updateElementProperty('zIndex', this.value)"></div>
+                        <div class="property-group !mb-0">
+                            <label>Opacity</label>
+                            <input type="range" min="0" max="1" step="0.05" id="propOpacity" class="w-full"
+                                onchange="updateElementProperty('opacity', this.value)">
+                        </div>
+                    </div>
                     <div class="flex gap-2">
                         <button onclick="centerElement('horizontal')" class="flex-1 tool-btn"><i
                                 class="fas fa-align-center"></i> Center X</button>
@@ -507,16 +599,18 @@
                     </div>
                 </div>
 
-                <div class="property-group mb-4">
-                    <label>Font Family</label>
-                    <select id="propFontFamily" onchange="updateElementProperty('fontFamily', this.value)">
-                        <option value="'FormaDJRArabic', sans-serif">Forma DJR Arabic (Default)</option>
-                        <option value="'Cairo', sans-serif">Cairo (Arabic)</option>
-                        <option value="'Tajawal', sans-serif">Tajawal (Arabic)</option>
-                        <option value="'Inter', sans-serif">Inter</option>
-                        <option value="Arial, sans-serif">Arial</option>
-                        <option value="'Times New Roman', serif">Times New Roman</option>
-                    </select>
+                <div id="fontPropsGroup">
+                    <div class="property-group mb-4">
+                        <label>Font Family</label>
+                        <select id="propFontFamily" onchange="updateElementProperty('fontFamily', this.value)">
+                            <option value="'FormaDJRArabic', sans-serif">Forma DJR Arabic (Default)</option>
+                            <option value="'Cairo', sans-serif">Cairo (Arabic)</option>
+                            <option value="'Tajawal', sans-serif">Tajawal (Arabic)</option>
+                            <option value="'Inter', sans-serif">Inter</option>
+                            <option value="Arial, sans-serif">Arial</option>
+                            <option value="'Times New Roman', serif">Times New Roman</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div id="basicProps" class="space-y-2">
@@ -554,19 +648,21 @@
                             onchange="updateElementProperty('content', this.value)"></textarea></div>
                 </div>
 
-                <div id="imageGroup" class="hidden border-t border-slate-200 pt-3 mt-3">
-                    <div class="property-group flex items-center justify-between !mb-0">
-                        <label class="mb-0">Opacity</label><input type="range" min="0" max="1" step="0.1"
-                            id="propOpacity" class="w-2/3" onchange="updateElementProperty('opacity', this.value)">
-                    </div>
-                </div>
-
                 <div id="watermarkGroup" class="hidden border-t border-slate-200 pt-3 mt-3">
-                    <div class="property-group !mb-0">
-                        <label>Upload Watermark</label>
+                    <div class="property-group !mb-2">
+                        <label>Upload Background Image</label>
                         <input type="file" id="watermarkFile" accept="image/*"
                             class="text-[10px] file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-emerald-50 file:text-emerald-700"
                             onchange="uploadWatermark(this)">
+                    </div>
+                    <div id="watermarkPreview" class="hidden mb-2">
+                        <div class="flex items-center gap-2 p-2 bg-slate-50 rounded border border-slate-200">
+                            <img id="watermarkThumb" src="" class="w-12 h-12 object-contain rounded">
+                            <div class="flex-1 text-xs text-slate-500 truncate" id="watermarkFilename"></div>
+                            <button onclick="removeWatermarkImage()" class="text-red-500 hover:text-red-700 text-xs font-bold px-2 py-1 rounded bg-red-50 hover:bg-red-100 transition" title="Remove Image">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -620,11 +716,41 @@
                                 id="propRowFontSize" onchange="updateElementProperty('rowFontSize', this.value)"></div>
                     </div>
 
-                    <div class="grid grid-cols-3 gap-2 mt-3 p-2 bg-slate-50 rounded border border-slate-200">
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div class="property-group !mb-0"><label>Header Height (px)</label><input type="number"
+                                id="propHeaderHeight" min="0" placeholder="auto"
+                                onchange="updateElementProperty('headerHeight', this.value)"></div>
+                        <div class="property-group !mb-0">
+                            <label>Header Align</label>
+                            <select id="propHeaderAlign" onchange="updateElementProperty('headerAlign', this.value)">
+                                <option value="left">Left</option>
+                                <option value="center">Center</option>
+                                <option value="right">Right</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div class="property-group !mb-0"><label>Row Height (px)</label><input type="number"
+                                id="propRowHeight" min="0" placeholder="auto"
+                                onchange="updateElementProperty('rowHeight', this.value)"></div>
+                        <div class="property-group !mb-0">
+                            <label>Row Align</label>
+                            <select id="propRowAlign" onchange="updateElementProperty('rowAlign', this.value)">
+                                <option value="left">Left</option>
+                                <option value="center">Center</option>
+                                <option value="right">Right</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 mt-3 p-2 bg-slate-50 rounded border border-slate-200">
                         <div class="property-group !mb-0"><label>Header BG</label><input type="color" id="propHeaderBg"
                                 onchange="updateElementProperty('headerBg', this.value)"></div>
                         <div class="property-group !mb-0"><label>Header Txt</label><input type="color"
                                 id="propHeaderColor" onchange="updateElementProperty('headerColor', this.value)"></div>
+                        <div class="property-group !mb-0"><label>Row Text</label><input type="color"
+                                id="propRowTextColor" onchange="updateElementProperty('rowTextColor', this.value)"></div>
                         <div class="property-group !mb-0"><label>Border</label><input type="color" id="propBorderColor"
                                 onchange="updateElementProperty('borderColor', this.value)"></div>
                     </div>
@@ -649,6 +775,31 @@
                         class="fas fa-hand-pointer text-2xl"></i></div>
                 <p class="text-sm font-medium text-slate-400">Select an element to edit</p>
             </div>
+
+            <!-- Element List -->
+            <div id="elementListSection" class="border-t border-slate-200 pt-4 mt-4">
+                <div class="flex items-center justify-between mb-2 cursor-pointer" onclick="toggleElementList()">
+                    <label class="font-bold text-[10px] text-slate-500 uppercase tracking-wider cursor-pointer"><i class="fas fa-layer-group mr-1"></i> Element Layers</label>
+                    <i id="elementListToggleIcon" class="fas fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+                </div>
+                <div id="elementListBody" class="max-h-[200px] overflow-y-auto"></div>
+            </div>
+
+            <!-- Keyboard Shortcuts -->
+            <div class="border-t border-slate-200 pt-4 mt-4">
+                <div class="flex items-center justify-between mb-2 cursor-pointer" onclick="this.nextElementSibling.classList.toggle('hidden')">
+                    <label class="font-bold text-[10px] text-slate-500 uppercase tracking-wider cursor-pointer"><i class="fas fa-keyboard mr-1"></i> Keyboard Shortcuts</label>
+                    <i class="fas fa-chevron-down text-slate-400 text-xs"></i>
+                </div>
+                <div class="shortcuts-panel hidden space-y-1.5 mt-2">
+                    <div><kbd>Delete</kbd> / <kbd>Backspace</kbd> — Remove selected</div>
+                    <div><kbd>Ctrl</kbd>+<kbd>Z</kbd> — Undo</div>
+                    <div><kbd>Ctrl</kbd>+<kbd>Y</kbd> — Redo</div>
+                    <div><kbd>Ctrl</kbd>+<kbd>D</kbd> — Duplicate selected</div>
+                    <div><kbd>Arrow Keys</kbd> — Nudge element (10px with grid)</div>
+                    <div><kbd>Ctrl</kbd>+<kbd>L</kbd> — Lock / Unlock selected</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -672,9 +823,17 @@
         let isGridEnabled = true;
         const GRID_SIZE = 10;
 
+        // All image-type elements (exact match list)
+        const IMAGE_TYPES = ['lab_logo', 'lab_stamp_1', 'lab_stamp_2', 'lab_signature_1', 'lab_signature_2', 'lab_image_1', 'lab_image_2', 'lab_qr_1', 'lab_qr_2'];
+        // Element types that should show the label input
+        const LABEL_TYPES = ['patient_name', 'patient_id', 'visit_id', 'patient_age', 'visit_date', 'doctor_name', 'agent_name', 'lab_phone_1', 'lab_phone_2', 'lab_email', 'lab_website', 'lab_currency', 'lab_title', 'lab_address', 'first_doctor_name', 'second_doctor_name', 'lab_note_1', 'lab_note_2'];
+        // Elements that don't need font controls
+        const NO_FONT_TYPES = ['shape_line'];
+
         let dragState = { isDragging: false, isResizing: false, draggedElement: null, dragOffset: { x: 0, y: 0 }, startX: 0, startY: 0, startWidth: 0, startHeight: 0 };
         const paper = document.getElementById('paperPreview');
         const emptyHint = document.getElementById('emptyHint');
+        const scrollArea = document.getElementById('scrollArea');
 
         function updatePaperSize() {
             paperWidth = document.getElementById('paperWidth').value || '210mm';
@@ -706,6 +865,7 @@
             designElements.forEach(renderElement);
             if (selectedElementId && designElements.find(e => e.id === selectedElementId)) selectElement(selectedElementId);
             else selectElement(null);
+            refreshElementList();
         }
 
         document.addEventListener('keydown', (e) => {
@@ -714,12 +874,15 @@
                 if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
                 if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
                 if (e.key === 'd' && selectedElementId && !isInput) { e.preventDefault(); duplicateSelected(); }
+                if (e.key === 'l' && selectedElementId && !isInput) { e.preventDefault(); toggleLockSelected(); }
                 return;
             }
             if (!selectedElementId || isInput) return;
             if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteElement(selectedElementId); }
             else if (e.key.startsWith('Arrow')) {
                 e.preventDefault(); const step = isGridEnabled ? GRID_SIZE : 1;
+                const el = designElements.find(item => item.id === selectedElementId);
+                if (el && el.locked) return; // Don't nudge locked elements
                 if (e.key === 'ArrowUp') nudgeElement(0, -step);
                 if (e.key === 'ArrowDown') nudgeElement(0, step);
                 if (e.key === 'ArrowLeft') nudgeElement(-step, 0);
@@ -737,7 +900,7 @@
 
         function nudgeElement(dx, dy) {
             const el = designElements.find(item => item.id === selectedElementId);
-            if (!el) return;
+            if (!el || el.locked) return;
             const rect = paper.getBoundingClientRect();
             el.x = Math.max(0, Math.min(rect.width - el.width, el.x + dx));
             el.y = Math.max(0, Math.min(rect.height - el.height, el.y + dy));
@@ -753,6 +916,19 @@
             if (axis === 'horizontal') el.x = snap((rect.width - el.width) / 2);
             if (axis === 'vertical') el.y = snap((rect.height - el.height) / 2);
             updateElementProperty(axis === 'horizontal' ? 'x' : 'y', axis === 'horizontal' ? el.x : el.y);
+        }
+
+        // --- Lock/Unlock ---
+        function toggleLockSelected() {
+            if (!selectedElementId) return;
+            const el = designElements.find(e => e.id === selectedElementId);
+            if (!el) return;
+            el.locked = !el.locked;
+            const dom = document.getElementById(el.id);
+            dom.classList.toggle('locked', el.locked);
+            syncPropertiesPanel(el);
+            saveState();
+            showToast(el.locked ? 'Element Locked 🔒' : 'Element Unlocked 🔓');
         }
 
         document.querySelectorAll('.element-item').forEach(item => {
@@ -776,20 +952,25 @@
             if (type === 'result_table') { w = 600; h = 250; }
             if (type === 'shape_line') { w = 700; h = 2; }
             if (type === 'watermark') { w = 400; h = 400; }
-            if (['lab_logo', 'lab_stamp_1', 'lab_stamp_2', 'lab_signature_1', 'lab_signature_2', 'lab_image_1', 'lab_image_2', 'lab_qr_1', 'lab_qr_2'].includes(type)) { w = 120; h = 120; }
+            if (IMAGE_TYPES.includes(type)) { w = 120; h = 120; }
 
             const el = {
                 id, type, x, y, width: w, height: h, fontSize: 14, fontWeight: 'normal', align: 'left', color: '#0f172a',
-                fontFamily: "'FormaDJRArabic', sans-serif", // Apply Default Arabic Font
+                fontFamily: "'FormaDJRArabic', sans-serif",
                 content: type === 'custom_text' ? 'Double click to edit this text.' : '', label: getDefaultLabel(type),
                 opacity: type === 'watermark' ? 0.2 : 1.0, zIndex: type === 'watermark' ? 0 : 10, image: '',
+                locked: false,
                 // Enhanced Table Properties
                 tableLayout: 'auto', colWidths: '', cellPadding: 8, wordWrap: true, zebraStripes: false, zebraColor: '#f8fafc',
-                headerFontSize: 12, rowFontSize: 12, headerBg: '#f8fafc', headerColor: '#1e293b', borderColor: '#e2e8f0',
+                headerFontSize: 12, rowFontSize: 12, headerHeight: 0, headerAlign: 'left',
+                rowHeight: 0, rowAlign: 'left',
+                headerBg: '#f8fafc', headerColor: '#1e293b', borderColor: '#e2e8f0',
+                rowTextColor: '#334155', borderWidth: 1,
                 columns: ['test', 'result', 'flag', 'range', 'unit']
             };
 
             designElements.push(el); renderElement(el); selectElement(id); saveState();
+            refreshElementList();
         }
 
         function duplicateSelected() {
@@ -799,12 +980,14 @@
             const clone = JSON.parse(JSON.stringify(original));
             clone.id = 'el_' + (++elementIdCounter);
             clone.x = snap(clone.x + 20); clone.y = snap(clone.y + 20);
+            clone.locked = false; // Always unlock clones
             designElements.push(clone); renderElement(clone); selectElement(clone.id); saveState();
+            refreshElementList();
             showToast('Element Cloned');
         }
 
         function getDefaultLabel(type) {
-            const labels = { patient_name: 'Patient Name:', patient_id: 'ID:', visit_id: 'Visit:', patient_age: 'Age/Sex:', visit_date: 'Date:', doctor_name: 'Dr:', lab_phone_1: 'Tel:' };
+            const labels = { patient_name: 'Patient Name:', patient_id: 'ID:', visit_id: 'Visit:', patient_age: 'Age/Sex:', visit_date: 'Date:', doctor_name: 'Dr:', lab_phone_1: 'Tel:', lab_phone_2: 'Tel 2:', lab_note_1: '', lab_note_2: '' };
             return labels[type] || '';
         }
 
@@ -813,7 +996,7 @@
             if (!div) {
                 div = document.createElement('div');
                 div.id = element.id; div.className = 'design-element';
-                div.innerHTML = `<div class="content-wrapper w-full h-full"></div><div class="resize-handle"></div><div class="delete-btn" onclick="deleteElement('${element.id}')"><i class="fas fa-times"></i></div>`;
+                div.innerHTML = `<div class="content-wrapper w-full h-full"></div><div class="resize-handle"></div><div class="delete-btn" onclick="event.stopPropagation(); event.preventDefault(); deleteElement('${element.id}')"><i class="fas fa-times"></i></div><div class="lock-badge"><i class="fas fa-lock"></i></div>`;
                 div.addEventListener('mousedown', handleElementMouseDown);
                 div.addEventListener('click', (e) => { e.stopPropagation(); selectElement(element.id); });
                 paper.appendChild(div);
@@ -825,22 +1008,54 @@
             div.style.textAlign = element.align; div.style.color = element.color || '#0f172a';
             div.style.zIndex = element.zIndex; div.style.opacity = element.opacity;
 
+            // Apply locked state
+            div.classList.toggle('locked', !!element.locked);
+
             div.querySelector('.content-wrapper').innerHTML = getDisplayContent(element);
         }
 
         function getDisplayContent(el) {
             const label = el.label ? `<span style="font-weight: 600; margin-right: 6px; opacity: 0.8;">${el.label}</span>` : '';
-            if (el.type === 'lab_name') return `<div style="font-weight:bold; font-size:1.5em;">${labInfo.lab_name || 'LABORATORY NAME'}</div>`;
+
+            // Lab Info text types
+            if (el.type === 'lab_name') return `<div style="font-weight:${el.fontWeight || 'bold'};">${labInfo.lab_name || 'LABORATORY NAME'}</div>`;
+            if (el.type === 'lab_title') return `${label}<span>${labInfo.lab_title || 'Lab Title'}</span>`;
             if (el.type === 'lab_phone_1') return `${label}<span>${labInfo.lab_phone_1 || '+000-000-000'}</span>`;
-            if (['lab_logo', 'lab_stamp_1', 'lab_signature_1'].some(t => el.type.includes(t))) {
+            if (el.type === 'lab_phone_2') return `${label}<span>${labInfo.lab_phone_2 || '+000-000-000'}</span>`;
+            if (el.type === 'lab_email') return `${label}<span>${labInfo.lab_email || 'email@lab.com'}</span>`;
+            if (el.type === 'lab_website') return `${label}<span>${labInfo.lab_website || 'www.lab.com'}</span>`;
+            if (el.type === 'lab_currency') return `${label}<span>${labInfo.lab_currency || '$'}</span>`;
+            if (el.type === 'lab_address') return `${label}<span>${labInfo.lab_address || 'Lab Address'}</span>`;
+            if (el.type === 'first_doctor_name') return `${label}<span>${labInfo.first_doctor_name || 'Doctor 1'}</span>`;
+            if (el.type === 'second_doctor_name') return `${label}<span>${labInfo.second_doctor_name || 'Doctor 2'}</span>`;
+            if (el.type === 'lab_note_1') return `${label}<span style="white-space: pre-wrap;">${labInfo.lab_note_1 || 'Lab Note 1'}</span>`;
+            if (el.type === 'lab_note_2') return `${label}<span style="white-space: pre-wrap;">${labInfo.lab_note_2 || 'Lab Note 2'}</span>`;
+
+            // Patient data types
+            if (el.type === 'patient_name') return `${label}<span>Patient Full Name</span>`;
+            if (el.type === 'patient_id') return `${label}<span>P-00001</span>`;
+            if (el.type === 'visit_id') return `${label}<span>V-00001</span>`;
+            if (el.type === 'patient_age') return `${label}<span>25 Y / MALE</span>`;
+            if (el.type === 'visit_date') return `${label}<span>2025-01-01</span>`;
+            if (el.type === 'doctor_name') return `${label}<span>Dr. Example</span>`;
+            if (el.type === 'agent_name') return `${label}<span>Department</span>`;
+
+            // Image types (exact match)
+            if (IMAGE_TYPES.includes(el.type)) {
                 const imgVal = labInfo[el.type];
                 if (imgVal) return `<img src="/uploads/${imgVal}" style="width:100%; height:100%; object-fit:contain; pointer-events:none;">`;
-                return `<div class="w-full h-full bg-slate-50 border border-slate-200 flex items-center justify-center text-[10px] text-slate-400 italic rounded">${el.type.replace('lab_', '')}</div>`;
+                return `<div class="w-full h-full bg-slate-50 border border-slate-200 flex items-center justify-center text-[10px] text-slate-400 italic rounded">${el.type.replace('lab_', '').replace(/_/g, ' ')}</div>`;
             }
+
             if (el.type === 'result_table') return renderResultTableMock(el);
             if (el.type === 'shape_line') return `<div style="width:100%; height:100%; background:${el.color || el.borderColor || '#334155'};"></div>`;
             if (el.type === 'barcode_image') return `<div class="bg-white border p-1 w-full h-full flex flex-col items-center"><div class="w-full flex-grow bg-[repeating-linear-gradient(90deg,#000,#000_2px,#fff_2px,#fff_4px)] transition-all"></div><span class="text-[10px] mt-1 font-mono">1234567890</span></div>`;
             if (el.type === 'custom_text') return el.content || 'Double click to edit text';
+            if (el.type === 'watermark') {
+                if (el.image) return `<div style="width:100%; height:100%; background-image:url('/uploads/${el.image}'); background-size:contain; background-repeat:no-repeat; background-position:center; opacity:1;"></div>`;
+                return `<div class="w-full h-full bg-slate-50 border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 text-[11px] italic rounded"><i class="fas fa-image text-2xl mb-1"></i>Upload Image</div>`;
+            }
+
             return `${label}<span>Placeholder</span>`;
         }
 
@@ -858,57 +1073,127 @@
 
             const bWidth = data.borderWidth !== undefined ? data.borderWidth : 1;
             let cellStyle = `padding: ${data.cellPadding !== undefined ? data.cellPadding : 8}px; border: ${bWidth}px solid ${data.borderColor || '#e2e8f0'};`;
-            cellStyle += ` white-space: pre-wrap; word-break: break-word; vertical-align: top;`;
+            cellStyle += ` white-space: pre-wrap; word-break: break-word; vertical-align: middle;`;
 
             let html = `<table style="${tableStyle}">${colGroupHtml}`;
+            const hHeight = data.headerHeight > 0 ? `height:${data.headerHeight}px;` : '';
+            const hAlign = data.headerAlign || 'left';
+            const rHeight = data.rowHeight > 0 ? `height:${data.rowHeight}px;` : '';
+            const rAlign = data.rowAlign || 'left';
+
             html += `<thead style="background:${data.headerBg || '#f8fafc'}; color:${data.headerColor || '#1e293b'};"><tr>`;
 
-            cols.forEach(c => { html += `<th style="${cellStyle} font-size:${data.headerFontSize || 12}px; text-align:left;">${c.toUpperCase()}</th>`; });
-            html += `</tr></thead><tbody>`;
+            cols.forEach(c => { html += `<th style="${cellStyle} ${hHeight} font-size:${data.headerFontSize || 12}px; text-align:${hAlign};">${c.toUpperCase()}</th>`; });
+            html += `</tr></thead><tbody style="color:${data.rowTextColor || '#334155'};">`;
 
             const mockData = [{ test: 'Hemoglobin', result: '14.5' }, { test: 'WBC Count', result: '8.2' }];
 
             mockData.forEach((row, index) => {
                 let trBg = (data.zebraStripes && index % 2 !== 0) ? `background-color: ${data.zebraColor || '#f8fafc'};` : '';
                 html += `<tr style="${trBg}">`;
-                cols.forEach(c => { html += `<td style="${cellStyle} font-size:${data.rowFontSize || 12}px;">${row[c.toLowerCase()] || '-'}</td>`; });
+                cols.forEach(c => { html += `<td style="${cellStyle} ${rHeight} font-size:${data.rowFontSize || 12}px; text-align:${rAlign};">${row[c.toLowerCase()] || '-'}</td>`; });
                 html += `</tr>`;
             });
             html += `</tbody></table>`;
             return html;
         }
 
+        // --- Watermark Upload & Remove ---
+        async function uploadWatermark(input) {
+            if (!input.files || !input.files[0]) return;
+            if (!selectedElementId) { showToast('Select a watermark element first'); return; }
+
+            const el = designElements.find(e => e.id === selectedElementId);
+            if (!el || el.type !== 'watermark') { showToast('Select a watermark element first'); return; }
+
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+
+            try {
+                const res = await fetch('/api/upload-watermark', { method: 'POST', body: formData });
+                const result = await res.json();
+                if (result.success) {
+                    el.image = result.filename;
+                    renderElement(el);
+                    syncPropertiesPanel(el);
+                    saveState();
+                    showToast('Background image uploaded!');
+                } else {
+                    alert('Upload failed: ' + (result.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Upload error: ' + err.message);
+            }
+            // Reset file input so same file can be re-selected
+            input.value = '';
+        }
+
+        function removeWatermarkImage() {
+            if (!selectedElementId) return;
+            const el = designElements.find(e => e.id === selectedElementId);
+            if (!el || el.type !== 'watermark') return;
+            el.image = '';
+            renderElement(el);
+            syncPropertiesPanel(el);
+            saveState();
+            showToast('Background image removed');
+        }
+
         // --- Mouse Interaction ---
         function handleElementMouseDown(e) {
             if (e.target.closest('.delete-btn') || e.target.classList.contains('resize-handle')) return;
             const elementId = e.currentTarget.id; selectElement(elementId);
+
             const el = designElements.find(i => i.id === elementId);
-            dragState = { isDragging: true, draggedElement: el, dragOffset: { x: e.clientX - paper.getBoundingClientRect().left - el.x, y: e.clientY - paper.getBoundingClientRect().top - el.y } };
+            if (!el || el.locked) return; // Don't start drag on locked elements
+
+            const paperRect = paper.getBoundingClientRect();
+            dragState = {
+                isDragging: true,
+                draggedElement: el,
+                dragOffset: {
+                    x: e.clientX - paperRect.left - el.x,
+                    y: e.clientY - paperRect.top - el.y
+                }
+            };
             e.currentTarget.classList.add('dragging');
-            document.addEventListener('mousemove', handleMouseMove); document.addEventListener('mouseup', handleMouseUp);
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
         }
+
         function handleMouseMove(e) {
             if (!dragState.isDragging) return;
             const rect = paper.getBoundingClientRect();
             let newX = snap(Math.max(0, Math.min(rect.width - dragState.draggedElement.width, e.clientX - rect.left - dragState.dragOffset.x)));
             let newY = snap(Math.max(0, Math.min(rect.height - dragState.draggedElement.height, e.clientY - rect.top - dragState.dragOffset.y)));
             dragState.draggedElement.x = newX; dragState.draggedElement.y = newY;
-            document.getElementById(dragState.draggedElement.id).style.left = newX + 'px';
-            document.getElementById(dragState.draggedElement.id).style.top = newY + 'px';
-            document.getElementById('propX').value = newX; document.getElementById('propY').value = newY;
+            const dom = document.getElementById(dragState.draggedElement.id);
+            dom.style.left = newX + 'px';
+            dom.style.top = newY + 'px';
+            document.getElementById('propX').value = newX;
+            document.getElementById('propY').value = newY;
         }
+
         function handleMouseUp() {
-            if (dragState.isDragging) { document.getElementById(dragState.draggedElement.id).classList.remove('dragging'); dragState.isDragging = false; saveState(); }
-            document.removeEventListener('mousemove', handleMouseMove); document.removeEventListener('mouseup', handleMouseUp);
+            if (dragState.isDragging) {
+                document.getElementById(dragState.draggedElement.id).classList.remove('dragging');
+                dragState.isDragging = false;
+                saveState();
+            }
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
         }
 
         paper.addEventListener('mousedown', e => {
             if (e.target.classList.contains('resize-handle')) {
-                const el = designElements.find(i => i.id === e.target.parentElement.id);
+                const parentEl = e.target.parentElement;
+                const el = designElements.find(i => i.id === parentEl.id);
+                if (!el || el.locked) return; // Don't resize locked elements
                 dragState = { isResizing: true, draggedElement: el, startX: e.clientX, startY: e.clientY, startWidth: el.width, startHeight: el.height };
                 document.addEventListener('mousemove', handleResizeMove); document.addEventListener('mouseup', handleResizeEnd);
             }
         });
+
         function handleResizeMove(e) {
             if (!dragState.isResizing) return;
             const rect = paper.getBoundingClientRect();
@@ -920,6 +1205,7 @@
             if (['result_table', 'custom_text'].includes(dragState.draggedElement.type)) dom.querySelector('.content-wrapper').innerHTML = getDisplayContent(dragState.draggedElement);
             document.getElementById('propW').value = newWidth; document.getElementById('propH').value = newHeight;
         }
+
         function handleResizeEnd() {
             dragState.isResizing = false; document.removeEventListener('mousemove', handleResizeMove); document.removeEventListener('mouseup', handleResizeEnd); saveState();
         }
@@ -927,10 +1213,11 @@
         function selectElement(id) {
             selectedElementId = id;
             document.querySelectorAll('.design-element').forEach(el => el.classList.remove('selected'));
-            if (!id) { document.getElementById('propertiesPanel').classList.add('hidden'); document.getElementById('noSelectionHint').classList.remove('hidden'); return; }
+            if (!id) { document.getElementById('propertiesPanel').classList.add('hidden'); document.getElementById('noSelectionHint').classList.remove('hidden'); refreshElementList(); return; }
             document.getElementById(id).classList.add('selected');
             document.getElementById('propertiesPanel').classList.remove('hidden'); document.getElementById('noSelectionHint').classList.add('hidden');
             syncPropertiesPanel(designElements.find(item => item.id === id));
+            refreshElementList();
         }
 
         function syncPropertiesPanel(el) {
@@ -938,16 +1225,76 @@
             document.getElementById('propSelectionName').innerText = el.type.replace(/_/g, ' ').toUpperCase();
 
             // Sync all standard properties
-            ['x', 'y', 'width', 'height', 'fontSize', 'fontWeight', 'align', 'color', 'fontFamily'].forEach(p => {
-                if (document.getElementById('prop' + p.charAt(0).toUpperCase() + p.slice(1))) {
-                    document.getElementById('prop' + p.charAt(0).toUpperCase() + p.slice(1)).value = el[p];
+            document.getElementById('propX').value = el.x;
+            document.getElementById('propY').value = el.y;
+            document.getElementById('propW').value = el.width;
+            document.getElementById('propH').value = el.height;
+            document.getElementById('propZIndex').value = el.zIndex || 10;
+            document.getElementById('propOpacity').value = el.opacity !== undefined ? el.opacity : 1.0;
+
+            // Lock button state
+            const lockBtn = document.getElementById('lockBtn');
+            if (el.locked) {
+                lockBtn.innerHTML = '<i class="fas fa-lock"></i>';
+                lockBtn.classList.add('!bg-amber-100', '!text-amber-700');
+            } else {
+                lockBtn.innerHTML = '<i class="fas fa-lock-open"></i>';
+                lockBtn.classList.remove('!bg-amber-100', '!text-amber-700');
+            }
+
+            // Font family
+            const fontFamilySelect = document.getElementById('propFontFamily');
+            fontFamilySelect.value = el.fontFamily || "'FormaDJRArabic', sans-serif";
+
+            // Show/hide font properties group (not needed for shapes)
+            const isShapeLine = el.type === 'shape_line';
+            const isImage = IMAGE_TYPES.includes(el.type);
+            const isWatermark = el.type === 'watermark';
+            const isBarcode = el.type === 'barcode_image';
+            const isTable = el.type === 'result_table';
+            const isCustomText = el.type === 'custom_text';
+            const needsFont = !isShapeLine && !isImage && !isWatermark && !isBarcode;
+
+            document.getElementById('fontPropsGroup').classList.toggle('hidden', !needsFont);
+            document.getElementById('basicProps').classList.toggle('hidden', isTable || isShapeLine || isImage || isWatermark || isBarcode);
+
+            // Sync basic text properties
+            if (needsFont) {
+                document.getElementById('propFontSize').value = el.fontSize || 14;
+                document.getElementById('propFontWeight').value = el.fontWeight || 'normal';
+                document.getElementById('propAlign').value = el.align || 'left';
+                document.getElementById('propColor').value = el.color || '#0f172a';
+            }
+
+            // Show/hide label group (for data elements that support labels)
+            const showLabel = LABEL_TYPES.includes(el.type);
+            document.getElementById('labelGroup').classList.toggle('hidden', !showLabel);
+            if (showLabel) {
+                document.getElementById('propLabel').value = el.label || '';
+            }
+
+            // Show/hide custom text content group
+            document.getElementById('customTextGroup').classList.toggle('hidden', !isCustomText);
+            if (isCustomText) {
+                document.getElementById('propContent').value = el.content || '';
+            }
+
+            // Show/hide watermark group
+            document.getElementById('watermarkGroup').classList.toggle('hidden', !isWatermark);
+            if (isWatermark) {
+                const preview = document.getElementById('watermarkPreview');
+                if (el.image) {
+                    preview.classList.remove('hidden');
+                    document.getElementById('watermarkThumb').src = '/uploads/' + el.image;
+                    document.getElementById('watermarkFilename').textContent = el.image;
+                } else {
+                    preview.classList.add('hidden');
                 }
-            });
+            }
 
-            document.getElementById('basicProps').classList.toggle('hidden', el.type === 'result_table');
-
-            document.getElementById('tableProps').classList.toggle('hidden', el.type !== 'result_table');
-            if (el.type === 'result_table') {
+            // Show/hide table properties
+            document.getElementById('tableProps').classList.toggle('hidden', !isTable);
+            if (isTable) {
                 document.getElementById('propTableLayout').value = el.tableLayout || 'auto';
                 document.getElementById('propColWidths').value = el.colWidths || '';
                 document.getElementById('propCellPadding').value = el.cellPadding !== undefined ? el.cellPadding : 8;
@@ -957,6 +1304,10 @@
                 document.getElementById('propZebraColor').value = el.zebraColor || '#f8fafc';
                 document.getElementById('propHeaderFontSize').value = el.headerFontSize || 12;
                 document.getElementById('propRowFontSize').value = el.rowFontSize || 12;
+                document.getElementById('propHeaderHeight').value = el.headerHeight || '';
+                document.getElementById('propHeaderAlign').value = el.headerAlign || 'left';
+                document.getElementById('propRowHeight').value = el.rowHeight || '';
+                document.getElementById('propRowAlign').value = el.rowAlign || 'left';
                 document.getElementById('propTableCols').value = (el.columns || []).join(',');
                 document.getElementById('propHeaderBg').value = el.headerBg || '#f8fafc';
                 document.getElementById('propHeaderColor').value = el.headerColor || '#1e293b';
@@ -970,7 +1321,8 @@
             const el = designElements.find(item => item.id === selectedElementId);
 
             let value = val;
-            if (['x', 'y', 'width', 'height', 'fontSize', 'cellPadding', 'borderWidth', 'headerFontSize', 'rowFontSize'].includes(prop)) value = parseInt(val) || 0;
+            if (['x', 'y', 'width', 'height', 'fontSize', 'cellPadding', 'borderWidth', 'headerFontSize', 'rowFontSize', 'headerHeight', 'rowHeight', 'zIndex'].includes(prop)) value = parseInt(val) || 0;
+            if (['opacity'].includes(prop)) value = parseFloat(val) || 0;
             if (['wordWrap', 'zebraStripes'].includes(prop)) value = val;
             if (prop === 'columns') value = val.map(v => v.trim()).filter(v => v !== '');
 
@@ -983,9 +1335,36 @@
             if (selectedElementId === id) selectElement(null);
             if (designElements.length === 0) emptyHint.style.display = 'flex';
             saveState();
+            refreshElementList();
         }
 
         function deselectAll() { selectElement(null); }
+
+        // --- Element List ---
+        let elementListOpen = true;
+        function toggleElementList() {
+            elementListOpen = !elementListOpen;
+            document.getElementById('elementListBody').classList.toggle('hidden', !elementListOpen);
+            document.getElementById('elementListToggleIcon').style.transform = elementListOpen ? '' : 'rotate(-90deg)';
+        }
+
+        function refreshElementList() {
+            const body = document.getElementById('elementListBody');
+            if (!body) return;
+            if (designElements.length === 0) {
+                body.innerHTML = '<div class="text-xs text-slate-400 italic py-2 text-center">No elements yet</div>';
+                return;
+            }
+            body.innerHTML = designElements.map(el => {
+                const isActive = el.id === selectedElementId;
+                const typeName = el.type.replace(/_/g, ' ');
+                const lockIcon = el.locked ? '<i class="fas fa-lock text-amber-500 text-[9px]"></i>' : '';
+                return `<div class="element-list-item ${isActive ? 'active' : ''}" onclick="selectElement('${el.id}')">
+                    <span class="truncate">${typeName}</span>
+                    <span class="flex items-center gap-1">${lockIcon}<span class="text-[9px] text-slate-400">z:${el.zIndex || 10}</span></span>
+                </div>`;
+            }).join('');
+        }
 
         async function loadLabInfoForPreview() {
             try {
@@ -1005,6 +1384,7 @@
                 setPaperSize(paperWidth, paperHeight); if (designElements.length > 0) emptyHint.style.display = 'none';
                 designElements.forEach(renderElement);
                 historyStack = [JSON.parse(JSON.stringify(designElements))]; historyIndex = 0;
+                refreshElementList();
             }
         }
 
@@ -1013,7 +1393,7 @@
                 designElements = []; elementIdCounter = 0;
                 paper.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center opacity-10 pointer-events-none" id="emptyHint"><i class="fas fa-vial text-[120px] mb-4"></i><p class="text-2xl font-bold tracking-widest uppercase">Drag Elements Here</p></div>`;
                 document.getElementById('emptyHint').style.display = 'flex';
-                selectElement(null); saveState(); showToast('Canvas Cleared');
+                selectElement(null); saveState(); refreshElementList(); showToast('Canvas Cleared');
             }
         }
 
@@ -1046,7 +1426,7 @@
                     paper.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center opacity-10 pointer-events-none" id="emptyHint"><i class="fas fa-vial text-[120px] mb-4"></i><p class="text-2xl font-bold tracking-widest uppercase">Drag Elements Here</p></div>`;
                     if (designElements.length > 0) document.getElementById('emptyHint').style.display = 'none';
                     designElements.forEach(renderElement);
-                    historyStack = [JSON.parse(JSON.stringify(designElements))]; historyIndex = 0; saveLocal(); showToast('Template Loaded from Database!');
+                    historyStack = [JSON.parse(JSON.stringify(designElements))]; historyIndex = 0; saveLocal(); refreshElementList(); showToast('Template Loaded from Database!');
                 } else alert('No saved template found on the server.');
             } catch (err) { alert('Error loading from database. Check console (F12).\n\nDetails: ' + err.message); }
         }
@@ -1062,7 +1442,7 @@
             }, 3000);
         }
 
-        window.addEventListener('load', async () => { await loadLabInfoForPreview(); loadLocal(); if (designElements.length === 0) loadDesign(); });
+        window.addEventListener('load', async () => { await loadLabInfoForPreview(); loadLocal(); if (designElements.length === 0) loadDesign(); refreshElementList(); });
     </script>
 </body>
 

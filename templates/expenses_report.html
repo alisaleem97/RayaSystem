@@ -1,0 +1,248 @@
+<!-- templates/expenses_report.html -->
+{% extends "base.html" %}
+
+{% block title %}Expenses Report - NexLab{% endblock %}
+{% block page_title %}Expenses Report{% endblock %}
+
+{% block content %}
+<!-- Flatpickr for Date Selection -->
+<link rel="stylesheet" href="/static/vendor/flatpickr/flatpickr.min.css">
+<script src="/static/vendor/flatpickr/flatpickr.min.js"></script>
+
+<!-- Filter Form -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6 overflow-hidden">
+    <div class="p-6">
+        <form action="/reports/expenses" method="GET" class="flex flex-wrap items-end gap-4">
+            
+            <!-- Dates (From - To in DD-MM-YYYY) -->
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">From Date</label>
+                <input type="text" name="start_date" required value="{{ start_date }}"
+                    class="datepicker w-36 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+            </div>
+            
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">To Date</label>
+                <input type="text" name="end_date" required value="{{ end_date }}"
+                    class="datepicker w-36 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+            </div>
+
+            <!-- Expense Type Dropdown -->
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Type</label>
+                <select name="type_id" class="w-48 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm bg-white cursor-pointer">
+                    <option value="all">All Types</option>
+                    {% for etype in expense_types %}
+                    <option value="{{ etype.id }}" {% if type_filter == etype.id|string %}selected{% endif %}>{{ etype.type_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- User Filter Dropdown -->
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">User</label>
+                <select name="user_id" class="w-48 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm bg-white cursor-pointer select2">
+                    <option value="all">All Users</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}" {% if user_filter == u.id|string %}selected{% endif %}>{{ u.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Buttons -->
+            <div class="flex items-center gap-2 ml-auto">
+                <a href="/reports/expenses" class="text-xs font-medium text-slate-600 hover:text-slate-800 transition-colors uppercase tracking-wider px-3 py-2">
+                    Reset
+                </a>
+                <button type="submit"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-all duration-300 shadow-md shadow-indigo-100 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    Generate Report
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Table Results -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    <th class="px-6 py-4">ID</th>
+                    <th class="px-6 py-4">Type</th>
+                    <th class="px-6 py-4">Date</th>
+                    <th class="px-6 py-4">Amount</th>
+                    <th class="px-6 py-4">Notes</th>
+                    <th class="px-6 py-4">File</th>
+                    <th class="px-6 py-4">User</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+                {% if expenses %}
+                    {% for exp in expenses %}
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        <td class="px-6 py-4 text-slate-500 font-mono">#{{ exp.id }}</td>
+                        <td class="px-6 py-4 font-semibold text-slate-800">{{ exp.expense_type.type_name }}</td>
+                        <td class="px-6 py-4 text-slate-600">{{ exp.expense_date.strftime('%d-%m-%Y') }}</td>
+                        <td class="px-6 py-4 font-bold text-slate-900">{{ "{:,.2f}".format(exp.amount) }}</td>
+                        <td class="px-6 py-4 text-slate-500 max-w-xs truncate" title="{{ exp.note if exp.note else '' }}">
+                            {{ exp.note if exp.note else '-' }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if exp.file_path %}
+                            <a href="/{{ exp.file_path }}" target="_blank" class="inline-flex items-center text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
+                                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                                View File
+                            </a>
+                            {% else %}
+                            <span class="text-slate-300 inline-flex items-center">
+                                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+                                No File
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center gap-2">
+                                <div class="w-6 h-6 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs">
+                                    {{ user_dict.get(exp.created_by, "Unknown")[0]|upper }}
+                                </div>
+                                <span class="font-medium text-slate-800">{{ user_dict.get(exp.created_by, "Unknown") }}</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-12 text-center text-slate-400 italic">No expenses matching the selected criteria.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+            {% if expenses %}
+            <tfoot class="bg-slate-50 border-t-2 border-slate-200 font-bold">
+                <tr>
+                    <td colspan="3" class="px-6 py-4 text-slate-700 uppercase tracking-wider text-sm">Total Summary</td>
+                    <td colspan="4" class="px-6 py-4 text-left text-lg text-indigo-700">{{ "{:,.2f}".format(total_amount) }}</td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+
+<!-- Edit Expense Modal Dialog -->
+<div id="editExpenseModal" class="fixed inset-0 z-50 overflow-y-auto hidden">
+    <!-- backdrop overlay -->
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onclick="closeEditModal()"></div>
+    
+    <!-- Modal content container -->
+    <div class="flex min-h-full items-center justify-center p-4">
+        <div class="relative transform overflow-hidden rounded-2xl bg-white shadow-2xl transition-all w-full max-w-md border border-slate-100">
+            <!-- Modal Header -->
+            <div class="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                <h3 class="text-base font-bold text-slate-800" id="modalTitle">Edit Expense</h3>
+                <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600 transition-colors p-1 hover:bg-slate-100 rounded-full">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <!-- Modal Form -->
+            <form id="editExpenseForm" action="" method="POST" enctype="multipart/form-data" class="p-6 space-y-4">
+                <!-- Type -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Expense Type</label>
+                    <select name="type_id" id="editType" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+                        {% for etype in expense_types %}
+                        <option value="{{ etype.id }}">{{ etype.type_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Date -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Expense Date</label>
+                    <input type="date" name="expense_date" id="editDate" required 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+                </div>
+                
+                <!-- Amount -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Amount</label>
+                    <input type="number" step="0.01" name="amount" id="editAmount" required placeholder="0.00" 
+                           class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+                </div>
+                
+                <!-- Note -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Notes</label>
+                    <textarea name="note" id="editNote" placeholder="Optional notes" rows="3" 
+                              class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm resize-none"></textarea>
+                </div>
+                
+                <!-- File receipt upload -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Receipt File (Optional)</label>
+                    <input type="file" name="file" 
+                           class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200">
+                    <p class="text-xs text-slate-400 mt-1">Leave empty to keep current file.</p>
+                </div>
+                
+                <!-- Modal Footer -->
+                <div class="flex gap-3 pt-4 border-t border-slate-100 justify-end">
+                    <button type="button" onclick="closeEditModal()" 
+                            class="px-4 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" 
+                            class="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-sm">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Initialize datepickers
+    document.addEventListener('DOMContentLoaded', function() {
+        flatpickr(".datepicker", {
+            dateFormat: "d-m-Y",
+            allowInput: true
+        });
+    });
+
+    // Modal populate and show logic
+    const expenses = {{ expenses_json | tojson | safe }};
+
+    function openEditModal(index) {
+        const exp = expenses[index];
+        document.getElementById('modalTitle').textContent = `Edit Expense #${exp.id}`;
+        document.getElementById('editType').value = exp.type_id;
+        
+        // Date input expects YYYY-MM-DD
+        document.getElementById('editDate').value = exp.expense_date;
+        document.getElementById('editAmount').value = exp.amount;
+        document.getElementById('editNote').value = exp.note || '';
+        
+        // Set action endpoint
+        document.getElementById('editExpenseForm').action = `/reports/expenses/update/${exp.id}`;
+        
+        // Show modal
+        const modal = document.getElementById('editExpenseModal');
+        modal.classList.remove('hidden');
+    }
+
+    function closeEditModal() {
+        document.getElementById('editExpenseModal').classList.add('hidden');
+    }
+
+    // Close modal on escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeEditModal();
+        }
+    });
+</script>
+{% endblock %}

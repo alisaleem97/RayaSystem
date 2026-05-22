@@ -100,11 +100,15 @@ class SettingsDialog(tk.Toplevel):
         # Barcode Printer & Orientation
         tk.Label(main_frame, text="Barcode Printer", font=('Arial', 14, 'bold'),
                  bg='white', fg='#2c3e50').pack(pady=(10, 5))
-        self.barcode_var = tk.StringVar(value=config.get('barcode_printer', ''))
+        saved_barcode = config.get('barcode_printer', '')
+        self.barcode_var = tk.StringVar(value=saved_barcode)
         if available_printers:
             barcode_combo = ttk.Combobox(main_frame, textvariable=self.barcode_var,
                                         values=available_printers, font=('Arial', 12), width=28)
             barcode_combo.pack(pady=(0, 5))
+            # Pre-select saved printer if it's in the list
+            if saved_barcode in available_printers:
+                barcode_combo.current(available_printers.index(saved_barcode))
         else:
             barcode_entry = tk.Entry(main_frame, textvariable=self.barcode_var,
                                      font=('Arial', 12), width=30, bd=2, relief=tk.GROOVE)
@@ -119,11 +123,15 @@ class SettingsDialog(tk.Toplevel):
         # Receipt Printer & Orientation
         tk.Label(main_frame, text="Receipt Printer", font=('Arial', 14, 'bold'),
                  bg='white', fg='#2c3e50').pack(pady=(10, 5))
-        self.receipt_var = tk.StringVar(value=config.get('receipt_printer', ''))
+        saved_receipt = config.get('receipt_printer', '')
+        self.receipt_var = tk.StringVar(value=saved_receipt)
         if available_printers:
             receipt_combo = ttk.Combobox(main_frame, textvariable=self.receipt_var,
                                         values=available_printers, font=('Arial', 12), width=28)
             receipt_combo.pack(pady=(0, 5))
+            # Pre-select saved printer if it's in the list
+            if saved_receipt in available_printers:
+                receipt_combo.current(available_printers.index(saved_receipt))
         else:
             receipt_entry = tk.Entry(main_frame, textvariable=self.receipt_var,
                                      font=('Arial', 12), width=30, bd=2, relief=tk.GROOVE)
@@ -266,7 +274,12 @@ class NexPrintApp:
             else:
                 self.log("⚠ SumatraPDF.exe not found! Place it in the NexPrint folder.", 'warning')
             
-            if not self.config.get('barcode_printer') and not self.config.get('receipt_printer'):
+            # Show loaded printer config
+            bp = self.config.get('barcode_printer', '')
+            rp = self.config.get('receipt_printer', '')
+            if bp or rp:
+                self.log(f"Loaded printers — Barcode: {bp or 'Not set'}, Receipt: {rp or 'Not set'}", 'info')
+            else:
                 self.log("⚠ No printers configured. Click 'Set Names' to configure.", 'warning')
                 
         except RuntimeError as e:
@@ -303,9 +316,26 @@ class NexPrintApp:
     
     def _on_close(self):
         """Handle window close."""
-        if self.server:
-            self.server.stop()
-        self.root.destroy()
+        # Hide window immediately so the user sees instant feedback
+        self.root.withdraw()
+        
+        # Attempt graceful shutdown in a thread with a timeout
+        import threading
+        def _shutdown():
+            try:
+                if self.server:
+                    self.server.stop()
+            except Exception:
+                pass
+            finally:
+                os._exit(0)
+        
+        t = threading.Thread(target=_shutdown, daemon=True)
+        t.start()
+        t.join(timeout=2)  # Wait max 2 seconds
+        
+        # If still alive after 2s, force exit
+        os._exit(0)
     
     def run(self):
         """Start the application."""

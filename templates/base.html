@@ -542,7 +542,7 @@
                 {% endif %}
 
                 <!-- Reports -->
-                {% if has_page('detailed_income') or has_page('net_amounts') or has_page('payment_records') or has_page('patients_number') or has_page('tests_number') or has_page('discount_report') %}
+                {% if has_page('detailed_income') or has_page('net_amounts') or has_page('payment_records') or has_page('patients_number') or has_page('tests_number') or has_page('discount_report') or has_page('expenses_report') %}
                 <div class="mt-2">
                     <button onclick="toggleSubMenu('reportsMenu')" class="w-full flex items-center justify-between px-6 py-3 text-slate-300 hover:text-white hover:bg-slate-800 transition-all group">
                         <div class="flex items-center">
@@ -580,6 +580,11 @@
                         {% if has_page('tests_number') %}<li>
                             <a href="/reports/tests-number" class="sidebar-link flex items-center px-6 py-3 submenu-item transition-colors {% if request.url.path == '/reports/tests-number' %}active{% endif %}">
                                 Test Number
+                            </a>
+                        </li>{% endif %}
+                        {% if has_page('expenses_report') %}<li>
+                            <a href="/reports/expenses" class="sidebar-link flex items-center px-6 py-3 submenu-item transition-colors {% if request.url.path == '/reports/expenses' %}active{% endif %}">
+                                Expenses Report
                             </a>
                         </li>{% endif %}
                     </ul>

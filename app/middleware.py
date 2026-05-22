@@ -3,9 +3,11 @@
 
 import hashlib
 from starlette.responses import RedirectResponse as StarletteRedirect
-from itsdangerous import URLSafeSerializer
 
 from app.config import SECRET_KEY
+from sqlmodel import Session
+from app.database import engine
+from app.services.auth_service import get_current_user
 
 # Pre-compute the print token once at import time (not per-request)
 PRINT_TOKEN = hashlib.sha256(SECRET_KEY.encode()).hexdigest()[:16]
@@ -25,24 +27,19 @@ async def auth_middleware(request, call_next):
         is_public = True
 
     # NexPrint token bypass for barcode/receipt printing
-    if path.startswith("/print-barcode/") or path.startswith("/print-receipt/") or path.startswith("/api/print-barcode-pdf/"):
+    if path.startswith("/print-barcode/") or path.startswith("/print-receipt/") or path.startswith("/api/print-barcode-pdf/") or path.startswith("/api/print-barcode-image/"):
         token = request.query_params.get("print_token", "")
         if token == PRINT_TOKEN:
             is_public = True
 
     if not is_public:
-        try:
-            s = URLSafeSerializer(SECRET_KEY)
-            cookie = request.cookies.get("nexlab_session")
-            if not cookie:
-                return StarletteRedirect(url="/login", status_code=303)
-            data = s.loads(cookie)
-            user_id = data.get("user_id")
-            if not user_id:
-                return StarletteRedirect(url="/login", status_code=303)
-            request.state.user_id = user_id
-        except Exception:
-            return StarletteRedirect(url="/login", status_code=303)
+        with Session(engine) as session:
+            user = get_current_user(request, session)
+            if not user:
+                response = StarletteRedirect(url="/login", status_code=303)
+                response.delete_cookie("nexlab_session")
+                return response
+            request.state.user_id = user.id
 
     response = await call_next(request)
     return response
