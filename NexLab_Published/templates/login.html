@@ -2,46 +2,606 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - NexLab</title>
-    <script src="/static/vendor/tailwind/tailwindcss.js"></script>
-    <link href="/static/vendor/fonts/fonts.css" rel="stylesheet">
-    <style>body { font-family: 'Inter', sans-serif; }</style>
-</head>
-<body class="bg-slate-100 h-screen flex items-center justify-center">
-    <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
-        <div class="text-center mb-8">
-            <h1 class="text-3xl font-bold text-slate-800">🔬 <span class="text-indigo-600">NEX</span>LAB</h1>
-            <p class="text-slate-500 mt-2">Laboratory Information System</p>
-        </div>
-        
-        {% if message_error %}
-            <div class="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded">
-                <p>{{ message_error }}</p>
-            </div>
-        {% endif %}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login - NexLab LIS</title>
 
-        <form method="POST" action="/login">
-            <div class="mb-4">
-                <label class="block text-slate-700 text-sm font-bold mb-2" for="username">Username</label>
-                <input class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-3 px-4 text-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" 
-                       id="username" name="username" type="text" placeholder="Enter username" required>
-            </div>
-            <div class="mb-6">
-                <label class="block text-slate-700 text-sm font-bold mb-2" for="password">Password</label>
-                <input class="shadow-sm appearance-none border border-slate-300 rounded-lg w-full py-3 px-4 text-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" 
-                       id="password" name="password" type="password" placeholder="Enter password" required>
-            </div>
-            <div class="flex items-center justify-between">
-                <button class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg w-full transition duration-300 transform hover:scale-105" type="submit">
-                    Sign In
-                </button>
-            </div>
-        </form>
-        <p class="text-center text-slate-400 text-xs mt-8">
-            &copy; 2026 NexLab System. Secure Access.
-        </p>
+<!-- Fonts & GSAP Libraries -->
+<link href="/static/vendor/fonts/fonts.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+<style>
+:root {
+  --bg-color: #0b1121;
+  --card-bg: rgba(30, 41, 59, 0.5);
+  --accent: #00f2fe;
+  --text: #f8fafc;
+  --angry-red: #ff2a2a;
+  --success-green: #10b981;
+}
+
+body {
+  background: radial-gradient(circle at 50% 0%, #1e293b 0%, #0b1121 80%);
+  color: var(--text);
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  overflow: hidden;
+  perspective: 1000px;
+  transition: background 0.5s ease;
+}
+
+/* ================= FIRE BACKGROUND ================= */
+body.on-fire {
+  background: radial-gradient(circle at 50% 100%, #8b0000 0%, #300000 40%, #0b1121 80%);
+  animation: firePulse 0.4s infinite alternate;
+}
+
+@keyframes firePulse {
+  0% { background: radial-gradient(circle at 50% 100%, #7a0000 0%, #200000 40%, #0b1121 80%); }
+  100% { background: radial-gradient(circle at 50% 100%, #a80000 0%, #4a0000 40%, #0b1121 80%); }
+}
+
+.ember {
+  position: fixed; width: 6px; height: 6px; background: #ff6600; border-radius: 50%;
+  pointer-events: none; z-index: 0; box-shadow: 0 0 8px #ff3300, 0 0 15px #ff0000; opacity: 0;
+}
+
+/* ================= UI & CARD ================= */
+.login-wrapper {
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 40px;
+  border-radius: 30px;
+  width: 340px;
+  text-align: center;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  position: relative;
+  z-index: 2;
+  transition: box-shadow 0.5s ease;
+}
+
+body.on-fire .login-wrapper { box-shadow: 0 25px 50px -12px rgba(255, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+
+.svg-container {
+  width: 260px; height: 260px; margin: -20px auto 20px; overflow: visible;
+  filter: drop-shadow(0 20px 20px rgba(0,0,0,0.5)); position: relative;
+}
+
+/* ================= DYNAMIC AURA ================= */
+.robot-aura {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 180px; height: 180px;
+  transform: translate(-50%, -50%);
+  background: var(--accent);
+  border-radius: 50%;
+  filter: blur(40px);
+  opacity: 0.3;
+  z-index: -1;
+  transition: background 0.5s ease, opacity 0.5s ease;
+  pointer-events: none;
+}
+
+/* ================= SLEEP ZZZ ================= */
+.sleep-z {
+  position: absolute;
+  top: 20px; right: 30px;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: 0 0 10px var(--accent);
+}
+
+/* ================= ERROR BUBBLE ================= */
+.error-bubble {
+  position: absolute; top: -10px; left: 50%; transform: translate(-50%, -100%) scale(0);
+  background: var(--angry-red); color: white; padding: 14px 24px; border-radius: 50px;
+  font-weight: 800; font-size: 0.85rem; box-shadow: 0 8px 25px rgba(255, 42, 42, 0.6);
+  white-space: nowrap; z-index: 10; pointer-events: none; letter-spacing: 0.5px;
+}
+.bubble-tail {
+  position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);
+  width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 16px solid var(--angry-red);
+}
+
+/* ================= FORM ELEMENTS ================= */
+#torso { cursor: pointer; transition: filter 0.2s ease; }
+#torso:hover { filter: brightness(1.15); }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+
+.input-wrapper { position: relative; margin-bottom: 20px; }
+
+.input-field {
+  box-sizing: border-box; width: 100%; padding: 16px; 
+  background: rgba(15, 23, 42, 0.6); border-radius: 14px;
+  border: 2px solid rgba(255,255,255,0.05); color: white; outline: none;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.input-field:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(0, 242, 254, 0.2); }
+.input-field::placeholder { color: #64748b; }
+
+/* Password Toggle Button */
+.toggle-pass {
+  position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: #64748b; cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: color 0.2s;
+}
+.toggle-pass:hover { color: var(--accent); }
+.toggle-pass svg { width: 20px; height: 20px; }
+
+button.submit-btn {
+  width: 100%; padding: 16px; border-radius: 14px; border: none;
+  font-weight: 800; font-size: 1rem; color: #020617;
+  background: linear-gradient(135deg, #4facfe, #00f2fe); cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+button.submit-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0, 242, 254, 0.3); }
+button.submit-btn:active { transform: translateY(1px); }
+
+/* Logo and Title */
+.system-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text);
+  margin-top: 10px;
+  margin-bottom: 2px;
+  letter-spacing: 0.5px;
+}
+.system-title span {
+  color: var(--accent);
+}
+.system-subtitle {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-bottom: 24px;
+}
+.footer-text {
+  font-size: 0.75rem;
+  color: #475569;
+  margin-top: 24px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="embers-container"></div>
+
+<div class="login-wrapper">
+  <!-- System Identity -->
+  <div class="system-title">🔬 <span>NEX</span>LAB</div>
+  <div class="system-subtitle">Laboratory Information System</div>
+
+  <div class="svg-container" aria-hidden="true">
+    <!-- Dynamic Aura -->
+    <div class="robot-aura" id="robot-aura"></div>
+    
+    <!-- Sleep Z -->
+    <div class="sleep-z" id="sleep-z">Z</div>
+
+    <!-- Error Message Bubble -->
+    <div id="error-bubble" class="error-bubble">
+      {% if message_error %}
+        {{ message_error }}
+      {% else %}
+        Invalid username or password
+      {% endif %}
+      <div class="bubble-tail"></div>
     </div>
+
+    <svg viewBox="0 0 300 350" width="100%" height="100%">
+      <defs>
+        <linearGradient id="body-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="80%" stop-color="#e2e8f0"/><stop offset="100%" stop-color="#94a3b8"/>
+        </linearGradient>
+        <linearGradient id="screen-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#020617"/>
+        </linearGradient>
+        <linearGradient id="cyan-glow" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="50%" stop-color="#80f8ff"/><stop offset="100%" stop-color="#00e5ff"/>
+        </linearGradient>
+      </defs>
+
+      <g id="entire-robot">
+        <rect x="35" y="80" width="25" height="60" rx="12.5" fill="url(#body-grad)"/>
+        <rect x="240" y="80" width="25" height="60" rx="12.5" fill="url(#body-grad)"/>
+        <rect x="130" y="160" width="40" height="30" rx="5" fill="#64748b"/>
+
+        <g id="torso">
+          <path d="M 80 200 C 80 160, 220 160, 220 200 C 240 280, 200 330, 150 330 C 100 330, 60 280, 80 200 Z" fill="url(#body-grad)"/>
+        </g>
+
+        <g id="head-group">
+          <rect x="45" y="40" width="210" height="135" rx="60" fill="url(#body-grad)"/>
+          <rect x="65" y="55" width="170" height="95" rx="35" fill="url(#screen-grad)"/>
+          <g id="face-features">
+            <path id="left-eye" d="M 95 105 A 16 16 0 0 1 127 105 Z" fill="url(#cyan-glow)"/>
+            <path id="right-eye" d="M 173 105 A 16 16 0 0 1 205 105 Z" fill="url(#cyan-glow)"/>
+            <path id="mouth" d="M 135 115 A 15 15 0 0 0 165 115 Z" fill="url(#cyan-glow)"/>
+          </g>
+        </g>
+
+        <path id="left-arm-path" fill="none" stroke="url(#body-grad)" stroke-width="26" stroke-linecap="round"/>
+        <path id="right-arm-path" fill="none" stroke="url(#body-grad)" stroke-width="26" stroke-linecap="round"/>
+        <g id="left-hand"><circle r="16" fill="#cbd5e1"/></g>
+        <g id="right-hand"><circle r="16" fill="#cbd5e1"/></g>
+      </g>
+    </svg>
+  </div>
+
+  <form id="login-form" method="POST" action="/login">
+    <label for="username" class="sr-only">Username</label>
+    <div class="input-wrapper">
+      <input type="text" id="username" name="username" class="input-field" placeholder="Username" autocomplete="username" required>
+    </div>
+    
+    <label for="password" class="sr-only">Password</label>
+    <div class="input-wrapper">
+      <input type="password" id="password" name="password" class="input-field" placeholder="Password" autocomplete="current-password" style="padding-right: 48px;" required>
+      <button type="button" class="toggle-pass" id="toggle-pass" aria-label="Toggle password visibility">
+        <svg id="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+      </button>
+    </div>
+    
+    <button type="submit" class="submit-btn">Login</button>
+  </form>
+
+  <p class="footer-text">&copy; 2026 NexLab System. Secure Portal.</p>
+</div>
+
+<script>
+/* ================= STATE ================= */
+const usernameInput = document.getElementById('username');
+const passwordInput = document.getElementById('password');
+const form = document.getElementById('login-form');
+const torso = document.getElementById('torso');
+const togglePassBtn = document.getElementById('toggle-pass');
+const aura = document.getElementById('robot-aura');
+const sleepZ = document.getElementById('sleep-z');
+
+let isPasswordFocused = false;
+let isUsernameFocused = false;
+let isPasswordVisible = false;
+let isPeeking = false;
+let isLaughing = false;
+let isAngry = false;
+let isSleeping = false;
+let isSuccess = false;
+let peekTimeout;
+let torsoEnterTime = 0;
+let idleTimer;
+
+gsap.set(["#left-eye", "#right-eye", "#mouth"], { transformOrigin: "center center" });
+
+/* ================= IK ================= */
+const leftIK = { shoulderX:65, shoulderY:205, elbowX:45, elbowY:250, handX:55, handY:290 };
+const rightIK = { shoulderX:235, shoulderY:205, elbowX:255, elbowY:250, handX:245, handY:290 };
+const leftArmPath = document.getElementById("left-arm-path");
+const rightArmPath = document.getElementById("right-arm-path");
+const leftHand = document.getElementById("left-hand");
+const rightHand = document.getElementById("right-hand");
+
+function renderArms() {
+  leftArmPath.setAttribute("d", `M ${leftIK.shoulderX} ${leftIK.shoulderY} Q ${leftIK.elbowX} ${leftIK.elbowY} ${leftIK.handX} ${leftIK.handY}`);
+  rightArmPath.setAttribute("d", `M ${rightIK.shoulderX} ${rightIK.shoulderY} Q ${rightIK.elbowX} ${rightIK.elbowY} ${rightIK.handX} ${rightIK.handY}`);
+  leftHand.setAttribute("transform", `translate(${leftIK.handX},${leftIK.handY})`);
+  rightHand.setAttribute("transform", `translate(${rightIK.handX},${rightIK.handY})`);
+}
+gsap.ticker.add(renderArms);
+
+/* ================= IDLE BLINKING ================= */
+function randomBlink() {
+  if (!isPasswordFocused && !isLaughing && !isAngry && !isSleeping && !isSuccess) {
+    gsap.to(["#left-eye", "#right-eye"], { scaleY: 0.1, duration: 0.1, yoyo: true, repeat: 1 });
+  }
+  gsap.delayedCall(gsap.utils.random(2, 6), randomBlink);
+}
+randomBlink();
+
+/* ================= MOUSE HEAD TRACK ================= */
+window.addEventListener('mousemove', (e) => {
+  resetIdleTimer();
+  if (isSleeping) wakeUp();
+  if (isPasswordFocused || isLaughing || isAngry || isUsernameFocused || isSuccess) return;
+  
+  const x = (e.clientX / window.innerWidth - 0.5) * 2;
+  const y = (e.clientY / window.innerHeight - 0.5) * 2;
+  gsap.to("#head-group", { x: x * 12, y: y * 8, rotationY: x * 15, rotationX: -y * 10, duration: 0.5 });
+  gsap.to("#face-features", { x: x * 20, y: y * 15, duration: 0.5 });
+});
+
+/* ================= USERNAME FOCUS (Attentive Look) ================= */
+usernameInput.addEventListener('focus', () => {
+  if (isAngry) resetAngryState();
+  if (isSleeping) wakeUp();
+  resetIdleTimer();
+  isUsernameFocused = true;
+  
+  // Look down at the username field
+  gsap.to("#head-group", { y: 15, rotationX: 15, duration: 0.4 });
+  // Eyes widen slightly in focus
+  gsap.to(["#left-eye", "#right-eye"], { scaleY: 1.2, scaleX: 1.1, duration: 0.3 });
+});
+
+usernameInput.addEventListener('blur', () => {
+  isUsernameFocused = false;
+  gsap.to("#head-group", { y: 0, rotationX: 0, duration: 0.4 });
+  gsap.to(["#left-eye", "#right-eye"], { scaleY: 1, scaleX: 1, duration: 0.3 });
+});
+
+/* ================= PASSWORD PEEK ================= */
+passwordInput.addEventListener('input', () => {
+  resetIdleTimer();
+  if (isSleeping) wakeUp();
+  if (!isPasswordFocused || isPasswordVisible) return;
+  
+  if (!isPeeking) {
+    isPeeking = true;
+    gsap.to(leftIK, { handX: 85, handY: 140, elbowX: 15, elbowY: 170, duration: 0.25 });
+    gsap.to("#left-eye", { scaleY: 0.9, duration: 0.25 });
+  }
+  clearTimeout(peekTimeout);
+  peekTimeout = setTimeout(() => {
+    isPeeking = false;
+    if (isPasswordFocused && !isPasswordVisible) {
+      gsap.to(leftIK, { handX: 111, handY: 95, elbowX: -10, elbowY: 150, duration: 0.35 });
+      gsap.to("#left-eye", { scaleY: 0.1, duration: 0.35 });
+    }
+  }, 800);
+});
+
+/* ================= FOCUS & BLUR ================= */
+passwordInput.addEventListener('focus', () => {
+  if (isAngry) resetAngryState();
+  if (isSleeping) wakeUp();
+  resetIdleTimer();
+  isPasswordFocused = true;
+  
+  if (!isPasswordVisible) {
+    gsap.to(leftIK, { handX:111, handY:95, elbowX:-10, elbowY:150, duration:0.6 });
+    gsap.to(rightIK, { handX:189, handY:95, elbowX:310, elbowY:150, duration:0.6 });
+    gsap.to(["#left-eye","#right-eye"], { scaleY:0.1, duration: 0.3 });
+  }
+});
+
+passwordInput.addEventListener('blur', () => {
+  isPasswordFocused = false;
+  isPeeking = false;
+  clearTimeout(peekTimeout);
+  if (!isAngry && !isPasswordVisible) {
+    gsap.to(leftIK, { handX:55, handY:290, elbowX:45, elbowY:250, duration:0.6 });
+    gsap.to(rightIK, { handX:245, handY:290, elbowX:255, elbowY:250, duration:0.6 });
+    gsap.to(["#left-eye","#right-eye"], { scaleY:1, duration: 0.3 });
+  }
+});
+
+/* ================= SHOW/HIDE PASSWORD ================= */
+togglePassBtn.addEventListener('click', () => {
+  resetIdleTimer();
+  isPasswordVisible = !isPasswordVisible;
+  passwordInput.type = isPasswordVisible ? 'text' : 'password';
+  
+  if (isPasswordVisible) {
+    // Reveal password: Robot moves hands down and opens eyes
+    gsap.to(leftIK, { handX:55, handY:290, elbowX:45, elbowY:250, duration:0.4 });
+    gsap.to(rightIK, { handX:245, handY:290, elbowX:255, elbowY:250, duration:0.4 });
+    gsap.to(["#left-eye","#right-eye"], { scaleY:1.2, duration: 0.3 }); // Eyes wide open
+  } else if (isPasswordFocused) {
+    // Hide password: Robot covers eyes again
+    gsap.to(leftIK, { handX:111, handY:95, elbowX:-10, elbowY:150, duration:0.4 });
+    gsap.to(rightIK, { handX:189, handY:95, elbowX:310, elbowY:150, duration:0.4 });
+    gsap.to(["#left-eye","#right-eye"], { scaleY:0.1, duration: 0.3 });
+  }
+});
+
+/* ================= SUBMIT (API-DRIVEN VALIDATION) ================= */
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  resetIdleTimer();
+  if (isSleeping) wakeUp();
+  
+  const submitBtn = form.querySelector('.submit-btn');
+  submitBtn.disabled = true;
+  const originalBtnText = submitBtn.innerText;
+  submitBtn.innerText = "Connecting...";
+
+  if (isAngry) resetAngryState();
+
+  const formData = new FormData(form);
+  
+  try {
+    const response = await fetch('/login', {
+      method: 'POST',
+      body: formData
+    });
+    
+    // Check if redirect occurred (successful login -> dashboard)
+    if (response.redirected || (response.url && !response.url.includes('/login'))) {
+      window.location.href = response.url || '/';
+    } else {
+      // Failed login. Extract dynamic error string from server-rendered HTML.
+      const htmlText = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlText, 'text/html');
+      
+      const errorDiv = doc.querySelector('.border-red-500 p') || doc.querySelector('#error-bubble');
+      let errMsg = "Invalid username or password";
+      if (errorDiv) {
+        errMsg = errorDiv.textContent.trim();
+      }
+      
+      // Update error bubble text
+      const errorBubble = document.getElementById('error-bubble');
+      errorBubble.innerHTML = errMsg + '<div class="bubble-tail"></div>';
+      
+      triggerAngryState();
+      submitBtn.disabled = false;
+      submitBtn.innerText = originalBtnText;
+    }
+  } catch (err) {
+    console.error("Fetch failed. Falling back to standard form submit.", err);
+    form.submit();
+  }
+});
+
+/* ================= SUCCESS STATE ================= */
+function triggerSuccess() {
+  isSuccess = true;
+  // Aura turns green
+  gsap.to(aura, { background: "#10b981", opacity: 0.5, duration: 0.5 });
+  
+  const tl = gsap.timeline({ onComplete: () => { isSuccess = false; gsap.to(aura, { background: "#00f2fe", opacity: 0.3, duration: 1 }); } });
+  
+  // Happy dance & green screen flash
+  tl.to("#entire-robot", { y: -30, duration: 0.2, repeat: 3, yoyo: true, ease: "power2.out" })
+    .to("#mouth", { attr: { d: "M 120 125 Q 150 145 180 125" }, fill: "#10b981", duration: 0.3 }, 0) // Big smile
+    .to(["#left-eye", "#right-eye"], { fill: "#10b981", scaleY: 0.5, scaleX: 1.2, duration: 0.3 }, 0) // Happy squint
+    .to("#mouth", { attr: { d: "M 135 115 A 15 15 0 0 0 165 115 Z" }, fill: "url(#cyan-glow)", duration: 0.5 }, ">")
+    .to(["#left-eye", "#right-eye"], { fill: "url(#cyan-glow)", scaleY: 1, scaleX: 1, duration: 0.5 }, "<");
+}
+
+/* ================= ANGRY STATE ================= */
+function triggerAngryState() {
+  if (isAngry) return;
+  isAngry = true;
+  isPasswordFocused = false; 
+  gsap.to(aura, { background: "#ff2a2a", opacity: 0.6, duration: 0.3 }); // Aura turns red
+
+  gsap.to("#left-eye", { rotation: 25, y: 8, x: 5, fill: "#ff2a2a", duration: 0.3 });
+  gsap.to("#right-eye", { rotation: -25, y: 8, x: -5, fill: "#ff2a2a", duration: 0.3 });
+  gsap.to("#mouth", { scaleY: -1.2, y: -12, fill: "#ff2a2a", duration: 0.3 });
+
+  gsap.to("#error-bubble", { scale: 1, duration: 0.5, ease: "back.out(1.7)" });
+  gsap.to("#error-bubble", { y: -6, duration: 1.2, ease: "sine.inOut", yoyo: true, repeat: -1 });
+
+  gsap.to(rightIK, { handX: 190, handY: 30, elbowX: 270, elbowY: 100, duration: 0.5, ease: "back.out(1.4)" });
+  gsap.to(leftIK, { handX: 40, handY: 310, elbowX: 20, elbowY: 260, duration: 0.4 });
+
+  document.body.classList.add('on-fire');
+  startEmbers();
+}
+
+function resetAngryState() {
+  isAngry = false;
+  gsap.to(aura, { background: "#00f2fe", opacity: 0.3, duration: 0.5 }); // Aura back to cyan
+
+  gsap.to("#left-eye", { rotation: 0, y: 0, x: 0, fill: "url(#cyan-glow)", duration: 0.4 });
+  gsap.to("#right-eye", { rotation: 0, y: 0, x: 0, fill: "url(#cyan-glow)", duration: 0.4 });
+  gsap.to("#mouth", { scaleY: 1, y: 0, fill: "url(#cyan-glow)", duration: 0.4 });
+
+  gsap.killTweensOf("#error-bubble");
+  gsap.to("#error-bubble", { scale: 0, y: 0, duration: 0.3, ease: "back.in(1.7)" });
+
+  gsap.to(leftIK, { handX:55, handY:290, elbowX:45, elbowY:250, duration:0.6 });
+  gsap.to(rightIK, { handX:245, handY:290, elbowX:255, elbowY:250, duration:0.6 });
+
+  document.body.classList.remove('on-fire');
+  stopEmbers();
+}
+
+/* ================= SLEEP MODE ================= */
+function resetIdleTimer() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    if (!isAngry && !isPasswordFocused && !isUsernameFocused) triggerSleep();
+  }, 15000); // 15 seconds
+}
+resetIdleTimer(); // Start on load
+
+function triggerSleep() {
+  isSleeping = true;
+  // Head droops
+  gsap.to("#head-group", { y: 20, rotation: -10, duration: 1, ease: "power2.out" });
+  // Eyes become flat lines
+  gsap.to(["#left-eye", "#right-eye"], { scaleY: 0.1, duration: 0.5 });
+  // Show Z
+  gsap.to(sleepZ, { opacity: 1, y: -10, duration: 1, ease: "power2.out" });
+  gsap.to(sleepZ, { y: -30, opacity: 0, duration: 2, repeat: -1, delay: 1 });
+}
+
+function wakeUp() {
+  if (!isSleeping) return;
+  isSleeping = false;
+  gsap.killTweensOf(sleepZ);
+  gsap.to(sleepZ, { opacity: 0, y: 0, duration: 0.3 });
+  gsap.to("#head-group", { y: 0, rotation: 0, duration: 0.5, ease: "back.out(1.7)" });
+  gsap.to(["#left-eye", "#right-eye"], { scaleY: 1, duration: 0.3 });
+}
+
+/* ================= FIRE EMBERS ================= */
+function startEmbers() {
+  const container = document.getElementById('embers-container');
+  if (!container) return;
+  container.innerHTML = '';
+  for (let i = 0; i < 30; i++) {
+    const ember = document.createElement('div');
+    ember.className = 'ember';
+    container.appendChild(ember);
+    const startX = Math.random() * window.innerWidth;
+    const size = gsap.utils.random(4, 10);
+    gsap.set(ember, { x: startX, y: window.innerHeight + 20, width: size, height: size, opacity: 0 });
+    gsap.to(ember, {
+      y: -50, x: `+=${gsap.utils.random(-100, 100)}`, opacity: gsap.utils.random(0.4, 0.9),
+      duration: gsap.utils.random(2, 4), delay: gsap.utils.random(0, 2), repeat: -1, ease: "none",
+      onRepeat: function() { gsap.set(ember, { x: Math.random() * window.innerWidth, y: window.innerHeight + 20 }); }
+    });
+  }
+}
+
+function stopEmbers() {
+  const container = document.getElementById('embers-container');
+  if (!container) return;
+  gsap.killTweensOf(".ember");
+  gsap.to(".ember", { opacity: 0, duration: 0.5, onComplete: () => { container.innerHTML = ''; } });
+}
+
+/* ================= BELLY LAUGH ================= */
+torso.addEventListener('mouseenter', () => { torsoEnterTime = Date.now(); resetIdleTimer(); });
+torso.addEventListener('mouseleave', () => {
+  const hoverDuration = Date.now() - torsoEnterTime;
+  if (hoverDuration < 350 && !isLaughing && !isPasswordFocused && !isAngry) triggerLaugh();
+});
+
+function triggerLaugh() {
+  isLaughing = true;
+  const laughTl = gsap.timeline({ onComplete: () => { isLaughing = false; } });
+  laughTl.to(["#left-eye", "#right-eye"], { scaleY: 0.2, scaleX: 1.3, duration: 0.2 }, 0);
+  laughTl.to("#mouth", { scaleY: 2.5, scaleX: 1.4, duration: 0.2 }, 0);
+  laughTl.to("#torso", { y: -6, scaleY: 0.92, duration: 0.08, repeat: 7, yoyo: true, ease: "power2.inOut" }, 0);
+  laughTl.to("#head-group", { rotation: 5, y: -4, duration: 0.08, repeat: 7, yoyo: true, ease: "power2.inOut" }, 0.04);
+  laughTl.to(["#left-eye", "#right-eye"], { scaleY: 1, scaleX: 1, duration: 0.3 }, ">");
+  laughTl.to("#mouth", { scaleY: 1, scaleX: 1, duration: 0.3 }, "<");
+}
+
+/* ================= SPACE FLOAT ================= */
+gsap.to("#entire-robot", { y: -18, duration: 2.2, ease: "sine.inOut", yoyo: true, repeat: -1 });
+gsap.to("#torso", { scaleY: 1.02, scaleX: 1.01, duration: 3, ease: "sine.inOut", yoyo: true, repeat: -1 });
+gsap.to("#entire-robot", { rotation: 0.8, duration: 4, ease: "sine.inOut", yoyo: true, repeat: -1 });
+gsap.to("#entire-robot", { x: 6, duration: 5, ease: "sine.inOut", yoyo: true, repeat: -1 });
+
+// Also float the aura
+gsap.to("#robot-aura", { scale: 1.1, duration: 3, ease: "sine.inOut", yoyo: true, repeat: -1 });
+
+/* ================= SERVER RUNTIME INITIAL ERROR TRIGGER ================= */
+{% if message_error %}
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    triggerAngryState();
+  }, 400);
+});
+{% endif %}
+</script>
 </body>
 </html>

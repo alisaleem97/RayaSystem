@@ -555,8 +555,8 @@ async def save_results(request: Request, session: Session = Depends(get_session)
                 result.note = row.get("remark", "")
                 result.device_id = row.get("device_id")
                 # Enforce status machine: ordered -> resulted -> authorized
-                # Authorization only allowed if order already has results (was 'resulted' or 'authorized')
-                can_authorize = authorized and order.status in ("resulted", "authorized")
+                # Allow authorization when result + auth are submitted together (order still "ordered")
+                can_authorize = authorized and order.status in ("ordered", "resulted", "authorized")
                 result.authorized = can_authorize
                 if can_authorize:
                     result.authorized_by = user_id
@@ -630,7 +630,8 @@ async def save_results(request: Request, session: Session = Depends(get_session)
                         has_any_value = True
 
                 # Enforce status machine: ordered -> resulted -> authorized
-                can_authorize = authorized and order.status in ("resulted", "authorized")
+                # Allow authorization when result + auth are submitted together (order still "ordered")
+                can_authorize = authorized and order.status in ("ordered", "resulted", "authorized")
                 result.authorized = can_authorize
                 if can_authorize:
                     result.authorized_by = user_id

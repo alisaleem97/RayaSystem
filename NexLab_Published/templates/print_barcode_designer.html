@@ -17,7 +17,7 @@ body { font-family: 'Inter', sans-serif; background: #f3f4f6; user-select: none;
 .element-item:active { cursor: grabbing; }
 .preview-area { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 20px; display: flex; flex-direction: column; }
 .paper-preview { background: white; border: 2px dashed #4f46e5; position: relative; margin: 20px auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15); overflow: visible; }
-.design-element { position: absolute; padding: 8px 12px; background: rgba(79, 70, 229, 0.15); border: 2px solid #4f46e5; border-radius: 6px; cursor: move; min-width: 100px; min-height: 30px; z-index: 10; transition: box-shadow 0.2s; }
+.design-element { position: absolute; padding: 2px 4px; background: rgba(79, 70, 229, 0.15); border: 2px solid #4f46e5; border-radius: 6px; cursor: move; min-width: 20px; min-height: 10px; z-index: 10; transition: box-shadow 0.2s; }
 .design-element:hover { background: rgba(79, 70, 229, 0.25); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
 .design-element.selected { border-color: #10b981; background: rgba(16, 185, 129, 0.25); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3); z-index: 100; }
 .design-element.dragging { opacity: 0.8; cursor: grabbing; z-index: 1000; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
@@ -93,6 +93,10 @@ body { font-family: 'Inter', sans-serif; background: #f3f4f6; user-select: none;
 <div class="element-item" draggable="true" data-type="test_name"><span><i class="fas fa-vial mr-2"></i>Test Name</span><i class="fas fa-plus"></i></div>
 <div class="element-item" draggable="true" data-type="sample_type"><span><i class="fas fa-tint mr-2"></i>Sample Type</span><i class="fas fa-plus"></i></div>
 </div>
+<div class="element-category">
+<div class="category-title">Custom</div>
+<div class="element-item" draggable="true" data-type="custom_text"><span><i class="fas fa-font mr-2"></i>Custom Text</span><i class="fas fa-plus"></i></div>
+</div>
 </div>
 
 <!-- Center Panel: Preview -->
@@ -126,10 +130,11 @@ body { font-family: 'Inter', sans-serif; background: #f3f4f6; user-select: none;
 <div class="property-group"><label>Background</label><input type="color" id="propBgColor" value="#ffffff" onchange="updateElementProperty('bgColor', this.value)"></div>
 <!-- Barcode-specific properties -->
 <div id="barcodeProperties" class="hidden mt-4 pt-4 border-t border-gray-200">
-<div class="property-group"><label>Barcode Scale</label><input type="number" id="propBarcodeScale" value="3" min="1" max="10" onchange="updateBarcodeProperty('scale', this.value)"></div>
-<div class="property-group"><label>Barcode Height</label><input type="number" id="propBarcodeHeight" value="10" min="5" max="50" onchange="updateBarcodeProperty('height', this.value)"></div>
 <div class="property-group checkbox-group"><input type="checkbox" id="propShowBarcodeText" checked onchange="updateBarcodeProperty('showText', this.checked)"><label for="propShowBarcodeText">Show Text Below Barcode</label></div>
-<div class="property-group"><label>Text Font Size</label><input type="number" id="propBarcodeTextSize" value="10" min="8" max="20" onchange="updateBarcodeProperty('textSize', this.value)"></div>
+<div class="property-group"><label>Text Font Size</label><input type="number" id="propBarcodeTextSize" value="10" min="6" max="20" onchange="updateBarcodeProperty('textSize', this.value)"></div>
+</div>
+<div id="customTextProperties" class="hidden mt-4 pt-4 border-t border-gray-200">
+<div class="property-group"><label>Custom Text</label><input type="text" id="propCustomText" value="" onchange="updateElementProperty('customText', this.value)"></div>
 </div>
 </div>
 <div id="noSelection" class="text-center text-gray-400 py-8"><i class="fas fa-mouse-pointer text-4xl mb-2"></i><p>Select an element to edit properties</p></div>
@@ -162,7 +167,7 @@ function handleDrop(e) { e.preventDefault(); const type = e.dataTransfer.getData
 function handlePaperClick(e) { if (e.target === paperPreview || e.target.id === 'placeholderText') { deselectAll(); } }
 
 function addElement(type) {
-const labels = { 'patient_id': 'Patient ID', 'patient_name': 'Patient Name', 'patient_gender': 'Gender', 'patient_age': 'Age', 'patient_phone': 'Phone', 'lab_name': 'Lab Name', 'lab_address': 'Lab Address', 'lab_phone': 'Lab Phone', 'barcode_image': 'Barcode Image', 'visit_id': 'Visit ID', 'visit_date': 'Visit Date', 'test_name': 'Test Name', 'test_list': 'All Tests', 'sample_type': 'Sample Type' };
+const labels = { 'patient_id': 'Patient ID', 'patient_name': 'Patient Name', 'patient_gender': 'Gender', 'patient_age': 'Age', 'patient_phone': 'Phone', 'lab_name': 'Lab Name', 'lab_address': 'Lab Address', 'lab_phone': 'Lab Phone', 'barcode_image': 'Barcode Image', 'visit_id': 'Visit ID', 'visit_date': 'Visit Date', 'test_name': 'Test Name', 'test_list': 'All Tests', 'sample_type': 'Sample Type', 'custom_text': 'Custom Text' };
 const rect = paperPreview.getBoundingClientRect();
 const x = 20;
 const y = 20 + (designElements.length * 35);
@@ -172,7 +177,7 @@ addElementToCanvas(type, labels[type], x, y);
 function addElementToCanvas(type, label, x, y) {
 const placeholder = document.getElementById('placeholderText');
 if (placeholder) placeholder.style.display = 'none';
-const element = { id: ++elementIdCounter, type: type, label: label, x: x, y: y, width: type === 'barcode_image' ? 200 : 150, height: type === 'barcode_image' ? 60 : 30, fontSize: type === 'barcode_image' ? 10 : 12, fontWeight: 'normal', color: '#000000', align: type === 'barcode_image' ? 'center' : 'left', bgColor: '#ffffff', barcodeScale: 3, barcodeHeight: 10, showBarcodeText: true, barcodeTextSize: 10 };
+const element = { id: ++elementIdCounter, type: type, label: label, x: x, y: y, width: type === 'barcode_image' ? 200 : 150, height: type === 'barcode_image' ? 60 : 30, fontSize: type === 'barcode_image' ? 10 : 12, fontWeight: 'normal', color: '#000000', align: type === 'barcode_image' ? 'center' : 'left', bgColor: '#ffffff', barcodeScale: 3, barcodeHeight: 10, showBarcodeText: true, barcodeTextSize: 10, customText: type === 'custom_text' ? 'Custom Text' : '' };
 designElements.push(element);
 renderElement(element);
 selectElement(element.id);
@@ -196,8 +201,10 @@ el.style.textAlign = element.align;
 el.style.backgroundColor = element.bgColor;
 
 if (element.type === 'barcode_image') {
-const bcDataUrl = generateBarcodeDataURL(currentPatient.patient_id, element.barcodeScale||3, element.barcodeHeight||10, element.showBarcodeText !== false);
-el.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="${bcDataUrl}" style="max-width: 100%; height: auto; display: block;">${element.showBarcodeText ? `<div style="font-size: ${element.barcodeTextSize||10}px; margin-top: 2px; font-family: monospace;">${currentPatient.patient_id}</div>` : ''}</div><div class="resize-handle"></div><div class="delete-btn" onclick="deleteElement(${element.id})">×</div>`;
+const bcDataUrl = generateBarcodeDataURL(currentPatient.patient_id, element.barcodeScale||3, element.barcodeHeight||10, false);
+const showText = element.showBarcodeText !== false;
+el.style.overflow = 'visible';
+el.innerHTML = `<div style="width:100%; height:100%; display:flex; align-items:stretch;"><img src="${bcDataUrl}" style="width:100%; height:100%; display:block; object-fit:fill;"></div>${showText ? `<div style="font-size:${element.barcodeTextSize||10}px; text-align:center; font-family:monospace; margin-top:1px; color:${element.color};">${currentPatient.patient_id}</div>` : ''}<div class="resize-handle"></div><div class="delete-btn" onclick="deleteElement(${element.id})">×</div>`;
 } else if (element.type === 'test_list') {
 el.innerHTML = `<div style="padding: 5px; font-size: 11px;">${currentPatient.tests?.join(', ') || 'No tests'}</div><div class="resize-handle"></div><div class="delete-btn" onclick="deleteElement(${element.id})">×</div>`;
 } else if (element.type === 'patient_id') {
@@ -206,6 +213,8 @@ el.innerHTML = `<div style="padding: 5px;">${currentPatient.patient_id}</div><di
 el.innerHTML = `<div style="padding: 5px;">${currentPatient.full_name}</div><div class="resize-handle"></div><div class="delete-btn" onclick="deleteElement(${element.id})">×</div>`;
 } else if (element.type === 'sample_type') {
 el.innerHTML = `<div style="padding: 5px;">${currentPatient.sample_type || 'Serum'}</div><div class="resize-handle"></div><div class="delete-btn" onclick="deleteElement(${element.id})">×</div>`;
+} else if (element.type === 'custom_text') {
+el.innerHTML = `<div style="padding: 5px;">${element.customText || 'Custom Text'}</div><div class="resize-handle"></div><div class="delete-btn" onclick="deleteElement(${element.id})">×</div>`;
 } else {
 el.innerHTML = `<div style="padding: 5px;">${element.label}</div><div class="resize-handle"></div><div class="delete-btn" onclick="deleteElement(${element.id})">×</div>`;
 }
@@ -285,8 +294,8 @@ document.addEventListener('mouseup', handleResizeEnd);
 function handleResizeMove(e) {
 if (!dragState.isResizing || !dragState.draggedElement) return;
 const element = dragState.draggedElement;
-element.width = Math.max(50, dragState.startWidth + (e.clientX - dragState.startX));
-element.height = Math.max(20, dragState.startHeight + (e.clientY - dragState.startY));
+element.width = Math.max(20, dragState.startWidth + (e.clientX - dragState.startX));
+element.height = Math.max(10, dragState.startHeight + (e.clientY - dragState.startY));
 const el = document.getElementById(`element-${element.id}`);
 if (el) { el.style.width = element.width + 'px'; el.style.height = element.height + 'px'; }
 updatePropertiesPanel();
@@ -310,7 +319,9 @@ document.getElementById('noSelection').style.display = 'none';
 updatePropertiesPanel();
 const element = designElements.find(el => el.id === id);
 const barcodeProps = document.getElementById('barcodeProperties');
+const customProps = document.getElementById('customTextProperties');
 if (element && element.type === 'barcode_image') { barcodeProps.classList.remove('hidden'); } else { barcodeProps.classList.add('hidden'); }
+if (element && element.type === 'custom_text') { customProps.classList.remove('hidden'); document.getElementById('propCustomText').value = element.customText || ''; } else { customProps.classList.add('hidden'); }
 }
 
 function deselectAll() {
@@ -319,6 +330,7 @@ document.querySelectorAll('.design-element').forEach(el => { el.classList.remove
 document.getElementById('propertiesPanel').style.display = 'none';
 document.getElementById('noSelection').style.display = 'block';
 document.getElementById('barcodeProperties').classList.add('hidden');
+document.getElementById('customTextProperties').classList.add('hidden');
 }
 
 function updatePropertiesPanel() {
@@ -335,10 +347,11 @@ document.getElementById('propColor').value = element.color;
 document.getElementById('propAlign').value = element.align;
 document.getElementById('propBgColor').value = element.bgColor;
 if (element.type === 'barcode_image') {
-document.getElementById('propBarcodeScale').value = element.barcodeScale || 3;
-document.getElementById('propBarcodeHeight').value = element.barcodeHeight || 10;
 document.getElementById('propShowBarcodeText').checked = element.showBarcodeText !== false;
 document.getElementById('propBarcodeTextSize').value = element.barcodeTextSize || 10;
+}
+if (element.type === 'custom_text') {
+document.getElementById('propCustomText').value = element.customText || '';
 }
 }
 
@@ -445,7 +458,9 @@ clone.style.color = el.color;
 clone.style.textAlign = el.align;
 clone.style.backgroundColor = el.bgColor;
 if (el.type === 'barcode_image') {
-clone.innerHTML = `<div style="text-align: center; padding: 5px;"><img src="${generateBarcodeDataURL(`${currentPatient.patient_id}`, 3, 10)}" style="max-width: 100%; height: auto; display: block;"><div style="font-size: 10px; margin-top: 2px; font-family: monospace;">${currentPatient.patient_id}</div></div>`;
+const showTxt = el.showBarcodeText !== false;
+clone.style.overflow = 'visible';
+clone.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:stretch;"><img src="${generateBarcodeDataURL(currentPatient.patient_id, 3, 10, false)}" style="width:100%;height:100%;display:block;object-fit:fill;"></div>${showTxt ? `<div style="font-size:${el.barcodeTextSize||10}px;text-align:center;font-family:monospace;margin-top:1px;">${currentPatient.patient_id}</div>` : ''}`;
 } else if (el.type === 'test_list') {
 clone.innerHTML = `<div style="padding: 5px; font-size: 11px;">${currentPatient.tests?.join(', ') || 'No tests'}</div>`;
 } else if (el.type === 'patient_id') {
@@ -454,6 +469,8 @@ clone.innerHTML = `<div style="padding: 5px;">${currentPatient.patient_id}</div>
 clone.innerHTML = `<div style="padding: 5px;">${currentPatient.full_name}</div>`;
 } else if (el.type === 'sample_type') {
 clone.innerHTML = `<div style="padding: 5px;">${currentPatient.sample_type || 'Serum'}</div>`;
+} else if (el.type === 'custom_text') {
+clone.innerHTML = `<div style="padding: 5px;">${el.customText || 'Custom Text'}</div>`;
 } else {
 clone.innerHTML = `<div style="padding: 5px;">${el.label}</div>`;
 }

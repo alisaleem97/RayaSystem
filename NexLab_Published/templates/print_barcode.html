@@ -6,11 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PrintBarcode - {{ patient.patient_id if patient else 'NexLab' }}</title>
     <style>
-        /* ✅ Dynamic @page size from saved template */
-        /* When auto=1 (NexPrint Edge Headless), force zero margin to match Chrome's "None" setting */
         @page {
             size: {{ template_data.paper_width if template_data else '4in' }} {{ template_data.paper_height if template_data else '2in' }};
-            margin: {% if request.query_params.get('auto') == '1' %}0{% else %}{{ template_data.margin if template_data else '0.1in' }}{% endif %};
+            margin: 0;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -66,13 +64,15 @@
             border: 1px solid #d1d5db;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             position: relative;
-            overflow: hidden;
+            overflow: visible;
             width: {{ template_data.paper_width if template_data else '4in' }};
             height: {{ template_data.paper_height if template_data else '2in' }};
         }
-        .barcode-element {
-            position: absolute;
-            overflow: hidden;
+        .barcode-page img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            image-rendering: pixelated; /* crisp 1-bit barcode rendering */
         }
         .page-label {
             font-size: 12px;
@@ -81,16 +81,28 @@
             font-weight: 500;
         }
         @media print {
-            body { background: white; padding: 0; margin: 0; }
+            html, body { background: white; padding: 0 !important; margin: 0 !important; width: 100%; height: 100%; }
             .toolbar { display: none !important; }
-            .barcode-pages { margin-top: 0; gap: 0; }
+            .barcode-pages { margin: 0 !important; padding: 0 !important; gap: 0; display: block; }
             .barcode-page {
                 border: none;
                 box-shadow: none;
                 page-break-after: always;
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                position: relative;
+                left: 4mm;
+                top: -2mm;
             }
             .barcode-page:last-child {
                 page-break-after: auto;
+            }
+            .barcode-page img {
+                width: 100% !important;
+                height: 100% !important;
+                object-fit: fill;
             }
             .page-label { display: none !important; }
         }
@@ -105,12 +117,15 @@
 
     <div class="barcode-pages">
         {% if template_data and template_data.elements %}
-            <!-- ✅ Render one barcode page per sample type using saved design -->
+            <!-- Render one barcode page per sample type using server-generated PNG images -->
+            {% set page_index = namespace(val=0) %}
             {% for sample_type, test_names in tests_by_sample_type.items() %}
                 <div class="page-label">{{ sample_type }} ({{ test_names | join(', ') }})</div>
-                <div class="barcode-page" id="page-{{ loop.index }}">
-                    <!-- Elements will be rendered by JavaScript using the saved template -->
+                <div class="barcode-page">
+                    <img src="/api/print-barcode-image/{{ patient.patient_id }}?print_token={{ print_token }}&page={{ page_index.val }}" 
+                         alt="Barcode - {{ sample_type }}">
                 </div>
+                {% set page_index.val = page_index.val + 1 %}
             {% endfor %}
         {% else %}
             <!-- Fallback: No saved design -->
@@ -120,113 +135,5 @@
             </div>
         {% endif %}
     </div>
-
-    <script src="/static/vendor/bwip-js/bwip-js.min.js"></script>
-    <script src="/static/vendor/bwip-js/barcode-helper.js"></script>
-    <script>
-    (function() {
-        // ✅ Template data from server
-        const templateData = {{ template_data | tojson if template_data else 'null' }};
-        const patient = {
-            patient_id: "{{ patient.patient_id }}",
-            full_name: "{{ patient.full_name }}",
-            gender: "{{ patient.gender }}",
-            age: {{ patient.age or 0 }},
-            age_unit: "{{ patient.age_unit or 'year' }}",
-            phone_key: "{{ patient.phone_key or '' }}",
-            phone_number: "{{ patient.phone_number or '' }}"
-        };
-        const labInfo = {
-            lab_name: "{{ lab_info.lab_name if lab_info else '' }}",
-            lab_address: "{{ lab_info.lab_address if lab_info and lab_info.lab_address else '' }}",
-            lab_phone: "{{ lab_info.lab_phone_1 if lab_info and lab_info.lab_phone_1 else '' }}"
-        };
-        const testsBySampleType = {{ tests_by_sample_type | tojson }};
-        const visitId = "{{ visit_id }}";
-        const visitDate = "{{ visit_date }}";
-
-        if (!templateData || !templateData.elements) return;
-
-        const elements = JSON.parse(templateData.elements || '[]');
-        const pages = document.querySelectorAll('.barcode-page');
-        const sampleTypeEntries = Object.entries(testsBySampleType);
-
-        sampleTypeEntries.forEach(([sampleType, testNames], pageIndex) => {
-            const page = pages[pageIndex];
-            if (!page) return;
-
-            elements.forEach(el => {
-                const div = document.createElement('div');
-                div.className = 'barcode-element';
-                div.style.left = el.x + 'px';
-                div.style.top = el.y + 'px';
-                div.style.width = el.width + 'px';
-                div.style.height = el.height + 'px';
-                div.style.fontSize = el.fontSize + 'px';
-                div.style.fontWeight = el.fontWeight || 'normal';
-                div.style.color = el.color || '#000000';
-                div.style.textAlign = el.align || 'left';
-                div.style.backgroundColor = el.bgColor || 'transparent';
-
-                switch (el.type) {
-                    case 'barcode_image':
-                        // ✅ Use bwip-js (same as designer) — text is built-in via includetext
-                        const bcScale = el.barcodeScale || 3;
-                        const bcHeight = el.barcodeHeight || 10;
-                        const showText = el.showBarcodeText !== false;
-                        const dataUrl = generateBarcodeDataURL(patient.patient_id, bcScale, bcHeight, showText);
-                        div.innerHTML = '<div style="text-align: center; padding: 5px;">' +
-                            '<img src="' + dataUrl + '" style="max-width: 100%; height: auto; display: block;">' +
-                            '</div>';
-                        break;
-                    case 'patient_id':
-                        div.innerHTML = `<div style="padding: 5px;">${patient.patient_id}</div>`;
-                        break;
-                    case 'patient_name':
-                        div.innerHTML = `<div style="padding: 5px;">${patient.full_name}</div>`;
-                        break;
-                    case 'patient_gender':
-                        div.innerHTML = `<div style="padding: 5px;">${patient.gender}</div>`;
-                        break;
-                    case 'patient_age':
-                        div.innerHTML = `<div style="padding: 5px;">${patient.age} ${patient.age_unit}</div>`;
-                        break;
-                    case 'patient_phone':
-                        div.innerHTML = `<div style="padding: 5px;">${patient.phone_key} ${patient.phone_number}</div>`;
-                        break;
-                    case 'lab_name':
-                        div.innerHTML = `<div style="padding: 5px;">${labInfo.lab_name}</div>`;
-                        break;
-                    case 'lab_address':
-                        div.innerHTML = `<div style="padding: 5px;">${labInfo.lab_address}</div>`;
-                        break;
-                    case 'lab_phone':
-                        div.innerHTML = `<div style="padding: 5px;">${labInfo.lab_phone}</div>`;
-                        break;
-                    case 'test_list':
-                        const testsStr = testNames.length > 0 ? testNames.join(', ') : 'No tests';
-                        div.innerHTML = `<div style="padding: 5px; font-size: ${el.fontSize || 11}px;">${testsStr}</div>`;
-                        break;
-                    case 'sample_type':
-                        div.innerHTML = `<div style="padding: 5px;">${sampleType}</div>`;
-                        break;
-                    case 'test_name':
-                        div.innerHTML = `<div style="padding: 5px;">${testNames[0] || ''}</div>`;
-                        break;
-                    case 'visit_id':
-                        div.innerHTML = '<div style="padding: 5px;">' + visitId + '</div>';
-                        break;
-                    case 'visit_date':
-                        div.innerHTML = '<div style="padding: 5px;">' + visitDate + '</div>';
-                        break;
-                    default:
-                        div.innerHTML = `<div style="padding: 5px;">${el.label || ''}</div>`;
-                }
-
-                page.appendChild(div);
-            });
-        });
-    })();
-    </script>
 </body>
 </html>

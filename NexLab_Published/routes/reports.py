@@ -1,13 +1,15 @@
 # routes/reports.py
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, status, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 from datetime import datetime, timedelta
 from typing import Optional
+import os
+import secrets
 
 from database import get_session
-from models import PatientVisit, Expense, User, Order, TestDefinition, Device
-from routes.helpers import templates, require_permission
+from models import PatientVisit, Expense, User, Order, TestDefinition, Device, ExpenseType
+from routes.helpers import templates, require_permission, get_current_user, create_audit_log, model_to_dict
 
 router = APIRouter()
 
@@ -492,3 +494,175 @@ def discount_report_page(request: Request, session: Session = Depends(get_sessio
         "records": records,
         "total_discount": total_discount
     })
+
+
+# ===========================
+# EXPENSES REPORT
+# ===========================
+EXPENSES_UPLOAD_DIR = "uploads/expenses"
+os.makedirs(EXPENSES_UPLOAD_DIR, exist_ok=True)
+
+@router.get("/reports/expenses", response_class=HTMLResponse)
+def expenses_report_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "expenses_report"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
+        
+    start_date_str = request.query_params.get("start_date")
+    end_date_str = request.query_params.get("end_date")
+    type_filter = request.query_params.get("type_id", "all")
+    user_filter = request.query_params.get("user_id", "all")
+    
+    # Default date range: first day of current month to today
+    today = datetime.now()
+    if not start_date_str:
+        start_date_str = today.replace(day=1).strftime("%d-%m-%Y")
+    if not end_date_str:
+        end_date_str = today.strftime("%d-%m-%Y")
+        
+    try:
+        start_datetime = datetime.strptime(start_date_str, "%d-%m-%Y").replace(hour=0, minute=0, second=0, microsecond=0)
+        end_datetime = datetime.strptime(end_date_str, "%d-%m-%Y").replace(hour=23, minute=59, second=59, microsecond=999999)
+    except ValueError:
+        return RedirectResponse(url="/reports/expenses?error=Invalid date format. Use DD-MM-YYYY", status_code=status.HTTP_303_SEE_OTHER)
+
+    # Fetch users for dropdown and initials/full name lookup
+    users = session.exec(select(User)).all()
+    user_dict = {u.id: u.full_name for u in users}
+
+    # Fetch expense types for dropdown
+    types = session.exec(select(ExpenseType).order_by(ExpenseType.type_name.asc())).all()
+
+    # Query Expense joined with ExpenseType and user filters
+    query = select(Expense).where(
+        Expense.expense_date >= start_datetime,
+        Expense.expense_date <= end_datetime
+    )
+    
+    if type_filter != "all":
+        query = query.where(Expense.type_id == int(type_filter))
+        
+    if user_filter != "all":
+        query = query.where(Expense.created_by == int(user_filter))
+        
+    expenses = session.exec(query.order_by(Expense.expense_date.desc())).all()
+    
+    # Calculate sum row total
+    total_amount = sum(e.amount for e in expenses)
+    
+    # Prepare serializable list for frontend js
+    expenses_json = []
+    for e in expenses:
+        d = model_to_dict(e)
+        if d.get("expense_date"):
+            d["expense_date"] = e.expense_date.strftime("%Y-%m-%d")
+        expenses_json.append(d)
+
+    return templates.TemplateResponse("expenses_report.html", {
+        "request": request,
+        "start_date": start_date_str,
+        "end_date": end_date_str,
+        "type_filter": type_filter,
+        "user_filter": user_filter,
+        "users": users,
+        "expense_types": types,
+        "expenses": expenses,
+        "expenses_json": expenses_json,
+        "user_dict": user_dict,
+        "total_amount": total_amount
+    })
+
+
+@router.post("/reports/expenses/delete/{expense_id}")
+def delete_expense_from_report(expense_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "expenses_report", "delete"):
+        return RedirectResponse(url="/reports/expenses?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
+    try:
+        current_user = get_current_user(request, session)
+        expense = session.get(Expense, expense_id)
+        if expense:
+            old_values = model_to_dict(expense)
+            
+            # Physically delete uploaded file if it exists
+            if expense.file_path and os.path.exists(expense.file_path):
+                try:
+                    os.remove(expense.file_path)
+                except Exception:
+                    pass
+            
+            create_audit_log(session, "expense", expense.id, "delete", current_user, old_values=old_values)
+            session.delete(expense)
+            session.commit()
+            return RedirectResponse(url="/reports/expenses?success=Expense deleted successfully!", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/reports/expenses?error=Expense not found", status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        return RedirectResponse(url=f"/reports/expenses?error={str(e).replace(' ', '%20')}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/reports/expenses/update/{expense_id}")
+async def update_expense_from_report(
+    expense_id: int,
+    type_id: int = Form(...),
+    expense_date: str = Form(...),
+    amount: float = Form(...),
+    note: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    if not require_permission(request, session, "expenses_report", "edit"):
+        return RedirectResponse(url="/reports/expenses?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
+    try:
+        current_user = get_current_user(request, session)
+        expense = session.get(Expense, expense_id)
+        if not expense:
+            return RedirectResponse(url="/reports/expenses?error=Expense not found", status_code=status.HTTP_303_SEE_OTHER)
+        
+        old_values = model_to_dict(expense)
+        
+        # Handle file upload if provided
+        if file and file.filename:
+            # Delete old file
+            if expense.file_path and os.path.exists(expense.file_path):
+                try:
+                    os.remove(expense.file_path)
+                except Exception:
+                    pass
+            
+            ext = os.path.splitext(file.filename)[1].lower()
+            secure_filename = f"EXP_{secrets.token_hex(8)}{ext}"
+            file_path = os.path.join(EXPENSES_UPLOAD_DIR, secure_filename).replace("\\", "/")
+            expense.file_path = file_path
+            expense.file_name = file.filename
+            
+            with open(file_path, "wb") as buffer:
+                content = await file.read()
+                buffer.write(content)
+        
+        # Parse date (handles both YYYY-MM-DD and DD-MM-YYYY formats)
+        try:
+            exp_dt = datetime.strptime(expense_date, "%Y-%m-%d")
+            expense.expense_date = exp_dt
+        except Exception:
+            try:
+                exp_dt = datetime.strptime(expense_date, "%d-%m-%Y")
+                expense.expense_date = exp_dt
+            except Exception:
+                pass
+            
+        expense.type_id = type_id
+        expense.amount = amount
+        expense.note = note
+        expense.edited_by = current_user.id if current_user else None
+        expense.edited_at = datetime.now()
+        
+        session.add(expense)
+        session.commit()
+        session.refresh(expense)
+        
+        create_audit_log(session, "expense", expense.id, "update", current_user, old_values=old_values, new_values=model_to_dict(expense))
+        return RedirectResponse(url="/reports/expenses?success=Expense updated successfully!", status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        session.rollback()
+        return RedirectResponse(url=f"/reports/expenses?error={str(e).replace(' ', '%20')}", status_code=status.HTTP_303_SEE_OTHER)
+

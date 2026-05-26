@@ -1,0 +1,179 @@
+<!-- templates/components/mini_robot_assistant.html -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+<style>
+  .mini-robot-container {
+    position: absolute;
+    bottom: 80%; /* Moved down slightly to overlap the input box */
+    right: 10px; /* Positioned at the end of the name box */
+    left: auto;
+    width: 60px; /* Smaller robot */
+    height: 70px;
+    z-index: 50;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .mini-robot-container.active {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .mini-svg-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+  }
+  .mini-robot-aura {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 40px; height: 40px;
+    transform: translate(-50%, -50%);
+    background: #000000; /* Black shadow aura */
+    border-radius: 50%;
+    filter: blur(10px);
+    opacity: 0.4;
+    z-index: -1;
+  }
+  .mini-error-bubble {
+    position: absolute;
+    top: 15px; /* Aligned vertically with robot head */
+    left: 70px; /* Positioned to the right of the robot */
+    right: auto;
+    transform: scale(0);
+    background: #00f2fe;
+    color: #020617; /* Dark text */
+    padding: 4px 10px; /* Smaller padding */
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.65rem; /* Smaller text */
+    white-space: nowrap;
+    box-shadow: 0 4px 8px rgba(0, 242, 254, 0.3);
+    pointer-events: none;
+    direction: rtl;
+    transform-origin: left center; /* Grow from left to right */
+  }
+  .mini-bubble-tail {
+    position: absolute;
+    top: 50%;
+    left: -4px; /* Tail pointing left towards the robot */
+    right: auto;
+    transform: translateY(-50%);
+    width: 0; height: 0;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-right: 5px solid #00f2fe;
+    border-left: none;
+  }
+</style>
+
+<div id="mini-robot-assistant" class="mini-robot-container">
+  <div class="mini-svg-container">
+    <div class="mini-robot-aura" id="mini-robot-aura"></div>
+    <div id="mini-error-bubble" class="mini-error-bubble">
+      متأكد من الجنس؟
+      <div class="mini-bubble-tail"></div>
+    </div>
+    <svg viewBox="0 0 300 350" width="100%" height="100%">
+      <defs>
+        <linearGradient id="mini-body-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="80%" stop-color="#e2e8f0"/><stop offset="100%" stop-color="#94a3b8"/>
+        </linearGradient>
+        <linearGradient id="mini-screen-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#020617"/>
+        </linearGradient>
+        <linearGradient id="mini-cyan-glow" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="50%" stop-color="#80f8ff"/><stop offset="100%" stop-color="#00e5ff"/>
+        </linearGradient>
+      </defs>
+
+      <g id="mini-entire-robot">
+        <!-- Shoulders -->
+        <rect x="35" y="80" width="25" height="60" rx="12.5" fill="url(#mini-body-grad)"/>
+        <rect x="240" y="80" width="25" height="60" rx="12.5" fill="url(#mini-body-grad)"/>
+        <!-- Neck -->
+        <rect x="130" y="160" width="40" height="30" rx="5" fill="#64748b"/>
+        <!-- Torso -->
+        <path d="M 80 200 C 80 160, 220 160, 220 200 C 240 280, 200 330, 150 330 C 100 330, 60 280, 80 200 Z" fill="url(#mini-body-grad)"/>
+
+        <!-- Head -->
+        <g id="mini-head-group">
+          <rect x="45" y="40" width="210" height="135" rx="60" fill="url(#mini-body-grad)"/>
+          <rect x="65" y="55" width="170" height="95" rx="35" fill="url(#mini-screen-grad)"/>
+          <g id="mini-face-features">
+            <!-- Friendly cyan asking eyes -->
+            <path id="mini-left-eye" d="M 95 105 A 16 16 0 0 1 127 105 Z" fill="url(#mini-cyan-glow)"/>
+            <path id="mini-right-eye" d="M 173 105 A 16 16 0 0 1 205 105 Z" fill="url(#mini-cyan-glow)"/>
+            <!-- Small round/curious mouth -->
+            <path id="mini-mouth" d="M 135 115 A 15 15 0 0 0 165 115 Z" fill="url(#mini-cyan-glow)"/>
+          </g>
+        </g>
+
+        <!-- Arms -->
+        <path id="mini-left-arm-path" fill="none" stroke="url(#mini-body-grad)" stroke-width="26" stroke-linecap="round"/>
+        <path id="mini-right-arm-path" fill="none" stroke="url(#mini-body-grad)" stroke-width="26" stroke-linecap="round"/>
+        <g id="mini-left-hand"><circle r="16" fill="#cbd5e1"/></g>
+        <g id="mini-right-hand"><circle r="16" fill="#cbd5e1"/></g>
+      </g>
+    </svg>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    if (typeof gsap === 'undefined') return;
+    
+    gsap.set(["#mini-left-eye", "#mini-right-eye", "#mini-mouth"], { transformOrigin: "center center" });
+    
+    // Set to a curious, looking down expression (looking at the name box)
+    gsap.set("#mini-head-group", { rotationX: 20, rotation: -8, y: 15 }); // Tilted down and slightly left
+    gsap.set(["#mini-left-eye", "#mini-right-eye"], { scaleY: 1.2, scaleX: 1.1, y: 12 }); // Eyes wide and looking down
+    gsap.set("#mini-mouth", { scaleY: -0.6, scaleX: 0.6, y: 12 }); // Small asking mouth
+    
+    // Arms IK for mini robot: resting naturally but slightly downward
+    const miniLeftIK = { shoulderX:65, shoulderY:205, elbowX:40, elbowY:280, handX:80, handY:310 };
+    const miniRightIK = { shoulderX:235, shoulderY:205, elbowX:260, elbowY:280, handX:220, handY:310 }; 
+    
+    const lArm = document.getElementById("mini-left-arm-path");
+    const rArm = document.getElementById("mini-right-arm-path");
+    const lHand = document.getElementById("mini-left-hand");
+    const rHand = document.getElementById("mini-right-hand");
+    
+    function renderMiniArms() {
+        if (!lArm) return;
+        lArm.setAttribute("d", `M ${miniLeftIK.shoulderX} ${miniLeftIK.shoulderY} Q ${miniLeftIK.elbowX} ${miniLeftIK.elbowY} ${miniLeftIK.handX} ${miniLeftIK.handY}`);
+        rArm.setAttribute("d", `M ${miniRightIK.shoulderX} ${miniRightIK.shoulderY} Q ${miniRightIK.elbowX} ${miniRightIK.elbowY} ${miniRightIK.handX} ${miniRightIK.handY}`);
+        lHand.setAttribute("transform", `translate(${miniLeftIK.handX},${miniLeftIK.handY})`);
+        rHand.setAttribute("transform", `translate(${miniRightIK.handX},${miniRightIK.handY})`);
+    }
+    
+    renderMiniArms();
+    
+    // Fast hovering animation
+    gsap.to("#mini-entire-robot", { y: -8, duration: 0.7, ease: "sine.inOut", yoyo: true, repeat: -1 });
+
+    window.MiniRobot = {
+        bubbleAnim: null,
+        show: function() {
+            const container = document.getElementById('mini-robot-assistant');
+            if (container.classList.contains('active')) return;
+            container.classList.add('active');
+            
+            if (this.bubbleAnim) this.bubbleAnim.kill();
+            this.bubbleAnim = gsap.to("#mini-error-bubble", { scale: 1, duration: 0.5, ease: "back.out(1.7)" });
+            
+            // A subtle head tilt as if noticing something
+            gsap.to("#mini-head-group", { rotation: 0, duration: 0.4, ease: "power2.out", yoyo: true, repeat: 1 });
+        },
+        hide: function() {
+            const container = document.getElementById('mini-robot-assistant');
+            if (!container.classList.contains('active')) return;
+            container.classList.remove('active');
+            
+            if (this.bubbleAnim) this.bubbleAnim.kill();
+            gsap.to("#mini-error-bubble", { scale: 0, duration: 0.3, ease: "back.in(1.7)" });
+        }
+    };
+});
+</script>

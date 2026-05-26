@@ -170,6 +170,11 @@ PAGES_REGISTRY = {
     "tests_number": {"label": "Tests Number", "group": "Reports", "buttons": [
         {"key": "view", "label": "View Report"},
     ]},
+    "expenses_report": {"label": "Expenses Report", "group": "Reports", "buttons": [
+        {"key": "view", "label": "View Report"},
+        {"key": "edit", "label": "Edit Expense"},
+        {"key": "delete", "label": "Delete Expense"},
+    ]},
     # --- Geography & Partners ---
     "partners": {"label": "Partners", "group": "Geography & Partners", "buttons": [
         {"key": "create", "label": "Create"},
