@@ -15,6 +15,7 @@ from app.models.lab import LabInfo, PrintTemplate
 from app.models.finance import Payment, ExpenseType, Expense
 from app.models.messaging import Chat, ChatMember, Message, MessageReceipt
 from app.models.inventory import Supply, Inventory, CalControl
+from app.models.hr import Employee, EmployeeAttachment
 
 __all__ = [
     "User", "UserPermission",
@@ -30,4 +31,5 @@ __all__ = [
     "Payment", "ExpenseType", "Expense",
     "Chat", "ChatMember", "Message", "MessageReceipt",
     "Supply", "Inventory", "CalControl",
+    "Employee", "EmployeeAttachment",
 ]

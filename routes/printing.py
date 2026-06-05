@@ -79,11 +79,19 @@ def print_report(patient_id: str, request: Request, session: Session = Depends(g
         log_activity_action(session, "PRINT_REPORT", f"Printed medical report for patient {patient.full_name}", current_user, "patient", patient.id)
         session.commit()
          
-    visit = session.exec(
-        select(PatientVisit)
-        .where(PatientVisit.patient_id == patient.id)
-        .order_by(PatientVisit.id.desc())
-    ).first()
+    # Support visit_id query param to select a specific visit
+    visit_id_param = request.query_params.get("visit_id")
+    if visit_id_param:
+        visit = session.exec(
+            select(PatientVisit)
+            .where(PatientVisit.visit_id == visit_id_param, PatientVisit.patient_id == patient.id)
+        ).first()
+    else:
+        visit = session.exec(
+            select(PatientVisit)
+            .where(PatientVisit.patient_id == patient.id)
+            .order_by(PatientVisit.id.desc())
+        ).first()
     
     lab_info = session.exec(select(LabInfo).limit(1)).first()
     template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "result_report")).first()
@@ -129,11 +137,19 @@ def view_results(patient_id: str, request: Request, session: Session = Depends(g
     if not patient:
          return HTMLResponse(content="Patient not found", status_code=404)
          
-    visit = session.exec(
-        select(PatientVisit)
-        .where(PatientVisit.patient_id == patient.id)
-        .order_by(PatientVisit.id.desc())
-    ).first()
+    # Support visit_id query param to select a specific visit
+    visit_id_param = request.query_params.get("visit_id")
+    if visit_id_param:
+        visit = session.exec(
+            select(PatientVisit)
+            .where(PatientVisit.visit_id == visit_id_param, PatientVisit.patient_id == patient.id)
+        ).first()
+    else:
+        visit = session.exec(
+            select(PatientVisit)
+            .where(PatientVisit.patient_id == patient.id)
+            .order_by(PatientVisit.id.desc())
+        ).first()
     
     visit_user_name = None
     if visit and visit.created_by:
@@ -142,11 +158,19 @@ def view_results(patient_id: str, request: Request, session: Session = Depends(g
         if user:
             visit_user_name = user.full_name or user.username
             
+    # Fetch all visits for the "Previous Results" bar
+    all_visits = session.exec(
+        select(PatientVisit)
+        .where(PatientVisit.patient_id == patient.id)
+        .order_by(PatientVisit.visit_date.asc())
+    ).all()
+            
     return templates.TemplateResponse("view_results.html", {
         "request": request,
         "patient": patient,
         "visit": visit,
-        "visit_user_name": visit_user_name
+        "visit_user_name": visit_user_name,
+        "all_visits": all_visits
     })
 
 
@@ -230,11 +254,19 @@ def get_double_authorized_tests(patient_id: str, request: Request, session: Sess
         if not patient:
             return {"success": False, "error": "Patient not found"}
             
-        visit = session.exec(
-            select(PatientVisit)
-            .where(PatientVisit.patient_id == patient.id)
-            .order_by(PatientVisit.id.desc())
-        ).first()
+        # Support visit_id query param to select a specific visit
+        visit_id_param = request.query_params.get("visit_id")
+        if visit_id_param:
+            visit = session.exec(
+                select(PatientVisit)
+                .where(PatientVisit.visit_id == visit_id_param, PatientVisit.patient_id == patient.id)
+            ).first()
+        else:
+            visit = session.exec(
+                select(PatientVisit)
+                .where(PatientVisit.patient_id == patient.id)
+                .order_by(PatientVisit.id.desc())
+            ).first()
         
         if not visit:
             return {"success": False, "error": "No visit found"}
@@ -522,12 +554,22 @@ def print_barcode(patient_id: str, request: Request, session: Session = Depends(
             "elements": template.elements
         }
     
+    # Load visit data
+    visit_id_param = request.query_params.get("visit_id") if request else None
+    if visit_id_param:
+        visit = session.exec(select(PatientVisit).where(PatientVisit.visit_id == visit_id_param, PatientVisit.patient_id == patient.id)).first()
+    else:
+        visit = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id).order_by(PatientVisit.id.desc())).first()
+        
+    visit_id = visit.visit_id if visit else ""
+    visit_date = visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit and visit.visit_date else ""
+
     # Get orders with test + sample_type eagerly loaded
     orders = session.exec(
         select(Order).options(
             selectinload(Order.test).selectinload(TestDefinition.sample_type)
-        ).where(Order.patient_id == patient.id)
-    ).all()
+        ).where(Order.visit_id == visit.id)
+    ).all() if visit else []
     
     # Build tests_by_sample_type using test_short_name
     tests_by_sample_type = {}
@@ -544,11 +586,6 @@ def print_barcode(patient_id: str, request: Request, session: Session = Depends(
         tests_by_sample_type = {"Unknown": []}
     
     lab_info = session.exec(select(LabInfo).limit(1)).first()
-    
-    # Load visit data
-    visit = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id)).first()
-    visit_id = visit.visit_id if visit else ""
-    visit_date = visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit and visit.visit_date else ""
         
     # Generate print_token for API image access
     import hashlib
@@ -576,12 +613,25 @@ def api_print_barcode_pdf(patient_id: str, request: Request, session: Session = 
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
         
+    barcode_template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "barcode")).first()
+    if not barcode_template:
+        raise HTTPException(status_code=404, detail="No barcode template configured in the database")
+
+    # Support visit_id query param to select a specific visit
+    visit_id_param = request.query_params.get("visit_id") if request else None
+    if visit_id_param:
+        visit = session.exec(select(PatientVisit).where(PatientVisit.visit_id == visit_id_param, PatientVisit.patient_id == patient.id)).first()
+    else:
+        visit = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id).order_by(PatientVisit.id.desc())).first()
+    v_id = visit.visit_id if visit else ''
+    v_date = visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit and visit.visit_date else ''
+    
     # Get orders with test + sample_type eagerly loaded
     orders = session.exec(
         select(Order).options(
             selectinload(Order.test).selectinload(TestDefinition.sample_type)
-        ).where(Order.patient_id == patient.id)
-    ).all()
+        ).where(Order.visit_id == visit.id)
+    ).all() if visit else []
     
     tests_by_sample_type = {}
     for order in orders:
@@ -591,15 +641,6 @@ def api_print_barcode_pdf(patient_id: str, request: Request, session: Session = 
                 tests_by_sample_type[sample_type_name] = []
             test_display = order.test.test_short_name if order.test.test_short_name else order.test.test_name
             tests_by_sample_type[sample_type_name].append(test_display)
-        
-    barcode_template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "barcode")).first()
-    if not barcode_template:
-        raise HTTPException(status_code=404, detail="No barcode template configured in the database")
-
-    # Load visit for visit_id and visit_date fields
-    visit = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id).order_by(PatientVisit.id.desc())).first()
-    v_id = visit.visit_id if visit else ''
-    v_date = visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit and visit.visit_date else ''
         
     try:
         pdf_buffer = generate_native_barcode_pdf(patient, tests_by_sample_type, barcode_template, visit_id=v_id, visit_date=v_date)
@@ -626,11 +667,24 @@ def api_print_barcode_image(patient_id: str, page: int = 0, request: Request = N
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
+    barcode_template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "barcode")).first()
+    if not barcode_template:
+        raise HTTPException(status_code=404, detail="No barcode template configured")
+
+    # Support visit_id query param to select a specific visit
+    visit_id_param = request.query_params.get("visit_id") if request else None
+    if visit_id_param:
+        visit = session.exec(select(PatientVisit).where(PatientVisit.visit_id == visit_id_param, PatientVisit.patient_id == patient.id)).first()
+    else:
+        visit = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id).order_by(PatientVisit.id.desc())).first()
+    v_id = visit.visit_id if visit else ''
+    v_date = visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit and visit.visit_date else ''
+    
     orders = session.exec(
         select(Order).options(
             selectinload(Order.test).selectinload(TestDefinition.sample_type)
-        ).where(Order.patient_id == patient.id)
-    ).all()
+        ).where(Order.visit_id == visit.id)
+    ).all() if visit else []
 
     tests_by_sample_type = {}
     for order in orders:
@@ -640,14 +694,6 @@ def api_print_barcode_image(patient_id: str, page: int = 0, request: Request = N
                 tests_by_sample_type[sample_type_name] = []
             test_display = order.test.test_short_name if order.test.test_short_name else order.test.test_name
             tests_by_sample_type[sample_type_name].append(test_display)
-
-    barcode_template = session.exec(select(PrintTemplate).where(PrintTemplate.template_name == "barcode")).first()
-    if not barcode_template:
-        raise HTTPException(status_code=404, detail="No barcode template configured")
-
-    visit = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id).order_by(PatientVisit.id.desc())).first()
-    v_id = visit.visit_id if visit else ''
-    v_date = visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit and visit.visit_date else ''
 
     try:
         pages = generate_barcode_label_image(patient, tests_by_sample_type, barcode_template, visit_id=v_id, visit_date=v_date)
@@ -691,7 +737,19 @@ def print_receipt(patient_id: str, request: Request, session: Session = Depends(
     lab_info = session.exec(select(LabInfo).limit(1)).first()
     
     # Load visit data + accounting
-    visit = session.exec(select(PatientVisit).where(PatientVisit.patient_id == patient.id)).first()
+    visit_id_param = request.query_params.get("visit_id")
+    if visit_id_param:
+        visit = session.exec(
+            select(PatientVisit)
+            .where(PatientVisit.visit_id == visit_id_param, PatientVisit.patient_id == patient.id)
+        ).first()
+    else:
+        visit = session.exec(
+            select(PatientVisit)
+            .where(PatientVisit.patient_id == patient.id)
+            .order_by(PatientVisit.id.desc())
+        ).first()
+        
     visit_id = visit.visit_id if visit else ""
     visit_date = visit.visit_date.strftime('%d/%m/%Y %H:%M') if visit and visit.visit_date else ""
     
@@ -704,8 +762,8 @@ def print_receipt(patient_id: str, request: Request, session: Session = Depends(
     orders = session.exec(
         select(Order).options(
             selectinload(Order.test)
-        ).where(Order.patient_id == patient.id)
-    ).all()
+        ).where(Order.visit_id == visit.id)
+    ).all() if visit else []
     
     # Build orders data for template
     orders_data = []

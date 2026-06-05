@@ -111,7 +111,7 @@
             </thead>
             <tbody class="bg-white divide-y divide-slate-200">
                 {% for item in patient_data %}
-                <tr class="hover:bg-slate-50 transition cursor-pointer" onclick="window.location.href='/double-auth/{{ item.patient.patient_id }}'">
+                <tr class="hover:bg-slate-50 transition cursor-pointer" onclick="window.location.href='/double-auth/{{ item.patient.patient_id }}?visit_id={{ item.visit.visit_id }}'">
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-slate-600">{{ item.patient.patient_id }}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{{ item.registration_date.strftime('%Y-%m-%d %H:%M') if item.registration_date else '' }}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{{ item.patient.full_name }}</td>
@@ -159,7 +159,7 @@
                             </div>
                         </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <a href="/double-auth/{{ item.patient.patient_id }}" 
+                        <a href="/double-auth/{{ item.patient.patient_id }}?visit_id={{ item.visit.visit_id }}" 
                             class="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200 px-3 py-1.5 rounded-lg text-sm font-medium transition" onclick="event.stopPropagation()">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
                             Enter
@@ -185,7 +185,7 @@
     <div class="p-4 border-t border-slate-200 bg-slate-50">
         <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
             <p class="text-sm text-slate-600">
-                Showing <strong>{{ patient_data|length }}</strong> of <strong>{{ total_count }}</strong> patient(s)
+                Showing <strong>{{ patient_data|length }}</strong> of <strong>{{ total_count }}</strong> visit(s)
                 <a href="/double-auth" class="text-indigo-600 hover:text-indigo-900 font-medium ml-2">Clear filters</a>
             </p>
             {% if total_pages > 1 %}

@@ -542,7 +542,7 @@
                 {% endif %}
 
                 <!-- Reports -->
-                {% if has_page('detailed_income') or has_page('net_amounts') or has_page('payment_records') or has_page('patients_number') or has_page('tests_number') or has_page('discount_report') or has_page('expenses_report') %}
+                {% if has_page('detailed_income') or has_page('net_amounts') or has_page('payment_records') or has_page('patients_number') or has_page('patient_region') or has_page('tests_number') or has_page('discount_report') or has_page('expenses_report') or has_page('remain_report') %}
                 <div class="mt-2">
                     <button onclick="toggleSubMenu('reportsMenu')" class="w-full flex items-center justify-between px-6 py-3 text-slate-300 hover:text-white hover:bg-slate-800 transition-all group">
                         <div class="flex items-center">
@@ -577,6 +577,11 @@
                                 Patients Number
                             </a>
                         </li>{% endif %}
+                        {% if has_page('patient_region') %}<li>
+                            <a href="/reports/patient-region" class="sidebar-link flex items-center px-6 py-3 submenu-item transition-colors {% if request.url.path == '/reports/patient-region' %}active{% endif %}">
+                                Patient Region
+                            </a>
+                        </li>{% endif %}
                         {% if has_page('tests_number') %}<li>
                             <a href="/reports/tests-number" class="sidebar-link flex items-center px-6 py-3 submenu-item transition-colors {% if request.url.path == '/reports/tests-number' %}active{% endif %}">
                                 Test Number
@@ -585,6 +590,11 @@
                         {% if has_page('expenses_report') %}<li>
                             <a href="/reports/expenses" class="sidebar-link flex items-center px-6 py-3 submenu-item transition-colors {% if request.url.path == '/reports/expenses' %}active{% endif %}">
                                 Expenses Report
+                            </a>
+                        </li>{% endif %}
+                        {% if has_page('remain_report') %}<li>
+                            <a href="/reports/remain" class="sidebar-link flex items-center px-6 py-3 submenu-item transition-colors {% if request.url.path == '/reports/remain' %}active{% endif %}">
+                                Remain
                             </a>
                         </li>{% endif %}
                     </ul>
@@ -620,6 +630,24 @@
                     </ul>
                 </div>
                 {% endif %}
+
+                <!-- HR & Staff -->
+                <div class="mt-2">
+                    <button onclick="toggleSubMenu('hrMenu')" class="w-full flex items-center justify-between px-6 py-3 text-slate-300 hover:text-white hover:bg-slate-800 transition-all group">
+                        <div class="flex items-center">
+                            <svg class="w-5 h-5 mr-3 text-slate-400 group-hover:text-accent transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                            <span class="text-sm font-medium">HR & Staff</span>
+                        </div>
+                        <svg id="hrMenu-chevron" class="w-4 h-4 chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <ul id="hrMenu" class="sidebar-submenu space-y-1">
+                        <li>
+                            <a href="/hr" class="sidebar-link flex items-center px-6 py-3 submenu-item transition-colors {% if request.url.path.startswith('/hr') %}active{% endif %}">
+                                Employees
+                            </a>
+                        </li>
+                    </ul>
+                </div>
 
                 <!-- Settings -->
                 {% if has_page('lab_info') or has_page('user_management') or has_page('activity_logs') %}

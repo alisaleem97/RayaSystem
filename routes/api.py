@@ -49,6 +49,52 @@ def generate_patient_id_api(session: Session = Depends(get_session)):
         return {"error": str(e)}
 
 # ===========================
+# PATIENT SEARCH BY NAME (Live Autocomplete)
+# ===========================
+@router.get("/api/search-patients-by-name")
+def search_patients_by_name(request: Request, q: str = "", session: Session = Depends(get_session)):
+    """Return up to 10 active patients matching the name fragment (for registration autocomplete)."""
+    if not _require_login(request, session):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    q = q.strip()
+    if len(q) < 2:
+        return []
+    patients = session.exec(
+        select(Patient)
+        .where(Patient.is_active == True, Patient.full_name.ilike(f"%{q}%"))
+        .order_by(Patient.created_at.desc())
+        .limit(10)
+    ).all()
+    results = []
+    for p in patients:
+        results.append({
+            "id": p.id,
+            "patient_id": p.patient_id,
+            "full_name": p.full_name,
+            "phone_key": p.phone_key,
+            "phone_number": p.phone_number,
+            "gender": p.gender,
+            "age": p.age,
+            "age_unit": p.age_unit or "year",
+            "date_of_birth": p.date_of_birth.strftime("%Y-%m-%d") if p.date_of_birth else "",
+            "weight": p.weight or 0,
+            "height": p.height or 0,
+            "province_id": p.province_id,
+            "region_id": p.region_id,
+            "note": p.note or "",
+            "email": p.email or "",
+            "diagnosis": p.diagnosis or "",
+            "symptoms": p.symptoms or "",
+            "therapy": p.therapy or "",
+            "partner_id": p.partner_id,
+            "doctor": p.doctor or "",
+            "skin_colour": p.skin_colour or "",
+            "agent_name": p.agent_name or "",
+            "is_outlab": p.is_outlab,
+        })
+    return results
+
+# ===========================
 # PATIENT ORDERS API (WITH PRICE SNAPSHOT + N+1 FIX)
 # ===========================
 @router.get("/api/patient-orders/{patient_id}")

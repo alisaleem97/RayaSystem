@@ -9,8 +9,63 @@
 <link rel="stylesheet" href="/static/vendor/flatpickr/flatpickr.min.css">
 <script src="/static/vendor/flatpickr/flatpickr.min.js"></script>
 
+<!-- Tom Select CSS -->
+<link href="/static/vendor/tom-select/tom-select.css" rel="stylesheet">
+<style>
+/* ✅ Tom Select Dropdown with Scrollbar */
+.ts-wrapper {
+    position: relative !important;
+    width: 100%;
+    z-index: 100;
+}
+.ts-dropdown {
+    max-height: 250px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    z-index: 9999 !important;
+    position: absolute !important;
+    width: 100% !important;
+    box-sizing: border-box;
+    border: 1px solid #d1d5db !important;
+    border-top: 0 !important;
+    border-radius: 0 0 0.5rem 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    margin-top: -1px;
+}
+.ts-dropdown .option {
+    padding: 8px 12px;
+    cursor: pointer;
+}
+.ts-dropdown .option:hover {
+    background-color: #e0e7ff;
+}
+.ts-dropdown .active {
+    background-color: #e0e7ff;
+}
+/* Custom scrollbar styling */
+.ts-dropdown::-webkit-scrollbar {
+    width: 8px;
+}
+.ts-dropdown::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+.ts-dropdown::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+.ts-dropdown::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+.ts-wrapper.form-control,
+.ts-wrapper.is-invalid,
+.ts-wrapper.is-valid {
+    padding: 0;
+}
+</style>
+
 <!-- Filter Form -->
-<div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6 overflow-hidden">
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
     <div class="p-6">
         <form action="/reports/tests-number" method="GET" class="flex flex-wrap items-end gap-4">
 
@@ -38,9 +93,9 @@
             </div>
 
             <!-- Additional Filters -->
-            <div class="ml-4">
+            <div class="ml-4" style="min-width: 250px;">
                 <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Test Name</label>
-                <select name="test_id" class="w-48 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm bg-white cursor-pointer select2">
+                <select id="test_id" name="test_id" class="w-full h-11 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm bg-white cursor-pointer">
                     <option value="all">All Tests</option>
                     {% for t in tests %}
                     <option value="{{ t.id }}" {% if test_filter == t.id|string %}selected{% endif %}>{{ t.test_name }}</option>
@@ -48,9 +103,9 @@
                 </select>
             </div>
             
-            <div>
+            <div style="min-width: 200px;">
                 <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Device</label>
-                <select name="device_id" class="w-48 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm bg-white cursor-pointer select2">
+                <select id="device_id" name="device_id" class="w-full h-11 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm bg-white cursor-pointer">
                     <option value="all">All Devices</option>
                     {% for d in devices %}
                     <option value="{{ d.id }}" {% if device_filter == d.id|string %}selected{% endif %}>{{ d.device_name }}</option>
@@ -81,6 +136,28 @@
             dateFormat: "H:i",
             time_24hr: true,
             allowInput: true
+        });
+    });
+</script>
+
+<!-- Tom Select JS -->
+<script src="/static/vendor/tom-select/tom-select.complete.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize Tom Select for tests
+        new TomSelect('#test_id', {
+            plugins: ['dropdown_input'],
+            placeholder: 'Search tests...',
+            create: false,
+            maxItems: 1
+        });
+        
+        // Initialize Tom Select for devices
+        new TomSelect('#device_id', {
+            plugins: ['dropdown_input'],
+            placeholder: 'Search devices...',
+            create: false,
+            maxItems: 1
         });
     });
 </script>

@@ -474,6 +474,8 @@
                 <div class="element-item" data-type="visit_id"><i class="fas fa-hashtag mr-2"></i> Visit ID</div>
                 <div class="element-item" data-type="patient_age"><i class="fas fa-birthday-cake mr-2"></i> Age / Gender
                 </div>
+                <div class="element-item" data-type="patient_fasting_time"><i class="fas fa-clock mr-2"></i> Fasting Time
+                </div>
                 <div class="element-item" data-type="visit_date"><i class="fas fa-calendar mr-2"></i> Visit Date</div>
                 <div class="element-item" data-type="doctor_name"><i class="fas fa-user-md mr-2"></i> Physician</div>
                 <div class="element-item" data-type="agent_name"><i class="fas fa-hospital mr-2"></i> Department</div>
@@ -537,8 +539,9 @@
 
             <div class="mb-2">
                 <div class="category-title"><i class="fas fa-shapes mr-2"></i> Shapes</div>
-                <div class="element-item shape-item" data-type="shape_line"><i class="fas fa-minus mr-2"></i> Decorative
-                    Line</div>
+                <div class="element-item shape-item" data-type="shape_line"><i class="fas fa-minus mr-2"></i> Decorative Line</div>
+                <div class="element-item shape-item" data-type="shape_box"><i class="far fa-square mr-2"></i> Rectangle Box</div>
+                <div class="element-item shape-item" data-type="shape_circle"><i class="far fa-circle mr-2"></i> Circle</div>
             </div>
         </div>
 
@@ -635,6 +638,19 @@
                         </div>
                         <div class="property-group !mb-0"><label>Color</label><input type="color" id="propColor"
                                 onchange="updateElementProperty('color', this.value)"></div>
+                        <div class="property-group !mb-0"><label>Background</label><input type="color" id="propBgColor"
+                                onchange="updateElementProperty('bgColor', this.value)"></div>
+                    </div>
+                </div>
+
+                <div id="shapePropsGroup" class="hidden border-t border-slate-200 pt-3 mt-3">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="property-group !mb-0"><label>Shape Color</label><input type="color" id="propShapeColor"
+                                onchange="updateElementProperty('color', this.value)"></div>
+                        <div class="property-group !mb-0"><label>Border Width</label><input type="number" id="propShapeWidth" min="1"
+                                onchange="updateElementProperty('borderWidth', this.value)"></div>
+                        <div class="property-group !mb-0 col-span-2"><label>Background</label><input type="color" id="propShapeBgColor"
+                                onchange="updateElementProperty('bgColor', this.value)"></div>
                     </div>
                 </div>
 
@@ -826,9 +842,9 @@
         // All image-type elements (exact match list)
         const IMAGE_TYPES = ['lab_logo', 'lab_stamp_1', 'lab_stamp_2', 'lab_signature_1', 'lab_signature_2', 'lab_image_1', 'lab_image_2', 'lab_qr_1', 'lab_qr_2'];
         // Element types that should show the label input
-        const LABEL_TYPES = ['patient_name', 'patient_id', 'visit_id', 'patient_age', 'visit_date', 'doctor_name', 'agent_name', 'lab_phone_1', 'lab_phone_2', 'lab_email', 'lab_website', 'lab_currency', 'lab_title', 'lab_address', 'first_doctor_name', 'second_doctor_name', 'lab_note_1', 'lab_note_2'];
+        const LABEL_TYPES = ['patient_name', 'patient_id', 'visit_id', 'patient_age', 'patient_fasting_time', 'visit_date', 'doctor_name', 'agent_name', 'lab_phone_1', 'lab_phone_2', 'lab_email', 'lab_website', 'lab_currency', 'lab_title', 'lab_address', 'first_doctor_name', 'second_doctor_name', 'lab_note_1', 'lab_note_2'];
         // Elements that don't need font controls
-        const NO_FONT_TYPES = ['shape_line'];
+        const NO_FONT_TYPES = ['shape_line', 'shape_box', 'shape_circle'];
 
         let dragState = { isDragging: false, isResizing: false, draggedElement: null, dragOffset: { x: 0, y: 0 }, startX: 0, startY: 0, startWidth: 0, startHeight: 0 };
         const paper = document.getElementById('paperPreview');
@@ -951,11 +967,13 @@
             let w = 200, h = 35;
             if (type === 'result_table') { w = 600; h = 250; }
             if (type === 'shape_line') { w = 700; h = 2; }
+            if (type === 'shape_box') { w = 200; h = 100; }
+            if (type === 'shape_circle') { w = 100; h = 100; }
             if (type === 'watermark') { w = 400; h = 400; }
             if (IMAGE_TYPES.includes(type)) { w = 120; h = 120; }
 
             const el = {
-                id, type, x, y, width: w, height: h, fontSize: 14, fontWeight: 'normal', align: 'left', color: '#0f172a',
+                id, type, x, y, width: w, height: h, fontSize: 14, fontWeight: 'normal', align: 'left', color: type.startsWith('shape_') ? '#334155' : '#0f172a', bgColor: 'transparent', borderWidth: 2,
                 fontFamily: "'FormaDJRArabic', sans-serif",
                 content: type === 'custom_text' ? 'Double click to edit this text.' : '', label: getDefaultLabel(type),
                 opacity: type === 'watermark' ? 0.2 : 1.0, zIndex: type === 'watermark' ? 0 : 10, image: '',
@@ -987,7 +1005,7 @@
         }
 
         function getDefaultLabel(type) {
-            const labels = { patient_name: 'Patient Name:', patient_id: 'ID:', visit_id: 'Visit:', patient_age: 'Age/Sex:', visit_date: 'Date:', doctor_name: 'Dr:', lab_phone_1: 'Tel:', lab_phone_2: 'Tel 2:', lab_note_1: '', lab_note_2: '' };
+            const labels = { patient_name: 'Patient Name:', patient_id: 'ID:', visit_id: 'Visit:', patient_age: 'Age/Sex:', patient_fasting_time: 'Fasting Time:', visit_date: 'Date:', doctor_name: 'Dr:', lab_phone_1: 'Tel:', lab_phone_2: 'Tel 2:', lab_note_1: '', lab_note_2: '' };
             return labels[type] || '';
         }
 
@@ -1006,6 +1024,7 @@
             div.style.fontSize = element.fontSize + 'px'; div.style.fontWeight = element.fontWeight;
             div.style.fontFamily = element.fontFamily || "'FormaDJRArabic', sans-serif";
             div.style.textAlign = element.align; div.style.color = element.color || '#0f172a';
+            div.style.backgroundColor = element.bgColor && element.bgColor !== 'transparent' && !element.type.startsWith('shape_') ? element.bgColor : 'transparent';
             div.style.zIndex = element.zIndex; div.style.opacity = element.opacity;
 
             // Apply locked state
@@ -1036,6 +1055,7 @@
             if (el.type === 'patient_id') return `${label}<span>P-00001</span>`;
             if (el.type === 'visit_id') return `${label}<span>V-00001</span>`;
             if (el.type === 'patient_age') return `${label}<span>25 Y / MALE</span>`;
+            if (el.type === 'patient_fasting_time') return `${label}<span>12 hr</span>`;
             if (el.type === 'visit_date') return `${label}<span>2025-01-01</span>`;
             if (el.type === 'doctor_name') return `${label}<span>Dr. Example</span>`;
             if (el.type === 'agent_name') return `${label}<span>Department</span>`;
@@ -1049,6 +1069,8 @@
 
             if (el.type === 'result_table') return renderResultTableMock(el);
             if (el.type === 'shape_line') return `<div style="width:100%; height:100%; background:${el.color || el.borderColor || '#334155'};"></div>`;
+            if (el.type === 'shape_box') return `<div style="width:100%; height:100%; border:${el.borderWidth || 2}px solid ${el.color || el.borderColor || '#334155'}; background:${el.bgColor || 'transparent'};"></div>`;
+            if (el.type === 'shape_circle') return `<div style="width:100%; height:100%; border:${el.borderWidth || 2}px solid ${el.color || el.borderColor || '#334155'}; border-radius:50%; background:${el.bgColor || 'transparent'};"></div>`;
             if (el.type === 'barcode_image') return `<div class="bg-white border p-1 w-full h-full flex flex-col items-center"><div class="w-full flex-grow bg-[repeating-linear-gradient(90deg,#000,#000_2px,#fff_2px,#fff_4px)] transition-all"></div><span class="text-[10px] mt-1 font-mono">1234567890</span></div>`;
             if (el.type === 'custom_text') return el.content || 'Double click to edit text';
             if (el.type === 'watermark') {
@@ -1247,16 +1269,26 @@
             fontFamilySelect.value = el.fontFamily || "'FormaDJRArabic', sans-serif";
 
             // Show/hide font properties group (not needed for shapes)
-            const isShapeLine = el.type === 'shape_line';
+            const isShape = el.type.startsWith('shape_');
             const isImage = IMAGE_TYPES.includes(el.type);
             const isWatermark = el.type === 'watermark';
             const isBarcode = el.type === 'barcode_image';
             const isTable = el.type === 'result_table';
             const isCustomText = el.type === 'custom_text';
-            const needsFont = !isShapeLine && !isImage && !isWatermark && !isBarcode;
+            const needsFont = !isShape && !isImage && !isWatermark && !isBarcode;
 
             document.getElementById('fontPropsGroup').classList.toggle('hidden', !needsFont);
-            document.getElementById('basicProps').classList.toggle('hidden', isTable || isShapeLine || isImage || isWatermark || isBarcode);
+            document.getElementById('basicProps').classList.toggle('hidden', isTable || isShape || isImage || isWatermark || isBarcode);
+            
+            const shapePropsGroup = document.getElementById('shapePropsGroup');
+            if(shapePropsGroup) shapePropsGroup.classList.toggle('hidden', !isShape);
+
+            // Sync shape properties
+            if (isShape && shapePropsGroup) {
+                document.getElementById('propShapeColor').value = el.color || '#334155';
+                document.getElementById('propShapeWidth').value = el.borderWidth || 2;
+                document.getElementById('propShapeBgColor').value = (el.bgColor && el.bgColor !== 'transparent') ? el.bgColor : '#ffffff';
+            }
 
             // Sync basic text properties
             if (needsFont) {
@@ -1264,6 +1296,7 @@
                 document.getElementById('propFontWeight').value = el.fontWeight || 'normal';
                 document.getElementById('propAlign').value = el.align || 'left';
                 document.getElementById('propColor').value = el.color || '#0f172a';
+                document.getElementById('propBgColor').value = (el.bgColor && el.bgColor !== 'transparent') ? el.bgColor : '#ffffff';
             }
 
             // Show/hide label group (for data elements that support labels)

@@ -189,11 +189,19 @@ def view_call_centre_patient(visit_id: str, request: Request, session: Session =
         if user:
             visit_user_name = user.full_name or user.username
             
+    # Fetch all visits for the "Previous Results" bar
+    all_visits = session.exec(
+        select(PatientVisit)
+        .where(PatientVisit.patient_id == patient.id)
+        .order_by(PatientVisit.visit_date.asc())
+    ).all()
+            
     return templates.TemplateResponse("call_centre_view.html", {
         "request": request,
         "patient": patient,
         "visit": visit,
-        "visit_user_name": visit_user_name
+        "visit_user_name": visit_user_name,
+        "all_visits": all_visits
     })
 
 # ✅ NEW: Added request dependency to track WHO marked the patient as called

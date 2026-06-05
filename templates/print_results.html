@@ -111,7 +111,7 @@
             </thead>
             <tbody class="bg-white divide-y divide-slate-200">
                 {% for item in patient_data %}
-                <tr class="hover:bg-slate-50 transition cursor-pointer" onclick="window.location.href='/view-results/{{ item.patient.patient_id }}'">
+                <tr class="hover:bg-slate-50 transition cursor-pointer" onclick="window.location.href='/view-results/{{ item.patient.patient_id }}?visit_id={{ item.visit.visit_id }}'">
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-slate-600">{{ item.patient.patient_id }}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{{ item.registration_date.strftime('%Y-%m-%d %H:%M') if item.registration_date else '' }}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{{ item.patient.full_name }}</td>
@@ -159,7 +159,7 @@
                         </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <a href="/view-results/{{ item.patient.patient_id }}" 
+                        <a href="/view-results/{{ item.patient.patient_id }}?visit_id={{ item.visit.visit_id }}" 
                             class="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white border border-indigo-200 px-3 py-1.5 rounded-lg text-sm font-medium transition" onclick="event.stopPropagation()">
                             <i class="fas fa-eye"></i>
                             View
@@ -185,7 +185,7 @@
     <div class="p-4 border-t border-slate-200 bg-slate-50">
         <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
             <p class="text-sm text-slate-600">
-                Showing <strong>{{ patient_data|length }}</strong> of <strong>{{ total_count }}</strong> patient(s)
+                Showing <strong>{{ patient_data|length }}</strong> of <strong>{{ total_count }}</strong> visit(s)
                 <a href="/print-results" class="text-indigo-600 hover:text-indigo-900 font-medium ml-2">Clear filters</a>
             </p>
             {% if total_pages > 1 %}

@@ -27,6 +27,10 @@ class User(SQLModel, table=True):
     phone_number: Optional[str] = None
     address: Optional[str] = None
 
+    # Audit Fields
+    edited_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    edited_at: Optional[datetime] = None
+
 
 class UserPermission(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

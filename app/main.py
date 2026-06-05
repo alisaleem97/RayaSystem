@@ -37,6 +37,7 @@ from routes.websockets import router as websockets_router
 from routes.supplies import router as supplies_router
 from routes.inventory import router as inventory_router
 from routes.cal_control import router as cal_control_router
+from routes.hr import router as hr_router
 
 
 # ===========================
@@ -142,3 +143,4 @@ app.include_router(websockets_router)
 app.include_router(supplies_router)
 app.include_router(inventory_router)
 app.include_router(cal_control_router)
+app.include_router(hr_router)

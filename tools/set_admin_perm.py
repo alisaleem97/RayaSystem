@@ -1,8 +1,11 @@
 import sqlite3
 import json
+import os
 
 def set_perms():
-    conn = sqlite3.connect('lab_database.db')
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    db_path = os.path.join(project_root, 'lab_database.db')
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
     # Get admin ID
@@ -52,8 +55,10 @@ def set_perms():
         'net_amounts': ["view"],
         'payment_records': ["view"],
         'patients_number': ["view"],
+        'patient_region': ["view"],
         'tests_number': ["view"],
         'expenses_report': ["view", "edit", "delete"],
+        'remain_report': ["view"],
         'partners': ["create", "edit", "delete"],
         'provinces': ["create", "edit", "delete"],
         'regions': ["create", "edit", "delete"],

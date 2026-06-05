@@ -239,7 +239,7 @@ def payment_records_page(request: Request, session: Session = Depends(get_sessio
                     "user": user_name,
                     "patient_name": "-",
                     "type": "Expense",
-                    "price": e.amount,
+                    "price": -e.amount,
                     "id": f"expense_{e.id}"
                 })
 
@@ -666,3 +666,178 @@ async def update_expense_from_report(
         session.rollback()
         return RedirectResponse(url=f"/reports/expenses?error={str(e).replace(' ', '%20')}", status_code=status.HTTP_303_SEE_OTHER)
 
+
+# ===========================
+# REMAIN REPORT
+# ===========================
+@router.get("/reports/remain", response_class=HTMLResponse)
+def remain_report_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "remain_report"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
+        
+    start_date_str = request.query_params.get("start_date")
+    start_time_str = request.query_params.get("start_time", "00:00")
+    end_date_str = request.query_params.get("end_date")
+    end_time_str = request.query_params.get("end_time", "23:59")
+    
+    user_filter = request.query_params.get("user_id", "all")
+    patient_id_filter = request.query_params.get("patient_id", "").strip()
+    patient_name_filter = request.query_params.get("patient_name", "").strip()
+    
+    if not start_date_str:
+        start_date_str = datetime.now().strftime("%Y-%m-%d")
+    if not end_date_str:
+        end_date_str = start_date_str
+        
+    try:
+        start_datetime = datetime.strptime(f"{start_date_str} {start_time_str}", "%Y-%m-%d %H:%M")
+        end_datetime = datetime.strptime(f"{end_date_str} {end_time_str}", "%Y-%m-%d %H:%M").replace(second=59, microsecond=999999)
+    except ValueError:
+        return RedirectResponse(url="/reports/remain?error=Invalid datetime format", status_code=status.HTTP_303_SEE_OTHER)
+
+    # Fetch users for dropdown
+    users = session.exec(select(User)).all()
+    user_dict = {u.id: u.full_name for u in users}
+
+    # Query PatientVisit where remaining_amount > 0 and within date range
+    from models import Patient
+    query = select(PatientVisit).where(
+        PatientVisit.remaining_amount > 0,
+        PatientVisit.visit_date >= start_datetime, 
+        PatientVisit.visit_date <= end_datetime
+    )
+    
+    if patient_id_filter or patient_name_filter:
+        query = query.join(Patient)
+        if patient_id_filter:
+            query = query.where(Patient.patient_id.ilike(f"%{patient_id_filter}%"))
+        if patient_name_filter:
+            query = query.where(Patient.full_name.ilike(f"%{patient_name_filter}%"))
+            
+    if user_filter != "all":
+        query = query.where(PatientVisit.created_by == int(user_filter))
+
+    visits = session.exec(query.order_by(PatientVisit.visit_date.desc())).all()
+    
+    records = []
+    total_remain = 0.0
+    row_num = 0
+
+    for v in visits:
+        remain = round(float(v.remaining_amount), 0) if v.remaining_amount else 0.0
+        
+        # Skip visits with no actual remaining balance (accounts for float rounding)
+        if remain <= 0:
+            continue
+        
+        row_num += 1
+        
+        # Calculate total amount from the orders linked to this visit
+        visit_total = sum(o.final_price for o in v.orders) if v.orders else 0.0
+        
+        paid = float(v.received_amount) if v.received_amount else 0.0
+        discount = float(v.discount_amount) if v.discount_amount else 0.0
+        
+        user_name = user_dict.get(v.created_by, "Unknown")
+        
+        records.append({
+            "no": row_num,
+            "patient_code": v.patient.patient_id if v.patient else "-",
+            "patient_name": v.patient.full_name if v.patient else "-",
+            "visit_date": v.visit_date.strftime("%d-%m-%Y %H:%M"),
+            "total_amount": visit_total,
+            "paid": paid,
+            "discount_amount": discount,
+            "remain_amount": remain,
+            "username": user_name
+        })
+        total_remain += remain
+
+    return templates.TemplateResponse("remain_report.html", {
+        "request": request,
+        "start_date": start_date_str,
+        "start_time": start_time_str,
+        "end_date": end_date_str,
+        "end_time": end_time_str,
+        "user_filter": user_filter,
+        "patient_id_filter": patient_id_filter,
+        "patient_name_filter": patient_name_filter,
+        "users": users,
+        "records": records,
+        "total_remain": total_remain
+    })
+
+
+# ===========================
+# PATIENT REGION REPORT
+# ===========================
+@router.get("/reports/patient-region", response_class=HTMLResponse)
+def patient_region_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "patient_region"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
+        
+    start_date_str = request.query_params.get("start_date")
+    end_date_str = request.query_params.get("end_date")
+    
+    region_filter = request.query_params.get("region_id", "all")
+    
+    if not start_date_str:
+        start_date_str = datetime.now().strftime("%Y-%m-%d")
+    if not end_date_str:
+        end_date_str = start_date_str
+        
+    try:
+        start_datetime = datetime.strptime(start_date_str, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
+        end_datetime = datetime.strptime(end_date_str, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999)
+    except ValueError:
+        return RedirectResponse(url="/reports/patient-region?error=Invalid date format", status_code=status.HTTP_303_SEE_OTHER)
+
+    from models import Patient, Region
+    
+    # Fetch all active regions for dropdown
+    regions_list = session.exec(select(Region).where(Region.is_active == True)).all()
+
+    query = select(Patient).where(Patient.created_at >= start_datetime, Patient.created_at <= end_datetime)
+    
+    if region_filter != "all":
+        query = query.where(Patient.region_id == int(region_filter))
+        
+    patients = session.exec(query).all()
+    
+    # Group by date and region name
+    from collections import defaultdict
+    daily_data = defaultdict(int)
+    
+    # Pre-fetch region names for quick lookup
+    region_dict = {r.id: r.region_name for r in regions_list}
+
+    for p in patients:
+        d_str = p.created_at.strftime("%d-%m-%Y")
+        r_name = region_dict.get(p.region_id, "Unknown Region") if p.region_id else "No Region"
+        daily_data[(d_str, r_name)] += 1
+
+    rows = []
+    total_patients = 0
+    
+    all_keys = sorted(list(daily_data.keys()), key=lambda x: (datetime.strptime(x[0], "%d-%m-%Y"), x[1]))
+    
+    for k in all_keys:
+        d_str, r_name = k
+        p_count = daily_data[k]
+        if p_count > 0:
+            rows.append({
+                "date": d_str,
+                "region_name": r_name,
+                "patient_count": p_count
+            })
+            total_patients += p_count
+
+    return templates.TemplateResponse("patient_region_report.html", {
+        "request": request,
+        "start_date": start_date_str,
+        "end_date": end_date_str,
+        "region_filter": region_filter,
+        "regions": regions_list,
+        "rows": rows,
+        "total_patients": total_patients
+    })

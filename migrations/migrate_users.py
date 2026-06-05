@@ -20,9 +20,9 @@ def migrate():
     for col_name, col_type in new_columns:
         if col_name not in columns:
             cursor.execute(f"ALTER TABLE user ADD COLUMN {col_name} {col_type}")
-            print(f"  ✅ Added column user.{col_name}")
+            print(f"  [+] Added column user.{col_name}")
         else:
-            print(f"  ℹ️ Column user.{col_name} already exists")
+            print(f"  [i] Column user.{col_name} already exists")
     
     # Create userpermission table
     cursor.execute("""
@@ -33,16 +33,16 @@ def migrate():
             allowed_buttons TEXT
         )
     """)
-    print("  ✅ userpermission table created/verified")
+    print("  [+] userpermission table created/verified")
     
     # Create index on user_id
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_userpermission_user_id ON userpermission(user_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_userpermission_page_key ON userpermission(page_key)")
-    print("  ✅ Indexes created/verified")
+    print("  [+] Indexes created/verified")
     
     conn.commit()
     conn.close()
-    print("\n✅ User management migration complete!")
+    print("\n[+] User management migration complete!")
 
 if __name__ == "__main__":
     migrate()

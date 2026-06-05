@@ -151,8 +151,11 @@
                 console.log("Fetching results from API...");
                 const urlParams = new URLSearchParams(window.location.search);
                 const orderIds = urlParams.get('order_ids');
-                let apiUrl = `/api/double-authorized-tests/${patient.patient_id}`;
-                if (orderIds) apiUrl += `?order_ids=${orderIds}`;
+                const queryVisitId = urlParams.get('visit_id') || (visit ? visit.visit_id : null);
+                
+                let apiUrl = `/api/double-authorized-tests/${patient.patient_id}?`;
+                if (orderIds) apiUrl += `order_ids=${orderIds}&`;
+                if (queryVisitId) apiUrl += `visit_id=${queryVisitId}&`;
 
                 const response = await fetch(apiUrl);
                 const data = await response.json();
@@ -250,6 +253,7 @@
                 const ageUnit = patient.age_unit ? (patient.age_unit === 'day' ? 'day' : patient.age_unit.charAt(0).toUpperCase()) : '';
                 return `${labelHtml}<span>${patient.age || '-'} ${ageUnit} / ${patient.gender ? patient.gender.toUpperCase() : ''}</span>`;
             }
+            if (el.type === 'patient_fasting_time') return `${labelHtml}<span>${patient.fasting_time != null ? patient.fasting_time + ' hr' : 'N/A'}</span>`;
             if (el.type === 'visit_id') return `${labelHtml}<span>${visit ? visit.visit_id : ''}</span>`;
             if (el.type === 'visit_date') return `${labelHtml}<span>${visit ? formatDate(visit.visit_date) : formatDate(patient.created_at)}</span>`;
             if (el.type === 'doctor_name') return `${labelHtml}<span>${patient.doctor || ''}</span>`;

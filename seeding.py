@@ -30,11 +30,11 @@ import pandas as pd
 from datetime import datetime
 
 # ─────────────────────────────────────────────
-# CONFIG  –  edit these two paths before running
+# CONFIG  –  resolved dynamically relative to project root
 # ─────────────────────────────────────────────
-DB_PATH   = r"C:\Users\aliss\Desktop\lab_system\lab_database.db"
-EXCEL_DIR = r"C:\Users\aliss\Desktop\lab_system\excel_files"
-# ─────────────────────────────────────────────
+project_root = os.path.dirname(os.path.abspath(__file__))
+DB_PATH   = os.path.join(project_root, "lab_database.db")
+EXCEL_DIR = os.path.join(project_root, "excel_files")
 
 NOW        = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 CREATED_BY = 1

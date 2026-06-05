@@ -39,11 +39,19 @@ def double_auth_page(patient_id: str, request: Request, session: Session = Depen
     if not patient:
         return RedirectResponse(url="/double-auth?error=Patient not found", status_code=303)
 
-    visit = session.exec(
-        select(PatientVisit)
-        .where(PatientVisit.patient_id == patient.id)
-        .order_by(PatientVisit.id.desc())
-    ).first()
+    # Support visit_id query param to select a specific visit
+    visit_id_param = request.query_params.get("visit_id")
+    if visit_id_param:
+        visit = session.exec(
+            select(PatientVisit)
+            .where(PatientVisit.visit_id == visit_id_param, PatientVisit.patient_id == patient.id)
+        ).first()
+    else:
+        visit = session.exec(
+            select(PatientVisit)
+            .where(PatientVisit.patient_id == patient.id)
+            .order_by(PatientVisit.id.desc())
+        ).first()
 
     visit_user_name = None
     if visit and visit.created_by:
@@ -52,11 +60,19 @@ def double_auth_page(patient_id: str, request: Request, session: Session = Depen
         if user:
             visit_user_name = user.full_name or user.username
 
+    # Fetch all visits for the "Previous Results" bar
+    all_visits = session.exec(
+        select(PatientVisit)
+        .where(PatientVisit.patient_id == patient.id)
+        .order_by(PatientVisit.visit_date.asc())
+    ).all()
+
     return templates.TemplateResponse("double_auth.html", {
         "request": request,
         "patient": patient,
         "visit": visit,
         "visit_user_name": visit_user_name,
+        "all_visits": all_visits,
     })
 
 

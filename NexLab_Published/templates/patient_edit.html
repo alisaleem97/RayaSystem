@@ -53,7 +53,7 @@
         </div>
     </div>
 
-    <form method="POST" action="/patients/update/{{ patient.patient_id }}" id="editForm">
+    <form method="POST" action="/patients/update/{{ patient.patient_id }}?visit_id={{ latest_visit.visit_id }}" id="editForm">
         <div class="p-6 space-y-6">
             <!-- Main Information -->
             <div>
@@ -158,6 +158,11 @@
                             <option value="{{ region.id }}" {% if patient.region_id == region.id %}selected{% endif %}>{{ region.region_name }}</option>
                             {% endfor %}
                         </select>
+                    </div>
+                    <div class="w-full sm:w-32">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Fasting Time (hr)</label>
+                        <input type="number" id="fasting_time" name="fasting_time" value="{{ patient.fasting_time or '' }}" min="0"
+                            class="w-full h-11 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                     </div>
                     <div class="w-full sm:flex-1">
                         <label class="block text-sm font-medium text-slate-700 mb-1">Note *</label>
@@ -393,66 +398,7 @@
     </form>
 </div>
 
-<!-- ATTACHMENTS SECTION -->
-<div class="bg-white rounded-xl shadow-sm border border-slate-200 mt-6 overflow-hidden">
-    <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-        <h2 class="text-sm font-semibold text-slate-800 flex items-center">
-            <svg class="w-4 h-4 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
-            Patient Attachments ({{ attachments|length }})
-        </h2>
-        <button type="button" onclick="document.getElementById('uploadAttachmentModal').classList.remove('hidden')" class="text-xs font-semibold px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 flex items-center transition-colors shadow-sm">
-            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-            Upload File
-        </button>
-    </div>
-    <div class="p-6">
-        {% if attachments %}
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {% for doc in attachments %}
-            <div class="border border-slate-200 rounded-lg p-3 flex flex-col hover:border-indigo-300 hover:shadow-sm transition-all bg-slate-50 relative group">
-                <div class="flex items-start justify-between mb-2">
-                    <div class="p-2 bg-indigo-100 text-indigo-600 rounded">
-                        {% if doc.file_type == 'pdf' %}
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                        {% elif doc.file_type == 'image' %}
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                        {% else %}
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                        {% endif %}
-                    </div>
-                    
-                    <form action="/attachment/{{ doc.id }}/delete" method="POST" class="opacity-0 group-hover:opacity-100 transition-opacity" onsubmit="return confirm('Are you sure you want to delete this file?');">
-                        <button type="submit" class="text-slate-400 hover:text-red-500 transition-colors p-1" title="Delete">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        </button>
-                    </form>
-                </div>
-                <div class="flex-1">
-                    <p class="text-sm font-medium text-slate-800 truncate" title="{{ doc.file_name }}">{{ doc.file_name }}</p>
-                    <p class="text-xs text-slate-500 mt-1">{{ doc.uploaded_at.strftime('%b %d, %Y') }}</p>
-                    {% if doc.description %}
-                    <p class="text-xs text-slate-600 mt-2 line-clamp-2">{{ doc.description }}</p>
-                    {% endif %}
-                </div>
-                <div class="mt-3 pt-3 border-t border-slate-200">
-                    <a href="/{{ doc.file_path }}" target="_blank" class="text-xs font-medium text-indigo-600 hover:text-indigo-800 flex items-center justify-center">
-                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                        View / Download
-                    </a>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <div class="text-center py-6 text-slate-400">
-            <svg class="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path></svg>
-            <p class="text-sm">No files attached to this patient yet.</p>
-        </div>
-        {% endif %}
-    </div>
-</div>
 
-<div id="printContainer" style="display: none;"></div>
 
 <!-- ADD PAYMENT MODAL -->
 <div id="addPaymentModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -494,35 +440,6 @@
             <div class="mt-6 flex gap-3 justify-end">
                 <button type="button" onclick="closeAddPaymentModal()" class="px-5 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">Cancel</button>
                 <button type="submit" class="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">Save Payment</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- UPLOAD ATTACHMENT MODAL -->
-<div id="uploadAttachmentModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
-        <div class="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
-            <h3 class="text-lg font-semibold text-slate-800">Upload Attachment</h3>
-            <button type="button" onclick="document.getElementById('uploadAttachmentModal').classList.add('hidden')" class="text-slate-400 hover:bg-slate-200 hover:text-slate-600 rounded-lg p-1.5 transition-colors">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
-        </div>
-        <form action="/patient/{{ patient.patient_id }}/attachment" method="POST" enctype="multipart/form-data" class="p-5">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Select File <span class="text-red-500">*</span></label>
-                    <input type="file" name="file" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
-                    <p class="text-xs text-slate-500 mt-1">Accepts PDF, JPG, PNG files</p>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Description (Optional)</label>
-                    <input type="text" name="description" placeholder="e.g. Identity Document, Referral Letter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                </div>
-            </div>
-            <div class="mt-6 flex gap-3 justify-end">
-                <button type="button" onclick="document.getElementById('uploadAttachmentModal').classList.add('hidden')" class="px-5 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">Cancel</button>
-                <button type="submit" class="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">Upload File</button>
             </div>
         </form>
     </div>
@@ -576,7 +493,6 @@ let testSelect, packageSelect;
 let selectedItems = [];
 let deletedItems = [];
 let itemCounter = 0;
-let receivedAmountAutoFilled = false;
 let labTaxPercentage = 0; // ✅ Tax percentage from lab info
 
 // Format price with comma separator
@@ -678,7 +594,6 @@ document.addEventListener('DOMContentLoaded', function() {
             discountSection.classList.remove('hidden');
         }
     }
-    receivedAmountAutoFilled = true;
     {% endif %}
     
     // Initialize Tom Select
@@ -859,7 +774,7 @@ function confirmDeleteTest() {
         confirmBtn.textContent = 'Removing...';
         
         const patientId = '{{ patient.patient_id }}';
-        const url = `/api/patients/${patientId}/remove-test?test_id=${item.id}&reason=${encodeURIComponent(reason)}`;
+        const url = `/api/patients/${patientId}/remove-test?test_id=${item.id}&visit_id=${encodeURIComponent('{{ latest_visit.visit_id }}')}&reason=${encodeURIComponent(reason)}`;
         
         fetch(url, { method: 'POST' })
             .then(response => response.json())
@@ -1003,15 +918,6 @@ function calculateTotalAfterDiscount() {
     const afterTax = afterDiscount + taxAmount;
     if (totalAfterTaxEl) totalAfterTaxEl.value = formatPrice(afterTax);
     
-    // ✅ Default received amount is now Total After Tax
-    const currentReceived = parseFloat(receivedEl.value.replace(/,/g, '')) || 0;
-    if (!receivedAmountAutoFilled && currentReceived === 0) {
-        receivedEl.value = afterTax;
-        receivedAmountAutoFilled = true;
-    } else if (receivedAmountAutoFilled) {
-        receivedEl.value = afterTax;
-    }
-    
     calculateRemaining();
 }
 
@@ -1032,21 +938,6 @@ function calculateRemaining() {
 
 // Detect manual changes to received amount
 document.addEventListener('DOMContentLoaded', function() {
-    const receivedEl = document.getElementById('received_amount');
-    if (receivedEl) {
-        receivedEl.addEventListener('input', function() {
-            const totalAfterTaxEl = document.getElementById('total_after_tax');
-            const totalAfterTax = parseFloat(totalAfterTaxEl.value.replace(/,/g, '')) || 0;
-            const currentReceived = parseFloat(this.value.replace(/,/g, '')) || 0;
-            
-            if (Math.abs(currentReceived - totalAfterTax) > 0.01) {
-                receivedAmountAutoFilled = false;
-            } else {
-                receivedAmountAutoFilled = true;
-            }
-        });
-    }
-    
     // ✅ Load lab info for tax percentage
     fetch('/api/lab-info')
         .then(response => response.json())

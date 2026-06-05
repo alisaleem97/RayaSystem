@@ -112,18 +112,16 @@ def build_patient_visit_data(session, request, status_filter=None, defaults_toda
             visit_query = visit_query.where(Order.status.in_(["authorized", "double_authorized"]))
 
     visits = session.exec(
-        visit_query.order_by(PatientVisit.visit_date.desc())
+        visit_query.distinct().order_by(PatientVisit.visit_date.desc())
     ).all()
 
-    # Group by patient (latest visit per patient)
-    seen_patients = set()
+    # Build one row per visit (no deduplication — each visit is shown separately)
     all_patient_data = []
 
     for visit in visits:
         patient = visit.patient
-        if not patient or patient.id in seen_patients:
+        if not patient:
             continue
-        seen_patients.add(patient.id)
 
         # Build tests data from orders
         packages = {}
@@ -158,6 +156,7 @@ def build_patient_visit_data(session, request, status_filter=None, defaults_toda
 
         all_patient_data.append({
             "patient": patient,
+            "visit": visit,
             "registration_date": visit.visit_date,
             "tests": tests_data
         })

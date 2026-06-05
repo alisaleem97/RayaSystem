@@ -175,6 +175,9 @@ PAGES_REGISTRY = {
         {"key": "edit", "label": "Edit Expense"},
         {"key": "delete", "label": "Delete Expense"},
     ]},
+    "remain_report": {"label": "Remain Report", "group": "Reports", "buttons": [
+        {"key": "view", "label": "View Report"},
+    ]},
     # --- Geography & Partners ---
     "partners": {"label": "Partners", "group": "Geography & Partners", "buttons": [
         {"key": "create", "label": "Create"},

@@ -1,0 +1,112 @@
+<!-- templates/patient_region_report.html -->
+{% extends "base.html" %}
+
+{% block title %}Patient Region Report - NexLab{% endblock %}
+{% block page_title %}Patient Region Report{% endblock %}
+
+{% block content %}
+<!-- Flatpickr for Date Selection -->
+<link rel="stylesheet" href="/static/vendor/flatpickr/flatpickr.min.css">
+<script src="/static/vendor/flatpickr/flatpickr.min.js"></script>
+
+<!-- Filter Form -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6 overflow-hidden">
+    <div class="p-6">
+        <form action="/reports/patient-region" method="GET" class="flex flex-wrap items-end gap-4">
+
+            <!-- Dates -->
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">From Date</label>
+                <input type="text" name="start_date" required value="{{ start_date }}"
+                    class="datepicker w-36 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+            </div>
+
+            <div class="ml-4">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">To Date</label>
+                <input type="text" name="end_date" required value="{{ end_date }}"
+                    class="datepicker w-36 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+            </div>
+
+            <!-- Region Filter -->
+            <div class="ml-4">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Region</label>
+                <select name="region_id"
+                    class="border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm min-w-[150px]">
+                    <option value="all" {% if region_filter == 'all' %}selected{% endif %}>All Regions</option>
+                    {% for r in regions %}
+                    <option value="{{ r.id }}" {% if region_filter == r.id|string %}selected{% endif %}>{{ r.region_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <button type="submit"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg text-sm font-semibold transition shadow-sm ml-auto">
+                Generate Report
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        flatpickr(".datepicker", {
+            dateFormat: "Y-m-d",
+            altInput: true,
+            altFormat: "d-m-Y",
+            allowInput: true
+        });
+
+        flatpickr(".timepicker", {
+            enableTime: true,
+            noCalendar: true,
+            dateFormat: "H:i",
+            time_24hr: true,
+            allowInput: true
+        });
+    });
+</script>
+
+<!-- Table Results -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr
+                    class="bg-indigo-50 border-b border-indigo-100 text-xs font-bold text-indigo-600 uppercase tracking-wider">
+                    <th class="px-6 py-4">Date</th>
+                    <th class="px-6 py-4">Region</th>
+                    <th class="px-6 py-4 text-center">Patient Count</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+                {% if rows %}
+                {% for row in rows %}
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="px-6 py-4 font-medium text-slate-800">{{ row.date }}</td>
+                    <td class="px-6 py-4 font-medium text-slate-800">{{ row.region_name }}</td>
+                    <td class="px-6 py-4 text-center">
+                        <span
+                            class="inline-flex items-center justify-center min-w-[3rem] px-3 py-1 rounded-full text-sm font-bold bg-indigo-100 text-indigo-800">
+                            {{ row.patient_count }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr>
+                    <td colspan="3" class="px-6 py-8 text-center text-slate-400 italic">No patients found for the selected dates and region.</td>
+                </tr>
+                {% endif %}
+            </tbody>
+            {% if rows %}
+            <tfoot class="bg-slate-50 border-t-2 border-slate-200 font-bold">
+                <tr>
+                    <td colspan="2" class="px-6 py-4 text-slate-700 uppercase tracking-wider text-sm text-right">Total Summary</td>
+                    <td class="px-6 py-4 text-center text-xl text-indigo-700">{{ total_patients }}</td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+{% endblock %}

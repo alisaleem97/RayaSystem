@@ -7,7 +7,8 @@ from sqlmodel import SQLModel
 # Import all models to register them
 from app.models import *
 
-DB_PATH = "lab_database.db"
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(project_root, "lab_database.db")
 conn = sqlite3.connect(DB_PATH)
 
 # 1. Get DB schema

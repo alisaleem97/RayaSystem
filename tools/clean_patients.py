@@ -70,7 +70,7 @@ def clean_patients():
         print("  The following records will be PERMANENTLY deleted:\n")
         for table, count in counts.items():
             print(f"    {table:<20} {count:>6} records")
-        print(f"    {'':─<20} {'':─>6}─────────")
+        print(f"    {'':-<20} {'':->6}---------")
         print(f"    {'TOTAL':<20} {total:>6} records")
         print()
 

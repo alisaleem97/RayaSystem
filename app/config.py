@@ -15,6 +15,8 @@ try:
 except ImportError:
     pass
 
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # ===========================
 # SECRET KEY
 # ===========================
@@ -35,10 +37,19 @@ else:
 # ===========================
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./lab_database.db")
 
+# If it is a relative sqlite URL, make it absolute relative to PROJECT_ROOT
+if DATABASE_URL.startswith("sqlite:///"):
+    db_path = DATABASE_URL[10:]
+    if not (db_path.startswith("/") or db_path.startswith("\\") or (len(db_path) > 1 and db_path[1] == ":")):
+        if db_path.startswith("./") or db_path.startswith(".\\"):
+            db_path = db_path[2:]
+        abs_db_path = os.path.abspath(os.path.join(PROJECT_ROOT, db_path))
+        DATABASE_URL = f"sqlite:///{abs_db_path}"
+
+
 # ===========================
 # PATHS
 # ===========================
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATE_DIR = os.path.join(PROJECT_ROOT, "templates")
 STATIC_DIR = os.path.join(PROJECT_ROOT, "static")
 UPLOAD_DIR = os.path.join(PROJECT_ROOT, "uploads")

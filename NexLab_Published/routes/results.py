@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 from database import get_session
@@ -78,29 +78,21 @@ def result_entry_patients_page(request: Request, session: Session = Depends(get_
             visit_query = visit_query.where(Order.status.in_(["authorized", "double_authorized"]))
     
     # Fetch all matching visits ordered by date
-    visits = session.exec(visit_query.order_by(PatientVisit.visit_date.desc())).all()
+    visits = session.exec(visit_query.distinct().order_by(PatientVisit.visit_date.desc())).all()
     
-    # Deduplicate: keep only the latest visit per patient
-    seen_patients = set()
-    unique_visits = []
-    for visit in visits:
-        patient = visit.patient
-        if not patient or patient.id in seen_patients:
-            continue
-        seen_patients.add(patient.id)
-        unique_visits.append(visit)
-    
-    # Pagination on deduplicated result
-    total_count = len(unique_visits)
+    # Pagination on all visits (each visit is a separate row)
+    total_count = len(visits)
     total_pages = max(1, (total_count + PAGE_SIZE - 1) // PAGE_SIZE)
     page = min(page, total_pages)
     offset = (page - 1) * PAGE_SIZE
-    page_visits = unique_visits[offset:offset + PAGE_SIZE]
+    page_visits = visits[offset:offset + PAGE_SIZE]
     
     # Build patient_data from the page slice (no extra queries needed)
     patient_data = []
     for visit in page_visits:
         patient = visit.patient
+        if not patient:
+            continue
         
         packages = {}
         standalones = []
@@ -149,6 +141,7 @@ def result_entry_patients_page(request: Request, session: Session = Depends(get_
                 
         patient_data.append({
             "patient": patient,
+            "visit": visit,
             "registration_date": visit.visit_date,
             "tests": tests_data
         })
@@ -181,12 +174,20 @@ def result_entry_page(patient_id: str, request: Request, session: Session = Depe
     if not patient:
         return RedirectResponse(url="/patients?error=Patient not found", status_code=303)
 
-    # Get latest visit
-    visit = session.exec(
-        select(PatientVisit)
-        .where(PatientVisit.patient_id == patient.id)
-        .order_by(PatientVisit.id.desc())
-    ).first()
+    # Support visit_id query param to select a specific visit
+    visit_id_param = request.query_params.get("visit_id")
+    if visit_id_param:
+        visit = session.exec(
+            select(PatientVisit)
+            .where(PatientVisit.visit_id == visit_id_param, PatientVisit.patient_id == patient.id)
+        ).first()
+    else:
+        # Fallback: get latest visit
+        visit = session.exec(
+            select(PatientVisit)
+            .where(PatientVisit.patient_id == patient.id)
+            .order_by(PatientVisit.id.desc())
+        ).first()
 
     visit_user_name = None
     if visit and visit.created_by:
@@ -195,11 +196,19 @@ def result_entry_page(patient_id: str, request: Request, session: Session = Depe
         if user:
             visit_user_name = user.full_name or user.username
 
+    # Fetch all visits for the "Previous Results" bar
+    all_visits = session.exec(
+        select(PatientVisit)
+        .where(PatientVisit.patient_id == patient.id)
+        .order_by(PatientVisit.visit_date.asc())
+    ).all()
+
     return templates.TemplateResponse("result_entry.html", {
         "request": request,
         "patient": patient,
         "visit": visit,
         "visit_user_name": visit_user_name,
+        "all_visits": all_visits,
     })
 
 
@@ -215,12 +224,20 @@ def result_entry_data(patient_id: str, request: Request, session: Session = Depe
         if not patient:
             return JSONResponse({"error": "Patient not found"}, status_code=404)
 
-        # Get latest visit
-        visit = session.exec(
-            select(PatientVisit)
-            .where(PatientVisit.patient_id == patient.id)
-            .order_by(PatientVisit.id.desc())
-        ).first()
+        # Support visit_id query param to select a specific visit
+        visit_id_param = request.query_params.get("visit_id")
+        if visit_id_param:
+            visit = session.exec(
+                select(PatientVisit)
+                .where(PatientVisit.visit_id == visit_id_param, PatientVisit.patient_id == patient.id)
+            ).first()
+        else:
+            # Fallback: get latest visit
+            visit = session.exec(
+                select(PatientVisit)
+                .where(PatientVisit.patient_id == patient.id)
+                .order_by(PatientVisit.id.desc())
+            ).first()
         if not visit:
             return JSONResponse({"error": "No visit found"}, status_code=404)
 
@@ -855,7 +872,16 @@ def receive_no_sample(order_id: int, request: Request, session: Session = Depend
 def no_sample_page(request: Request, session: Session = Depends(get_session)):
     if not require_permission(request, session, "no_sample"):
         return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=303)
-    query = select(Order).options(selectinload(Order.patient), selectinload(Order.test), selectinload(Order.visit)).where(Order.status == "no_sample").order_by(Order.order_date.desc())
+    
+    cutoff_date = datetime.now() - timedelta(days=15)
+    query = select(Order).options(
+        selectinload(Order.patient), 
+        selectinload(Order.test), 
+        selectinload(Order.visit)
+    ).where(
+        Order.status == "no_sample",
+        Order.order_date >= cutoff_date
+    ).order_by(Order.order_date.desc())
     no_sample_orders = session.exec(query).all()
     
     return templates.TemplateResponse("no_sample.html", {

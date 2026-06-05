@@ -230,7 +230,7 @@
                         visit_user_name or 'System' }}</span></div>
                 {% endif %}
                 <div class="truncate"><span class="font-semibold text-slate-500">Fasting Time:</span> <span
-                        class="font-bold">{{ patient.fasting_time if patient.fasting_time else 'N/A' }}</span></div>
+                        class="font-bold">{{ patient.fasting_time ~ ' hr' if patient.fasting_time is not none else 'N/A' }}</span></div>
             </div>
 
             <div class="bg-amber-50 rounded-lg p-3 border border-amber-100">
@@ -254,8 +254,22 @@
     </div>
 </div>
 
+<!-- Previous Results -->
+{% if all_visits and all_visits|length > 0 %}
+<div class="bg-[#d29b9b] rounded-t-lg px-4 py-2 mb-0 flex items-center gap-6 border border-[#c18686]">
+    <div class="font-bold text-[#5c2a2a] whitespace-nowrap">Previous Results</div>
+    <div class="flex flex-wrap gap-2">
+        {% for v in all_visits %}
+        <a href="/print-report/{{ patient.patient_id }}?visit_id={{ v.visit_id }}" target="_blank" 
+           class="bg-white border border-[#a86f6f] hover:bg-slate-50 text-slate-700 px-3 py-1 shadow-sm text-xs font-medium transition-colors" style="border-radius: 2px;">
+            {{ v.visit_date.strftime('%Y-%m-%d') if v.visit_date else 'Unknown' }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 
-<div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden mb-24">
+<div class="bg-white rounded-b-3xl rounded-t-none shadow-sm border border-slate-200 overflow-hidden mb-24">
     <div class="overflow-x-auto">
         <table class="w-full result-grid" id="resultGrid">
             <thead>
@@ -600,7 +614,7 @@ ${resultsText}`;
             showModal('error', 'Select Tests', 'Please select at least one test to print.');
             return;
         }
-        window.open(`/print-report/{{ patient.patient_id }}?order_ids=${selectedIds.join(',')}`, '_blank');
+        window.open(`/print-report/{{ patient.patient_id }}?visit_id=${visitId}&order_ids=${selectedIds.join(',')}`, '_blank');
     }
 
     async function sendWhatsApp() {

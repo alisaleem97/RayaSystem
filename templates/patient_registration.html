@@ -56,6 +56,56 @@
 .ts-wrapper.is-valid {
     padding: 0;
 }
+/* Patient Name Autocomplete Dropdown */
+#nameSuggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    background: white;
+    border: 1px solid #cbd5e1;
+    border-top: 0;
+    border-radius: 0 0 0.5rem 0.5rem;
+    box-shadow: 0 8px 25px -5px rgba(0,0,0,0.15);
+    max-height: 260px;
+    overflow-y: auto;
+    display: none;
+}
+#nameSuggestions .suggestion-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.15s;
+}
+#nameSuggestions .suggestion-item:last-child {
+    border-bottom: none;
+}
+#nameSuggestions .suggestion-item:hover,
+#nameSuggestions .suggestion-item.active {
+    background: #eef2ff;
+}
+#nameSuggestions .sg-name {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 0.9rem;
+}
+#nameSuggestions .sg-phone {
+    color: #64748b;
+    font-size: 0.8rem;
+}
+#nameSuggestions .sg-id {
+    margin-left: auto;
+    color: #94a3b8;
+    font-size: 0.75rem;
+    font-family: monospace;
+}
+#returningPatientBanner {
+    display: none;
+}
 </style>
 
 <div class="bg-white rounded-xl shadow-sm border border-slate-200">
@@ -63,6 +113,18 @@
     <form method="POST" id="registrationForm" action="/patient-registration/create">
         <div class="p-6 space-y-6">
             
+            <!-- Returning Patient Banner -->
+            <div id="returningPatientBanner" class="flex items-center gap-3 p-4 bg-amber-50 border border-amber-300 rounded-xl">
+                <svg class="w-6 h-6 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                <div>
+                    <h4 class="text-sm font-bold text-amber-800">Returning Patient — New Visit</h4>
+                    <p class="text-xs text-amber-600">A new visit will be created under the existing Patient ID: <strong id="returningPatientIdText" class="font-mono"></strong></p>
+                </div>
+                <button type="button" onclick="clearExistingPatientSelection()" class="ml-auto text-amber-700 hover:text-amber-900 text-xs underline flex-shrink-0">Clear Selection</button>
+            </div>
+
             <!-- Main Information -->
             <div>
                 <h4 class="text-md font-semibold text-slate-700 mb-4">Main Information</h4>
@@ -74,8 +136,10 @@
                     </div>
                     <div class="w-full sm:min-w-[16rem] flex-1 relative">
                         <label class="block text-sm font-medium text-slate-700 mb-1">Patient Name *</label>
-                        <input type="text" id="full_name" name="full_name" required
+                        <input type="text" id="full_name" name="full_name" required autocomplete="off"
                             class="w-full h-11 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <!-- Patient Name Autocomplete Suggestions -->
+                        <div id="nameSuggestions"></div>
                         <!-- ✅ Mini Robot Assistant -->
                         {% include 'components/mini_robot_assistant.html' %}
                     </div>
@@ -214,6 +278,11 @@
                             class="w-full h-11 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-100">
                             <option value="">Select Region...</option>
                         </select>
+                    </div>
+                    <div class="w-full sm:w-32">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Fasting Time (hr)</label>
+                        <input type="number" id="fasting_time" name="fasting_time" min="0"
+                            class="w-full h-11 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                     </div>
                     <div class="w-full sm:flex-1">
                         <label class="block text-sm font-medium text-slate-700 mb-1">Note *</label>
@@ -385,7 +454,7 @@
                     <label class="relative flex items-center text-xs font-medium text-amber-600 mb-1 h-4">
                         <span>Total After Tax</span>
                         <label class="absolute left-1/2 -translate-x-1/2 inline-flex items-center cursor-pointer" title="Toggle Tax">
-                            <input type="checkbox" id="apply_tax_toggle" name="apply_tax_toggle" checked class="sr-only peer" onchange="calculateTotalAfterDiscount()">
+                            <input type="checkbox" id="apply_tax_toggle" name="apply_tax_toggle" class="sr-only peer" onchange="calculateTotalAfterDiscount()">
                             <div class="w-7 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-500"></div>
                         </label>
                     </label>
@@ -409,6 +478,7 @@
             <input type="hidden" id="discount_percentage_hidden" name="discount_percentage" value="">
             <input type="hidden" id="discount_amount_hidden" name="discount_amount" value="">
             <input type="hidden" id="force_duplicate" name="force_duplicate" value="false">
+            <input type="hidden" id="existing_patient_db_id" name="existing_patient_db_id" value="">
             <input type="hidden" id="discount_amount_hidden" name="discount_amount" value="">
             
             <!-- Save Button -->
@@ -538,6 +608,192 @@ async function loadPackageTestsLazy(packageId) {
 function formatPrice(amount) {
     return Math.round(amount).toLocaleString('en-US');
 }
+
+// ===========================
+// PATIENT NAME AUTOCOMPLETE
+// ===========================
+let selectedExistingPatient = null;  // Stores the full patient object when a suggestion is selected
+let nameSearchTimeout = null;
+let activeSuggestionIndex = -1;
+
+// Debounced search triggered on name input
+function searchPatientsByName(query) {
+    const dropdown = document.getElementById('nameSuggestions');
+    query = query.trim();
+    if (query.length < 2) {
+        dropdown.style.display = 'none';
+        return;
+    }
+    // If a patient is already selected and name matches exactly, don't re-search
+    if (selectedExistingPatient && selectedExistingPatient.full_name === query) {
+        dropdown.style.display = 'none';
+        return;
+    }
+
+    fetch('/api/search-patients-by-name?q=' + encodeURIComponent(query))
+        .then(r => r.json())
+        .then(patients => {
+            if (!patients || patients.length === 0) {
+                dropdown.style.display = 'none';
+                return;
+            }
+            activeSuggestionIndex = -1;
+            dropdown.innerHTML = patients.map((p, idx) => `
+                <div class="suggestion-item" data-index="${idx}" onclick='selectExistingPatient(${JSON.stringify(p).replace(/'/g, "&#39;")})'>
+                    <div>
+                        <div class="sg-name">${p.full_name}</div>
+                        <div class="sg-phone">📞 ${p.phone_key} ${p.phone_number}</div>
+                    </div>
+                    <span class="sg-id">#${p.patient_id}</span>
+                </div>
+            `).join('');
+            dropdown.style.display = 'block';
+        })
+        .catch(err => {
+            console.error('Patient search error:', err);
+            dropdown.style.display = 'none';
+        });
+}
+
+// Select an existing patient from suggestions
+function selectExistingPatient(patient) {
+    selectedExistingPatient = patient;
+    const dropdown = document.getElementById('nameSuggestions');
+    dropdown.style.display = 'none';
+
+    // Set the hidden field so the backend knows to reuse this patient
+    document.getElementById('existing_patient_db_id').value = patient.id;
+
+    // Set patient ID to existing (don't generate a new one)
+    document.getElementById('patient_id').value = patient.patient_id;
+
+    // Auto-fill all demographic fields
+    document.getElementById('full_name').value = patient.full_name;
+    document.getElementById('gender').value = patient.gender;
+    // Trigger gender select color change
+    const genderEl = document.getElementById('gender');
+    genderEl.dispatchEvent(new Event('change'));
+
+    document.getElementById('age').value = patient.age || '';
+    document.getElementById('age_unit').value = patient.age_unit || 'year';
+    document.getElementById('date_of_birth').value = patient.date_of_birth || '';
+    document.getElementById('phone_key').value = patient.phone_key || '+964';
+    document.getElementById('phone_number').value = patient.phone_number || '';
+    document.getElementById('weight').value = patient.weight || '';
+    document.getElementById('height').value = patient.height || '';
+    document.getElementById('note').value = patient.note || '';
+    document.getElementById('fasting_time').value = patient.fasting_time || '';
+
+    // Province & Region (async)
+    if (patient.province_id) {
+        document.getElementById('province_id').value = patient.province_id;
+        // Load regions then set region_id
+        fetch('/api/regions?province_id=' + patient.province_id)
+            .then(r => r.json())
+            .then(regions => {
+                const regionSelect = document.getElementById('region_id');
+                regionSelect.innerHTML = '<option value="">Select Region...</option>';
+                regions.forEach(region => {
+                    const opt = document.createElement('option');
+                    opt.value = region.id;
+                    opt.textContent = region.region_name;
+                    regionSelect.appendChild(opt);
+                });
+                regionSelect.disabled = false;
+                if (patient.region_id) {
+                    regionSelect.value = patient.region_id;
+                }
+            });
+    }
+
+    // "More" section fields
+    document.getElementById('email').value = patient.email || '';
+    document.getElementById('diagnosis').value = patient.diagnosis || '';
+    document.getElementById('symptoms').value = patient.symptoms || '';
+    document.getElementById('therapy').value = patient.therapy || '';
+    document.getElementById('doctor').value = patient.doctor || '';
+    document.getElementById('agent_name').value = patient.agent_name || '';
+
+    // Partner select
+    if (patient.partner_id) {
+        document.getElementById('partner_id').value = patient.partner_id;
+    } else {
+        document.getElementById('partner_id').value = '';
+    }
+
+    // Skin colour select
+    if (patient.skin_colour) {
+        document.getElementById('skin_colour').value = patient.skin_colour;
+    } else {
+        document.getElementById('skin_colour').value = '';
+    }
+
+    // Outlab checkbox
+    document.getElementById('is_outlab').checked = !!patient.is_outlab;
+
+    // Show returning patient banner
+    document.getElementById('returningPatientIdText').textContent = patient.patient_id;
+    document.getElementById('returningPatientBanner').style.display = 'flex';
+
+    // Verify gender after auto-fill
+    verifyGender();
+}
+
+// Clear existing patient selection (called by banner button or on name/phone change)
+function clearExistingPatientSelection() {
+    selectedExistingPatient = null;
+    document.getElementById('existing_patient_db_id').value = '';
+    document.getElementById('returningPatientBanner').style.display = 'none';
+    // Generate a fresh patient ID
+    generatePatientId();
+}
+
+// Close suggestions when clicking outside
+document.addEventListener('click', function(e) {
+    const dropdown = document.getElementById('nameSuggestions');
+    const nameInput = document.getElementById('full_name');
+    if (!nameInput.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.style.display = 'none';
+    }
+});
+
+// Keyboard navigation for suggestions (arrow keys + Enter)
+document.getElementById('full_name').addEventListener('keydown', function(e) {
+    const dropdown = document.getElementById('nameSuggestions');
+    if (dropdown.style.display === 'none') return;
+    const items = dropdown.querySelectorAll('.suggestion-item');
+    if (!items.length) return;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeSuggestionIndex = Math.min(activeSuggestionIndex + 1, items.length - 1);
+        items.forEach((el, i) => el.classList.toggle('active', i === activeSuggestionIndex));
+        items[activeSuggestionIndex].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeSuggestionIndex = Math.max(activeSuggestionIndex - 1, 0);
+        items.forEach((el, i) => el.classList.toggle('active', i === activeSuggestionIndex));
+        items[activeSuggestionIndex].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter' && activeSuggestionIndex >= 0) {
+        e.preventDefault();
+        items[activeSuggestionIndex].click();
+    } else if (e.key === 'Escape') {
+        dropdown.style.display = 'none';
+    }
+});
+
+// Phone number/key change detection — if user modifies phone after selecting an existing patient, treat as new patient
+document.getElementById('phone_number').addEventListener('input', function() {
+    if (selectedExistingPatient && this.value.trim() !== selectedExistingPatient.phone_number) {
+        clearExistingPatientSelection();
+    }
+});
+document.getElementById('phone_key').addEventListener('change', function() {
+    if (selectedExistingPatient && this.value !== selectedExistingPatient.phone_key) {
+        clearExistingPatientSelection();
+    }
+});
+
 // ✅ Arabic Name Gender Detection - PATTERN ONLY (Most Efficient!)
 // Based on Hallawi et al. (2024) - Iraqi Journal of Science
 // Accuracy: ~85% for Iraqi names without frequency data
@@ -586,11 +842,20 @@ function verifyGender() {
     }
 }
 
-// ✅ Also verify on name input (debounced for performance)
+// ✅ Also verify on name input + trigger autocomplete search (debounced)
 let verifyTimeout = null;
 document.getElementById('full_name').addEventListener('input', function() {
     clearTimeout(verifyTimeout);
     verifyTimeout = setTimeout(verifyGender, 500);
+
+    // If user edits name after selecting a patient, clear the selection
+    if (selectedExistingPatient && this.value.trim() !== selectedExistingPatient.full_name) {
+        clearExistingPatientSelection();
+    }
+
+    // Debounced autocomplete search
+    clearTimeout(nameSearchTimeout);
+    nameSearchTimeout = setTimeout(() => searchPatientsByName(this.value), 300);
 });
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {

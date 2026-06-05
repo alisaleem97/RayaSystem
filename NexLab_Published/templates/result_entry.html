@@ -178,7 +178,7 @@
 <!-- Patient Header -->
 <div class="bg-white rounded-3xl shadow-sm border border-slate-200 mb-4 p-5 relative overflow-hidden">
     <div class="absolute top-4 right-4">
-        <a href="/patients/edit/{{ patient.patient_id }}"
+        <a href="/patients/edit/{{ patient.patient_id }}{% if visit %}?visit_id={{ visit.visit_id }}{% endif %}"
             class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition">←
             Back to Patient</a>
     </div>
@@ -222,7 +222,7 @@
                         visit_user_name or 'System' }}</span></div>
                 {% endif %}
                 <div class="truncate"><span class="font-semibold text-slate-500">Fasting Time:</span> <span
-                        class="font-bold">{{ patient.fasting_time if patient.fasting_time else 'N/A' }}</span></div>
+                        class="font-bold">{{ patient.fasting_time ~ ' hr' if patient.fasting_time is not none else 'N/A' }}</span></div>
             </div>
 
             <!-- Medical Details -->
@@ -247,8 +247,23 @@
     </div>
 </div>
 
+<!-- Previous Results -->
+{% if all_visits and all_visits|length > 0 %}
+<div class="bg-[#d29b9b] rounded-t-lg px-4 py-2 mb-0 flex items-center gap-6 border border-[#c18686]">
+    <div class="font-bold text-[#5c2a2a] whitespace-nowrap">Previous Results</div>
+    <div class="flex flex-wrap gap-2">
+        {% for v in all_visits %}
+        <a href="/print-report/{{ patient.patient_id }}?visit_id={{ v.visit_id }}" target="_blank" 
+           class="bg-white border border-[#a86f6f] hover:bg-slate-50 text-slate-700 px-3 py-1 shadow-sm text-xs font-medium transition-colors" style="border-radius: 2px;">
+            {{ v.visit_date.strftime('%Y-%m-%d') if v.visit_date else 'Unknown' }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <!-- Grid Container -->
-<div class="bg-white rounded-3xl shadow-sm border border-slate-200 relative overflow-hidden" id="gridWrapper">
+<div class="bg-white rounded-b-3xl rounded-t-none shadow-sm border border-slate-200 relative overflow-hidden" id="gridWrapper">
     <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="text-center">
@@ -322,6 +337,7 @@
     let gridData = null;
     let allRanges = [];
     const patientId = '{{ patient.patient_id }}';
+    const visitIdParam = '{{ visit.visit_id if visit else "" }}';
     const patientGender = '{{ patient.gender }}';
     const patientAge = {{ patient.age or 0 }};
     let currentNoSampleOrderId = null;
@@ -331,7 +347,9 @@
     // ===========================
     async function loadGridData() {
         try {
-            const resp = await fetch(`/api/result-entry-data/${patientId}`);
+            let fetchUrl = `/api/result-entry-data/${patientId}`;
+            if (visitIdParam) fetchUrl += `?visit_id=${encodeURIComponent(visitIdParam)}`;
+            const resp = await fetch(fetchUrl);
             const data = await resp.json();
             if (data.error) {
                 document.getElementById('loadingOverlay').innerHTML = `<p class="text-red-500">${data.error}</p>`;

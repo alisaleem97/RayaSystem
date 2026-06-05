@@ -22,46 +22,43 @@ def patient_status_page(request: Request, session: Session = Depends(get_session
     patient_id_q = request.query_params.get("patient_id", "")
     status_q = request.query_params.get("status", "all")
     
-    query = select(Patient).where(Patient.is_active == True)
+    # Visit-centric query (each visit shown separately)
+    visit_query = (
+        select(PatientVisit)
+        .options(
+            selectinload(PatientVisit.patient),
+            selectinload(PatientVisit.orders).selectinload(Order.test)
+        )
+        .join(Patient, PatientVisit.patient_id == Patient.id)
+        .where(Patient.is_active == True)
+    )
     
-    query = query.join(PatientVisit)
     if from_date:
-        query = query.where(PatientVisit.visit_date >= datetime.strptime(f"{from_date} 00:00:00", "%Y-%m-%d %H:%M:%S"))
+        visit_query = visit_query.where(PatientVisit.visit_date >= datetime.strptime(f"{from_date} 00:00:00", "%Y-%m-%d %H:%M:%S"))
     if to_date:
-        query = query.where(PatientVisit.visit_date <= datetime.strptime(f"{to_date} 23:59:59", "%Y-%m-%d %H:%M:%S"))
-        
+        visit_query = visit_query.where(PatientVisit.visit_date <= datetime.strptime(f"{to_date} 23:59:59", "%Y-%m-%d %H:%M:%S"))
     if name:
-        query = query.where(Patient.full_name.ilike(f"%{name}%"))
+        visit_query = visit_query.where(Patient.full_name.ilike(f"%{name}%"))
     if patient_id_q:
-        query = query.where(Patient.patient_id.ilike(f"%{patient_id_q}%"))
+        visit_query = visit_query.where(Patient.patient_id.ilike(f"%{patient_id_q}%"))
         
     if status_q != "all":
-        query = query.join(Order, Order.visit_id == PatientVisit.id)
+        visit_query = visit_query.join(Order, Order.visit_id == PatientVisit.id)
         if status_q == "pending":
-            query = query.where(Order.status == "ordered")
+            visit_query = visit_query.where(Order.status == "ordered")
         elif status_q == "resulted":
-            query = query.where(Order.status == "resulted")
+            visit_query = visit_query.where(Order.status == "resulted")
         elif status_q == "auth":
-            query = query.where(Order.status == "authorized")
+            visit_query = visit_query.where(Order.status == "authorized")
         elif status_q == "double_auth":
-            query = query.where(Order.status == "double_authorized")
-            
-    query = query.distinct()
-    
-    patients_result = session.exec(query.order_by(Patient.created_at.desc())).all()
+            visit_query = visit_query.where(Order.status == "double_authorized")
+
+    visits = session.exec(visit_query.distinct().order_by(PatientVisit.visit_date.desc())).all()
     
     patient_data = []
-    for patient in patients_result:
-        # Get latest visit
-        visit_query = select(PatientVisit).options(selectinload(PatientVisit.orders).selectinload(Order.test)).where(PatientVisit.patient_id == patient.id)
-        if from_date:
-            visit_query = visit_query.where(PatientVisit.visit_date >= datetime.strptime(f"{from_date} 00:00:00", "%Y-%m-%d %H:%M:%S"))
-        if to_date:
-            visit_query = visit_query.where(PatientVisit.visit_date <= datetime.strptime(f"{to_date} 23:59:59", "%Y-%m-%d %H:%M:%S"))
-            
-        visit = session.exec(visit_query.order_by(PatientVisit.id.desc())).first()
-        
-        if not visit:
+    for visit in visits:
+        patient = visit.patient
+        if not patient:
             continue
             
         tests_data = []
@@ -122,6 +119,8 @@ def patient_status_page(request: Request, session: Session = Depends(get_session
             
         patient_data.append({
             "patient": patient,
+            "visit": visit,
+            "registration_date": visit.visit_date,
             "tests": tests_data
         })
         

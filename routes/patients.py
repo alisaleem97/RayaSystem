@@ -123,6 +123,7 @@ async def create_patient_registration(
     height: float = Form(...),
     province_id: int = Form(...),
     region_id: int = Form(...),
+    fasting_time: Optional[int] = Form(None),
     note: Optional[str] = Form(None),
     email: Optional[str] = Form(None),
     diagnosis: Optional[str] = Form(None),
@@ -140,6 +141,7 @@ async def create_patient_registration(
     received_amount: Optional[float] = Form(None),
     apply_tax_toggle: Optional[str] = Form(None),
     force_duplicate: Optional[str] = Form("false"),
+    existing_patient_db_id: Optional[int] = Form(None),
     session: Session = Depends(get_session)
 ):
     if not require_permission(request, session, "patient_registration", "save_registration"):
@@ -180,33 +182,47 @@ async def create_patient_registration(
         received = float(received_amount) if received_amount else 0.0
         remaining = max(0, final_total - received)
         
-        new_patient = Patient(
-            patient_id=patient_id,
-            full_name=full_name,
-            gender=gender,
-            date_of_birth=datetime.strptime(date_of_birth, "%Y-%m-%d") if date_of_birth else None,
-            age=age,
-            age_unit=age_unit,
-            phone_key=phone_key,
-            phone_number=phone_number,
-            weight=weight,
-            height=height,
-            province_id=province_id,
-            region_id=region_id,
-            note=note,
-            email=email,
-            diagnosis=diagnosis,
-            symptoms=symptoms,
-            therapy=therapy,
-            partner_id=partner_id if partner_id else None,
-            doctor=doctor,
-            skin_colour=skin_colour,
-            agent_name=agent_name,
-            is_outlab=is_outlab.lower() == "true",
-            created_by=current_user.id if current_user else None
-        )
-        session.add(new_patient)
-        session.flush()  # Get new_patient.id without committing
+        # --- Returning patient vs new patient ---
+        is_returning = False
+        if existing_patient_db_id:
+            existing = session.get(Patient, existing_patient_db_id)
+            if existing and existing.is_active:
+                new_patient = existing
+                patient_id = existing.patient_id  # Reuse the same Patient ID
+                new_patient.fasting_time = fasting_time  # Update for the new visit
+                is_returning = True
+            else:
+                existing_patient_db_id = None  # Fallback to new patient
+
+        if not existing_patient_db_id:
+            new_patient = Patient(
+                patient_id=patient_id,
+                full_name=full_name,
+                gender=gender,
+                date_of_birth=datetime.strptime(date_of_birth, "%Y-%m-%d") if date_of_birth else None,
+                age=age,
+                age_unit=age_unit,
+                phone_key=phone_key,
+                phone_number=phone_number,
+                weight=weight,
+                height=height,
+                province_id=province_id,
+                region_id=region_id,
+                fasting_time=fasting_time,
+                note=note,
+                email=email,
+                diagnosis=diagnosis,
+                symptoms=symptoms,
+                therapy=therapy,
+                partner_id=partner_id if partner_id else None,
+                doctor=doctor,
+                skin_colour=skin_colour,
+                agent_name=agent_name,
+                is_outlab=is_outlab.lower() == "true",
+                created_by=current_user.id if current_user else None
+            )
+            session.add(new_patient)
+            session.flush()  # Get new_patient.id without committing
         
         # Generate visit_id using timestamp to avoid race conditions with concurrent registrations
         import time
@@ -242,60 +258,85 @@ async def create_patient_registration(
         
         discount_ratio = discount_amt / total_price if total_price > 0 else 0
         
+        created_orders = {}
+
         for item in items:
             if item['type'] == 'test':
-                test = session.get(TestDefinition, item['id'])
+                test_id = int(item['id'])
+                test = session.get(TestDefinition, test_id)
                 unit_price = test.price if test else 0.0
                 order_discount = unit_price * discount_ratio
                 final_price = unit_price - order_discount
                 
-                order = Order(
-                    order_number=f"ORD-{visit_id}-{item['id']}",
-                    patient_id=new_patient.id,
-                    test_id=item['id'],
-                    visit_id=new_visit.id,
-                    ordered_by=current_user.id if current_user else None,
-                    unit_price=unit_price,
-                    discount_amount=order_discount,
-                    final_price=final_price
-                )
-                session.add(order)
-                
-            elif item['type'] == 'package':
-                package = session.get(Package, item['id'])
-                package_name = package.package_name if package else ''
-                package_price = package.price if package else 0.0
-                package_tests = session.exec(
-                    select(PackageTest).where(PackageTest.package_id == item['id'])
-                ).all()
-                num_tests = len(package_tests)
-                price_per_test = package_price / num_tests if num_tests > 0 else 0.0
-                for pt in package_tests:
-                    unit_price = price_per_test
-                    order_discount = unit_price * discount_ratio
-                    final_price = unit_price - order_discount
-                    
+                if test_id in created_orders:
+                    existing_order = created_orders[test_id]
+                    existing_order.unit_price += unit_price
+                    existing_order.discount_amount += order_discount
+                    existing_order.final_price += final_price
+                else:
                     order = Order(
-                        order_number=f"ORD-{visit_id}-{pt.test_id}",
+                        order_number=f"ORD-{visit_id}-{test_id}",
                         patient_id=new_patient.id,
-                        test_id=pt.test_id,
+                        test_id=test_id,
                         visit_id=new_visit.id,
                         ordered_by=current_user.id if current_user else None,
                         unit_price=unit_price,
                         discount_amount=order_discount,
-                        final_price=final_price,
-                        package_name=package_name
+                        final_price=final_price
                     )
+                    created_orders[test_id] = order
                     session.add(order)
+                
+            elif item['type'] == 'package':
+                package_id = int(item['id'])
+                package = session.get(Package, package_id)
+                package_name = package.package_name if package else ''
+                package_price = package.price if package else 0.0
+                package_tests = session.exec(
+                    select(PackageTest).where(PackageTest.package_id == package_id)
+                ).all()
+                num_tests = len(package_tests)
+                price_per_test = package_price / num_tests if num_tests > 0 else 0.0
+                for pt in package_tests:
+                    test_id = pt.test_id
+                    unit_price = price_per_test
+                    order_discount = unit_price * discount_ratio
+                    final_price = unit_price - order_discount
+                    
+                    if test_id in created_orders:
+                        existing_order = created_orders[test_id]
+                        existing_order.unit_price += unit_price
+                        existing_order.discount_amount += order_discount
+                        existing_order.final_price += final_price
+                        if existing_order.package_name:
+                            if package_name and package_name not in existing_order.package_name:
+                                existing_order.package_name += f", {package_name}"
+                        else:
+                            existing_order.package_name = package_name
+                    else:
+                        order = Order(
+                            order_number=f"ORD-{visit_id}-{test_id}",
+                            patient_id=new_patient.id,
+                            test_id=test_id,
+                            visit_id=new_visit.id,
+                            ordered_by=current_user.id if current_user else None,
+                            unit_price=unit_price,
+                            discount_amount=order_discount,
+                            final_price=final_price,
+                            package_name=package_name
+                        )
+                        created_orders[test_id] = order
+                        session.add(order)
         
         # Audit & Activity Logs (all part of the same transaction)
+        audit_action = "New Visit (Returning Patient)" if is_returning else "Patient Registered"
         create_audit_log(
             session, 
             "patient", 
             new_patient.id, 
-            "create", 
+            "create" if not is_returning else "update", 
             current_user, 
-            new_values={"action": "Patient Registered", "total_tests_ordered": len(items), "visit_id": visit_id}
+            new_values={"action": audit_action, "total_tests_ordered": len(items), "visit_id": visit_id}
         )
         
         if force_duplicate.lower() == "true":
@@ -309,7 +350,8 @@ async def create_patient_registration(
                 new_values={"action": "Duplicate Registration Confirmed", "note": "User explicitly confirmed bypassing duplicate check."}
             )
         
-        log_activity_action(session, "REGISTER_PATIENT", f"Registered patient {new_patient.full_name} (ID: {new_patient.patient_id})", current_user, "patient", new_patient.id)
+        activity_msg = f"New visit for returning patient {new_patient.full_name} (ID: {new_patient.patient_id})" if is_returning else f"Registered patient {new_patient.full_name} (ID: {new_patient.patient_id})"
+        log_activity_action(session, "REGISTER_PATIENT", activity_msg, current_user, "patient", new_patient.id)
         
         # Single atomic commit — all or nothing
         session.commit()
@@ -378,8 +420,8 @@ def patients_page(request: Request, session: Session = Depends(get_session)):
     except (ValueError, TypeError):
         page = 1
     
-    query = select(Patient).where(Patient.is_active == True)
-    count_query = select(func.count(Patient.id)).where(Patient.is_active == True)
+    query = select(PatientVisit).join(Patient).where(Patient.is_active == True)
+    count_query = select(func.count(PatientVisit.id)).join(Patient).where(Patient.is_active == True)
     
     if search:
         search_filter = (
@@ -393,23 +435,23 @@ def patients_page(request: Request, session: Session = Depends(get_session)):
     if from_date:
         try:
             fd = datetime.strptime(from_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0)
-            query = query.where(Patient.created_at >= fd)
-            count_query = count_query.where(Patient.created_at >= fd)
+            query = query.where(PatientVisit.visit_date >= fd)
+            count_query = count_query.where(PatientVisit.visit_date >= fd)
         except Exception:
             pass
             
     if to_date:
         try:
             td = datetime.strptime(to_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
-            query = query.where(Patient.created_at <= td)
-            count_query = count_query.where(Patient.created_at <= td)
+            query = query.where(PatientVisit.visit_date <= td)
+            count_query = count_query.where(PatientVisit.visit_date <= td)
         except Exception:
             pass
             
     if test_filter:
         try:
-            query = query.join(Order, Patient.id == Order.patient_id).where(Order.test_id == int(test_filter)).distinct()
-            count_query = count_query.join(Order, Patient.id == Order.patient_id).where(Order.test_id == int(test_filter))
+            query = query.join(Order, PatientVisit.id == Order.visit_id).where(Order.test_id == int(test_filter)).distinct()
+            count_query = count_query.join(Order, PatientVisit.id == Order.visit_id).where(Order.test_id == int(test_filter))
         except Exception:
             pass
     
@@ -419,7 +461,9 @@ def patients_page(request: Request, session: Session = Depends(get_session)):
     page = min(page, total_pages)
     offset = (page - 1) * PAGE_SIZE
     
-    patients = session.exec(query.order_by(Patient.created_at.desc()).offset(offset).limit(PAGE_SIZE)).all()
+    # Use selectinload to eagerly load the related Patient so it's accessible in the template
+    query = query.options(selectinload(PatientVisit.patient))
+    patient_visits = session.exec(query.order_by(PatientVisit.visit_date.desc()).offset(offset).limit(PAGE_SIZE)).all()
     tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
     
     success = request.query_params.get("success")
@@ -427,7 +471,7 @@ def patients_page(request: Request, session: Session = Depends(get_session)):
     
     return templates.TemplateResponse("patients.html", {
         "request": request,
-        "patients": patients,
+        "patient_visits": patient_visits,
         "tests": tests,
         "search": search,
         "from_date": from_date,
@@ -466,12 +510,20 @@ def patient_edit_page(request: Request, patient_id: str, session: Session = Depe
         tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
         packages = session.exec(select(Package).where(Package.is_active == True)).all()
         
+        visit_id_param = request.query_params.get("visit_id")
         visits = session.exec(
             select(PatientVisit)
             .where(PatientVisit.patient_id == patient.id)
             .order_by(PatientVisit.visit_date.desc())
         ).all()
-        latest_visit = visits[0] if visits else None
+        latest_visit = None
+        if visit_id_param:
+            for v in visits:
+                if v.visit_id == visit_id_param:
+                    latest_visit = v
+                    break
+        if not latest_visit and visits:
+            latest_visit = visits[0]
         
         # ✅ N+1 FIX: eager-load test relationship for orders
         orders_json = []
@@ -549,12 +601,21 @@ def api_remove_test(patient_id: str, request: Request, session: Session = Depend
         if not patient:
             return JSONResponse({"success": False, "error": "Patient not found"}, status_code=404)
         
-        # Get latest visit
-        latest_visit = session.exec(
-            select(PatientVisit)
-            .where(PatientVisit.patient_id == patient.id)
-            .order_by(PatientVisit.visit_date.desc())
-        ).first()
+        visit_id_param = request.query_params.get("visit_id")
+        
+        # Get target visit
+        if visit_id_param:
+            latest_visit = session.exec(
+                select(PatientVisit)
+                .where(PatientVisit.patient_id == patient.id, PatientVisit.visit_id == visit_id_param)
+            ).first()
+        else:
+            latest_visit = session.exec(
+                select(PatientVisit)
+                .where(PatientVisit.patient_id == patient.id)
+                .order_by(PatientVisit.visit_date.desc())
+            ).first()
+            
         if not latest_visit:
             return JSONResponse({"success": False, "error": "No visit found"}, status_code=404)
         
@@ -659,6 +720,7 @@ def update_patient(
     height: float = Form(...),
     province_id: int = Form(...),
     region_id: int = Form(...),
+    fasting_time: Optional[int] = Form(None),
     note: Optional[str] = Form(None),
     email: Optional[str] = Form(None),
     diagnosis: Optional[str] = Form(None),
@@ -701,6 +763,7 @@ def update_patient(
         patient.height = height
         patient.province_id = province_id
         patient.region_id = region_id
+        patient.fasting_time = fasting_time
         patient.note = note
         patient.email = email
         patient.diagnosis = diagnosis
@@ -723,13 +786,23 @@ def update_patient(
         logger = logging.getLogger("nexlab.patients")
         logger.debug(f"Update patient {patient_id} | selected_items: {selected_items} | deleted_items: {deleted_items}")
 
+        visit_id_param = request.query_params.get("visit_id")
+        
         # Get or create the latest visit
         visits = session.exec(
             select(PatientVisit)
             .where(PatientVisit.patient_id == patient.id)
             .order_by(PatientVisit.visit_date.desc())
         ).all()
-        latest_visit = visits[0] if visits else None
+        
+        latest_visit = None
+        if visit_id_param:
+            for v in visits:
+                if v.visit_id == visit_id_param:
+                    latest_visit = v
+                    break
+        if not latest_visit and visits:
+            latest_visit = visits[0]
 
         if not latest_visit:
             visit_count = 0
@@ -869,72 +942,52 @@ def update_patient(
 
         # Recreate orders with price snapshots
         discount_ratio = discount_amt / total_price if total_price > 0 else 0
+        
+        # map old active orders
+        active_orders_map = {o.test_id: o for o in old_orders if o.test_id in active_old_order_test_ids}
+        
+        # Reset their prices to 0 so we can recalculate them from the current items list
+        for o in active_orders_map.values():
+            o.unit_price = 0.0
+            o.discount_amount = 0.0
+            o.final_price = 0.0
+
+        created_orders = {}
 
         for item in items:
             if item.get('type') == 'test':
-                if int(item['id']) in active_old_order_test_ids:
-                    continue  # Keep existing order to preserve results and IDs
-                test = session.get(TestDefinition, item['id'])
+                test_id = int(item['id'])
+                test = session.get(TestDefinition, test_id)
                 unit_price = test.price if test else 0.0
                 order_discount = unit_price * discount_ratio
                 final_price = unit_price - order_discount
-
-                order = Order(
-                    order_number=f"ORD-{latest_visit.visit_id}-{item['id']}",
-                    patient_id=patient.id,
-                    test_id=item['id'],
-                    visit_id=latest_visit.id,
-                    ordered_by=current_user.id if current_user else None,
-                    unit_price=unit_price,
-                    discount_amount=order_discount,
-                    final_price=final_price
-                )
-                session.add(order)
-
-                # Log newly added test
-                test_name = test.test_name if test else f"Test #{item['id']}"
-                create_audit_log(
-                    session,
-                    "patient",
-                    patient.id,
-                    "update",
-                    current_user,
-                    old_values={},
-                    new_values={"action": "Test Added", "test_name": test_name}
-                )
-
-            elif item.get('type') == 'package':
-                package = session.get(Package, item['id'])
-                package_name = package.package_name if package else ''
-                package_price = package.price if package else 0.0
-                package_tests = session.exec(
-                    select(PackageTest).where(PackageTest.package_id == item['id'])
-                ).all()
-                num_tests = len(package_tests)
-                price_per_test = package_price / num_tests if num_tests > 0 else 0.0
-                for pt in package_tests:
-                    if pt.test_id in active_old_order_test_ids:
-                        continue  # Keep existing order to preserve results and IDs
-                    unit_price = price_per_test
-                    order_discount = unit_price * discount_ratio
-                    final_price = unit_price - order_discount
-
+                
+                if test_id in active_orders_map:
+                    order = active_orders_map[test_id]
+                    order.unit_price += unit_price
+                    order.discount_amount += order_discount
+                    order.final_price += final_price
+                elif test_id in created_orders:
+                    order = created_orders[test_id]
+                    order.unit_price += unit_price
+                    order.discount_amount += order_discount
+                    order.final_price += final_price
+                else:
                     order = Order(
-                        order_number=f"ORD-{latest_visit.visit_id}-{pt.test_id}",
+                        order_number=f"ORD-{latest_visit.visit_id}-{test_id}",
                         patient_id=patient.id,
-                        test_id=pt.test_id,
+                        test_id=test_id,
                         visit_id=latest_visit.id,
                         ordered_by=current_user.id if current_user else None,
                         unit_price=unit_price,
                         discount_amount=order_discount,
-                        final_price=final_price,
-                        package_name=package_name
+                        final_price=final_price
                     )
+                    created_orders[test_id] = order
                     session.add(order)
 
-                    # Log newly added test from package
-                    test_def = session.get(TestDefinition, pt.test_id)
-                    test_name = test_def.test_name if test_def else f"Test #{pt.test_id}"
+                    # Log newly added test
+                    test_name = test.test_name if test else f"Test #{test_id}"
                     create_audit_log(
                         session,
                         "patient",
@@ -944,6 +997,68 @@ def update_patient(
                         old_values={},
                         new_values={"action": "Test Added", "test_name": test_name}
                     )
+
+            elif item.get('type') == 'package':
+                package_id = int(item['id'])
+                package = session.get(Package, package_id)
+                package_name = package.package_name if package else ''
+                package_price = package.price if package else 0.0
+                package_tests = session.exec(
+                    select(PackageTest).where(PackageTest.package_id == package_id)
+                ).all()
+                num_tests = len(package_tests)
+                price_per_test = package_price / num_tests if num_tests > 0 else 0.0
+                for pt in package_tests:
+                    test_id = pt.test_id
+                    unit_price = price_per_test
+                    order_discount = unit_price * discount_ratio
+                    final_price = unit_price - order_discount
+
+                    if test_id in active_orders_map:
+                        order = active_orders_map[test_id]
+                        order.unit_price += unit_price
+                        order.discount_amount += order_discount
+                        order.final_price += final_price
+                        if not order.package_name:
+                            order.package_name = package_name
+                        elif package_name and package_name not in order.package_name:
+                            order.package_name += f", {package_name}"
+                    elif test_id in created_orders:
+                        order = created_orders[test_id]
+                        order.unit_price += unit_price
+                        order.discount_amount += order_discount
+                        order.final_price += final_price
+                        if not order.package_name:
+                            order.package_name = package_name
+                        elif package_name and package_name not in order.package_name:
+                            order.package_name += f", {package_name}"
+                    else:
+                        order = Order(
+                            order_number=f"ORD-{latest_visit.visit_id}-{test_id}",
+                            patient_id=patient.id,
+                            test_id=test_id,
+                            visit_id=latest_visit.id,
+                            ordered_by=current_user.id if current_user else None,
+                            unit_price=unit_price,
+                            discount_amount=order_discount,
+                            final_price=final_price,
+                            package_name=package_name
+                        )
+                        created_orders[test_id] = order
+                        session.add(order)
+
+                        # Log newly added test
+                        test_def = session.get(TestDefinition, test_id)
+                        test_name = test_def.test_name if test_def else f"Test #{test_id}"
+                        create_audit_log(
+                            session,
+                            "patient",
+                            patient.id,
+                            "update",
+                            current_user,
+                            old_values={},
+                            new_values={"action": "Test Added", "test_name": test_name}
+                        )
 
         # Audit & Activity Logs (same transaction as data changes)
         create_audit_log(
@@ -1061,11 +1176,21 @@ def deleted_patients_page(request: Request, session: Session = Depends(get_sessi
     if user_filter and user_filter != "all":
         query = query.where(Patient.deleted_by == int(user_filter))
     
+    query = query.options(selectinload(Patient.visits).selectinload(PatientVisit.orders))
     patients = session.exec(query.order_by(Patient.deleted_at.desc())).all()
     
     # Fetch all users for dropdown and dictionary
     users = session.exec(select(User)).all()
     user_dict = {u.id: u.full_name for u in users}
+    
+    patient_totals = {}
+    for p in patients:
+        total = 0.0
+        # Get the latest visit for this patient
+        if p.visits:
+            latest_visit = sorted(p.visits, key=lambda v: v.visit_date, reverse=True)[0]
+            total = sum((o.unit_price or 0.0) for o in latest_visit.orders) - (latest_visit.discount_amount or 0.0) + (latest_visit.tax_amount or 0.0)
+        patient_totals[p.id] = total
     
     success = request.query_params.get("success")
     error = request.query_params.get("error")
@@ -1073,6 +1198,7 @@ def deleted_patients_page(request: Request, session: Session = Depends(get_sessi
     return templates.TemplateResponse("deleted_patients.html", {
         "request": request,
         "patients": patients,
+        "patient_totals": patient_totals,
         "search": search,
         "start_date": start_date_str,
         "end_date": end_date_str,
@@ -1268,6 +1394,17 @@ def deleted_tests_page(request: Request, session: Session = Depends(get_session)
         patient = session.get(Patient, patient_id) if patient_id else None
         test = session.get(TestDefinition, test_id) if test_id else None
         
+        # Safely determine price
+        try:
+            if "unit_price" in data and data["unit_price"] is not None:
+                p_val = float(data["unit_price"])
+            elif "final_price" in data and data["final_price"] is not None:
+                p_val = float(data["final_price"])
+            else:
+                p_val = float(test.price) if test and test.price is not None else 0.0
+        except (ValueError, TypeError):
+            p_val = 0.0
+
         report_data.append({
             "no": idx,
             "deleted_at": rec.deleted_at.strftime("%d-%m-%Y %H:%M"),
@@ -1276,6 +1413,7 @@ def deleted_tests_page(request: Request, session: Session = Depends(get_session)
             "patient_name": patient.full_name if patient else "Unknown",
             "age_gender": f"{patient.age} {patient.age_unit} - {patient.gender}" if patient else "N/A",
             "test_name": test.test_name if test else "Unknown Test",
+            "price": p_val,
             "reason": rec.deleted_reason or "No reason provided"
         })
         

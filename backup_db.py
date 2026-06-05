@@ -8,8 +8,9 @@ def backup_database():
     Unlike shutil.copy2, this handles active connections and WAL mode correctly,
     producing a consistent, non-corrupted backup every time.
     """
-    db_file = "lab_database.db"
-    backup_dir = "backups"
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    db_file = os.path.join(project_root, "lab_database.db")
+    backup_dir = os.path.join(project_root, "backups")
     
     if not os.path.exists(db_file):
         print(f"❌ Error: Database file '{db_file}' not found.")

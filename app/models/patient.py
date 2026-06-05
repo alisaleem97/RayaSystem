@@ -22,6 +22,7 @@ class Patient(SQLModel, table=True):
     height: Optional[float] = Field(default=None)
     province_id: Optional[int] = Field(default=None, foreign_key="province.id")
     region_id: Optional[int] = Field(default=None, foreign_key="region.id")
+    fasting_time: Optional[int] = Field(default=None)
     note: Optional[str] = Field(default=None)
     email: Optional[str] = Field(default=None)
     diagnosis: Optional[str] = Field(default=None)
