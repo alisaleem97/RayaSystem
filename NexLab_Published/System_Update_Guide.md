@@ -7,47 +7,89 @@ This guide ensures you can update your NexLab Laboratory Information System (LIS
 - Ensure no one is currently using the system before starting.
 - Keep a backup of your `lab_database.db` file in a safe location.
 
+> [!CAUTION]
+> **NEVER delete the entire NexLab_Published folder during an update!**
+> The database uses WAL mode, which stores recent writes in `lab_database.db-wal`.
+> Deleting the folder destroys this file and causes **data loss** (patient results, status changes).
+
 ---
 
-## 🚀 The Automatic Way (Recommended)
-We have provided an automated tool to handle backups and database migrations for you.
+## 🚀 The Safe Way (Recommended — One Click)
 
-1.  **Close the System**: Stop the server (close the window opened by `start_nexlab.bat`).
-2.  **Run the Update Tool**: Double-click `update_system.bat`.
-3.  **Follow the Prompts**:
-    *   The tool will automatically create a backup in the `backups/` folder.
-    *   It will ask you to confirm that you have replaced the system files with the new version.
-    *   It will automatically run all database migrations (`migrate_*.py`).
-4.  **Restart**: Once completed, run `start_nexlab.bat` as usual.
+### Prerequisites
+1. Get the new `NexLab_Published` folder from the developer
+2. **Stop the NexLab server** (close the `start_nexlab.bat` window)
+
+### Steps
+1. Copy the new `NexLab_Published` folder **next to** your existing one on the server
+2. **Rename** the new folder to `NexLab_Update`
+3. Place it **inside** your existing `NexLab_Published` folder
+4. Double-click **`safe_update.bat`**
+5. Follow the prompts — it will:
+   - ✅ Flush all pending database writes (WAL checkpoint)
+   - ✅ Create a timestamped backup
+   - ✅ Copy only code files (your database, config, uploads are protected)
+   - ✅ Install any new dependencies
+   - ✅ Run database migrations
+6. Once complete, run `start_nexlab.bat` to start the system
+7. Delete the `NexLab_Update` folder (no longer needed)
+
+### What is protected (NEVER overwritten):
+| File/Folder | Contains |
+|-------------|----------|
+| `lab_database.db` | All patient data, results, orders |
+| `lab_database.db-wal` | Recent uncommitted writes |
+| `lab_database.db-shm` | Database shared memory |
+| `.env` | Server secrets and configuration |
+| `venv/` | Python virtual environment |
+| `backups/` | Database backups |
+| `uploads/` | Patient attachments and files |
 
 ---
 
 ## 🛠️ The Manual Way (Step-by-Step)
-If you prefer to perform the update manually, follow these steps exactly:
 
-### 1. Backup your Database
-- Go to your system folder (`lab_system`).
-- Locate the file `lab_database.db`.
-- Copy this file and paste it into a folder named `backups`. Rename it to something like `lab_database_backup_DATE.db`.
+If you prefer to perform the update manually, follow these steps **exactly**:
 
-### 2. Replace System Files
-- Delete the old files (except for `lab_database.db`, `backups/`, and `venv/`).
-- Copy the new files from the update package into the `lab_system` folder.
+### 1. Stop the Server
+- Close the `start_nexlab.bat` window completely.
 
-### 3. Run Database Migrations
-- If the new system version includes new database columns or features, you must run the migration scripts.
-- Open a Command Prompt in the folder.
-- Type: `venv\Scripts\python.exe run_all_migrations.py`
-- Press Enter.
+### 2. Checkpoint the Database
+- Open a Command Prompt in the `NexLab_Published` folder.
+- Run: `venv\Scripts\python.exe tools\checkpoint_db.py`
+- This flushes all pending writes into the main database file.
 
-### 4. Restart the Server
+### 3. Backup your Database
+- Run: `venv\Scripts\python.exe tools\backup_db.py`
+- A backup will be saved in the `backups/` folder.
+
+### 4. Replace System Files
+- **DO NOT delete the folder!**
+- Delete the old files **EXCEPT** for:
+  - `lab_database.db` (and `.db-wal`, `.db-shm`)
+  - `.env`
+  - `backups/` folder
+  - `venv/` folder
+  - `uploads/` folder
+- Copy the new files from the update package into the folder.
+
+### 5. Install Dependencies
+- Run: `install_requirements.bat`
+
+### 6. Run Database Migrations
+- Run: `venv\Scripts\python.exe migrations\run_all.py`
+
+### 7. Restart the Server
 - Double-click `start_nexlab.bat` to bring the system back online.
 
 ---
 
 ## 🆘 Troubleshooting
 - **Error: "Column already exists"**: This is normal if you have already run the migration before. The scripts are designed to skip columns that already exist.
-- **System Won't Start**: Check the `update_debug.log` if it exists, or restore your backup by renaming your latest backup file back to `lab_database.db`.
+- **Error: "Database is locked"**: Make sure you completely closed the `start_nexlab.bat` window. Wait a few seconds and try again.
+- **System Won't Start**: Restore your backup by copying the latest file from `backups/` and renaming it to `lab_database.db`.
+- **Patient data is missing after update**: You may have lost WAL data. Restore from the backup in the `backups/` folder.
 
 > [!WARNING]
 > DO NOT delete or overwrite `lab_database.db` during an update. This file contains all your data.
+> Also protect `lab_database.db-wal` and `lab_database.db-shm` — they contain recent writes!

@@ -8,7 +8,7 @@ import os
 import secrets
 
 from database import get_session
-from models import PatientVisit, Expense, User, Order, TestDefinition, Device, ExpenseType
+from models import Patient, PatientVisit, Expense, User, Order, TestDefinition, Device, ExpenseType
 from routes.helpers import templates, require_permission, get_current_user, create_audit_log, model_to_dict
 
 router = APIRouter()
@@ -36,9 +36,11 @@ def detailed_income_page(request: Request, session: Session = Depends(get_sessio
     except ValueError:
         return RedirectResponse(url="/reports/detailed-income?error=Invalid date format", status_code=status.HTTP_303_SEE_OTHER)
 
-    # 1. Fetch Visits for the selected date
+    # 1. Fetch Visits for the selected date (exclude soft-deleted patients)
     visits = session.exec(
         select(PatientVisit)
+        .join(Patient, PatientVisit.patient_id == Patient.id)
+        .where(Patient.is_active == True)
         .where(PatientVisit.visit_date >= start_date)
         .where(PatientVisit.visit_date <= end_date)
     ).all()
@@ -101,9 +103,11 @@ def net_amounts_page(request: Request, session: Session = Depends(get_session)):
     except ValueError:
         return RedirectResponse(url="/reports/net-amounts?error=Invalid date format", status_code=status.HTTP_303_SEE_OTHER)
 
-    # 1. Fetch Visits
+    # 1. Fetch Visits (exclude soft-deleted patients)
     visits = session.exec(
         select(PatientVisit)
+        .join(Patient, PatientVisit.patient_id == Patient.id)
+        .where(Patient.is_active == True)
         .where(PatientVisit.visit_date >= start_date)
         .where(PatientVisit.visit_date <= end_date)
     ).all()
@@ -206,7 +210,7 @@ def payment_records_page(request: Request, session: Session = Depends(get_sessio
     records = []
 
     if record_type in ["all", "receive"]:
-        query = select(PatientVisit).where(PatientVisit.visit_date >= start_datetime, PatientVisit.visit_date <= end_datetime)
+        query = select(PatientVisit).join(Patient, PatientVisit.patient_id == Patient.id).where(Patient.is_active == True, PatientVisit.visit_date >= start_datetime, PatientVisit.visit_date <= end_datetime)
         if user_filter != "all":
             query = query.where(PatientVisit.created_by == int(user_filter))
         
@@ -289,7 +293,7 @@ def patients_number_page(request: Request, session: Session = Depends(get_sessio
     except ValueError:
         return RedirectResponse(url="/reports/patients-number?error=Invalid datetime format", status_code=status.HTTP_303_SEE_OTHER)
 
-    query = select(PatientVisit).where(PatientVisit.visit_date >= start_datetime, PatientVisit.visit_date <= end_datetime)
+    query = select(PatientVisit).join(Patient, PatientVisit.patient_id == Patient.id).where(Patient.is_active == True, PatientVisit.visit_date >= start_datetime, PatientVisit.visit_date <= end_datetime)
     visits = session.exec(query).all()
     
     # Group by date
@@ -356,7 +360,7 @@ def tests_number_page(request: Request, session: Session = Depends(get_session))
     tests_list = session.exec(select(TestDefinition).where(TestDefinition.deleted_at == None)).all()
     devices_list = session.exec(select(Device).where(Device.deleted_at == None)).all()
 
-    query = select(Order).where(Order.order_date >= start_datetime, Order.order_date <= end_datetime)
+    query = select(Order).join(Patient, Order.patient_id == Patient.id).where(Patient.is_active == True, Order.order_date >= start_datetime, Order.order_date <= end_datetime)
     
     if test_filter != "all":
         query = query.where(Order.test_id == int(test_filter))
@@ -438,20 +442,18 @@ def discount_report_page(request: Request, session: Session = Depends(get_sessio
     users = session.exec(select(User)).all()
     user_dict = {u.id: u.full_name for u in users}
 
-    # Query PatientVisit where discount_amount > 0 and within date range
-    from models import Patient
-    query = select(PatientVisit).where(
+    # Query PatientVisit where discount_amount > 0 and within date range (exclude soft-deleted patients)
+    query = select(PatientVisit).join(Patient, PatientVisit.patient_id == Patient.id).where(
+        Patient.is_active == True,
         PatientVisit.discount_amount > 0,
         PatientVisit.visit_date >= start_datetime, 
         PatientVisit.visit_date <= end_datetime
     )
     
-    if patient_id_filter or patient_name_filter:
-        query = query.join(Patient)
-        if patient_id_filter:
-            query = query.where(Patient.patient_id.ilike(f"%{patient_id_filter}%"))
-        if patient_name_filter:
-            query = query.where(Patient.full_name.ilike(f"%{patient_name_filter}%"))
+    if patient_id_filter:
+        query = query.where(Patient.patient_id.ilike(f"%{patient_id_filter}%"))
+    if patient_name_filter:
+        query = query.where(Patient.full_name.ilike(f"%{patient_name_filter}%"))
             
     if user_filter != "all":
         # Check if the user either created or edited the visit
@@ -699,20 +701,18 @@ def remain_report_page(request: Request, session: Session = Depends(get_session)
     users = session.exec(select(User)).all()
     user_dict = {u.id: u.full_name for u in users}
 
-    # Query PatientVisit where remaining_amount > 0 and within date range
-    from models import Patient
-    query = select(PatientVisit).where(
+    # Query PatientVisit where remaining_amount > 0 and within date range (exclude soft-deleted patients)
+    query = select(PatientVisit).join(Patient, PatientVisit.patient_id == Patient.id).where(
+        Patient.is_active == True,
         PatientVisit.remaining_amount > 0,
         PatientVisit.visit_date >= start_datetime, 
         PatientVisit.visit_date <= end_datetime
     )
     
-    if patient_id_filter or patient_name_filter:
-        query = query.join(Patient)
-        if patient_id_filter:
-            query = query.where(Patient.patient_id.ilike(f"%{patient_id_filter}%"))
-        if patient_name_filter:
-            query = query.where(Patient.full_name.ilike(f"%{patient_name_filter}%"))
+    if patient_id_filter:
+        query = query.where(Patient.patient_id.ilike(f"%{patient_id_filter}%"))
+    if patient_name_filter:
+        query = query.where(Patient.full_name.ilike(f"%{patient_name_filter}%"))
             
     if user_filter != "all":
         query = query.where(PatientVisit.created_by == int(user_filter))
@@ -792,12 +792,13 @@ def patient_region_page(request: Request, session: Session = Depends(get_session
     except ValueError:
         return RedirectResponse(url="/reports/patient-region?error=Invalid date format", status_code=status.HTTP_303_SEE_OTHER)
 
-    from models import Patient, Region
+    from models import Region
     
     # Fetch all active regions for dropdown
     regions_list = session.exec(select(Region).where(Region.is_active == True)).all()
 
-    query = select(Patient).where(Patient.created_at >= start_datetime, Patient.created_at <= end_datetime)
+    # Exclude soft-deleted patients
+    query = select(Patient).where(Patient.is_active == True, Patient.created_at >= start_datetime, Patient.created_at <= end_datetime)
     
     if region_filter != "all":
         query = query.where(Patient.region_id == int(region_filter))

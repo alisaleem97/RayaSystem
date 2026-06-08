@@ -418,7 +418,7 @@ if (result.success) { alert('✅ Design saved successfully!'); } else { alert('�
 } catch (error) { alert('❌ Error saving design: ' + error.message); }
 }
 
-async function loadDesign() {
+async function loadDesign(quiet = false) {
 try {
 const response = await fetch('/api/print-template/load/barcode');
 const result = await response.json();
@@ -431,9 +431,14 @@ designElements = [];
 const elements = JSON.parse(result.template.elements || '[]');
 elements.forEach(el => { designElements.push(el); renderElement(el); });
 updatePaperSize();
-alert('✅ Design loaded successfully!');
-} else { alert('❌ No saved design found'); }
-} catch (error) { alert('❌ Error loading design: ' + error.message); }
+if (!quiet) alert('✅ Design loaded successfully!');
+} else { 
+if (!quiet) alert('❌ No saved design found'); 
+else loadDesignLocal();
+}
+} catch (error) { 
+if (!quiet) alert('❌ Error loading design: ' + error.message); 
+}
 }
 
 window.addEventListener('beforeprint', function() {
@@ -498,7 +503,7 @@ updatePaperSize();
 }
 
 document.querySelectorAll('#propertiesPanel input, #propertiesPanel select').forEach(input => { input.addEventListener('change', saveDesignLocal); });
-window.addEventListener('load', function() { loadDesignLocal(); });
+window.addEventListener('load', function() { loadDesign(true); });
 </script>
 </body>
 </html>

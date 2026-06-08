@@ -54,7 +54,7 @@ class Result(SQLModel, table=True):
     unauth_reason: Optional[str] = Field(default=None)
 
     order: Order = Relationship(back_populates="result")
-    details: List["ResultDetail"] = Relationship(back_populates="result")
+    details: List["ResultDetail"] = Relationship(back_populates="result", cascade_delete=True)
 
 
 class ResultDetail(SQLModel, table=True):

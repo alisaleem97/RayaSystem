@@ -1441,7 +1441,7 @@
             } catch (err) { alert('Failed to save to database. Check console (F12).\n\nDetails: ' + err.message); }
         }
 
-        async function loadDesign() {
+        async function loadDesign(quiet = false) {
             try {
                 const res = await fetch('/api/print-template/load/result_report');
                 if (!res.ok) throw new Error(`Server returned status ${res.status}`);
@@ -1450,7 +1450,7 @@
                     const loaded = result.template; let parsedData;
                     try {
                         parsedData = JSON.parse(loaded.elements && loaded.elements.trim() !== '' && loaded.elements !== 'None' ? loaded.elements : '{"elements":[], "paperWidth":"210mm", "paperHeight":"297mm"}');
-                    } catch (parseErr) { alert('The template data in the database is corrupted. Loading a fresh canvas.'); parsedData = { elements: [], paperWidth: '210mm', paperHeight: '297mm' }; }
+                    } catch (parseErr) { if (!quiet) alert('The template data in the database is corrupted. Loading a fresh canvas.'); parsedData = { elements: [], paperWidth: '210mm', paperHeight: '297mm' }; }
                     designElements = parsedData.elements || []; 
                     paperWidth = parsedData.paperWidth || loaded.paper_width || '210mm';
                     paperHeight = parsedData.paperHeight || loaded.paper_height || '297mm';
@@ -1459,9 +1459,13 @@
                     paper.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center opacity-10 pointer-events-none" id="emptyHint"><i class="fas fa-vial text-[120px] mb-4"></i><p class="text-2xl font-bold tracking-widest uppercase">Drag Elements Here</p></div>`;
                     if (designElements.length > 0) document.getElementById('emptyHint').style.display = 'none';
                     designElements.forEach(renderElement);
-                    historyStack = [JSON.parse(JSON.stringify(designElements))]; historyIndex = 0; saveLocal(); refreshElementList(); showToast('Template Loaded from Database!');
-                } else alert('No saved template found on the server.');
-            } catch (err) { alert('Error loading from database. Check console (F12).\n\nDetails: ' + err.message); }
+                    historyStack = [JSON.parse(JSON.stringify(designElements))]; historyIndex = 0; saveLocal(); refreshElementList(); 
+                    if (!quiet) showToast('Template Loaded from Database!');
+                } else {
+                    if (!quiet) alert('No saved template found on the server.');
+                    else loadLocal();
+                }
+            } catch (err) { if (!quiet) alert('Error loading from database. Check console (F12).\n\nDetails: ' + err.message); }
         }
 
         function showToast(msg) {
@@ -1475,7 +1479,7 @@
             }, 3000);
         }
 
-        window.addEventListener('load', async () => { await loadLabInfoForPreview(); loadLocal(); if (designElements.length === 0) loadDesign(); refreshElementList(); });
+        window.addEventListener('load', async () => { await loadLabInfoForPreview(); await loadDesign(true); refreshElementList(); });
     </script>
 </body>
 

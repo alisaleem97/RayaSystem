@@ -78,7 +78,7 @@ class PatientVisit(SQLModel, table=True):
 
     # Relationships
     patient: Optional["Patient"] = Relationship(back_populates="visits")
-    orders: List["Order"] = Relationship(back_populates="visit")
+    orders: List["Order"] = Relationship(back_populates="visit", cascade_delete=True)
 
 
 class Attachment(SQLModel, table=True):

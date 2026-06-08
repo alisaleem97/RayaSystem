@@ -167,13 +167,19 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
         )
         session.commit()
         
+        # Determine cookie security dynamically (none/secure for cloud HTTPS/iframes, lax for local HTTP)
+        is_secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+        samesite = "none" if is_secure else "lax"
+        secure = is_secure
+
         response = RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
         response.set_cookie(
             key="nexlab_session",
             value=cookie_value,
             httponly=True,
             max_age=60 * 60 * 2,  # 2 hours
-            samesite="lax"
+            samesite=samesite,
+            secure=secure
         )
         return response
     else:

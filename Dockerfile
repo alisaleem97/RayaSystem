@@ -1,25 +1,11 @@
 # Use the official Python 3.11 slim image
 FROM python:3.11-slim
 
-# Install system dependencies required for Playwright (Chromium) and PDF generation
+# Install system dependencies needed to compile python packages (like pycairo)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget \
-    gnupg \
-    libnss3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    librandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libasound2 \
+    gcc \
+    pkg-config \
+    libcairo2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user (required by Hugging Face Spaces and best practice for security)
@@ -29,12 +15,18 @@ WORKDIR /home/user/app
 # Copy requirements first to leverage Docker cache
 COPY --chown=user:user requirements.txt .
 
-# Install Python packages and Playwright browsers
-RUN pip install --no-cache-dir -r requirements.txt && \
-    playwright install chromium
+# Install Python packages
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright browser and its exact system dependencies automatically
+RUN playwright install chromium
+RUN playwright install-deps chromium
 
 # Copy the rest of the application files
 COPY --chown=user:user . .
+
+# Use the pre-seeded database as the active database
+RUN cp seed_database.sqlite lab_database.db
 
 # Ensure directory permissions are correct for temporary files and uploads
 RUN mkdir -p tmp uploads/attachments uploads/chat_media backups && \
@@ -45,7 +37,7 @@ USER user
 
 # Set environment variables
 ENV PORT=7860
-ENV DATABASE_URL=sqlite:///home/user/app/lab_database.db
+ENV DATABASE_URL=sqlite:///./lab_database.db
 ENV PYTHONUNBUFFERED=1
 
 # Expose the port (Hugging Face Spaces uses 7860 by default)

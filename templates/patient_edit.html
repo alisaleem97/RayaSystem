@@ -47,6 +47,9 @@
             </div>
             <div class="flex gap-3">
                 <a href="/patients" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium">← Back</a>
+                {% if latest_visit %}
+                <button type="button" onclick="showDeleteVisitModal()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium">🗑️ Delete Visit</button>
+                {% endif %}
                 <button type="button" onclick="printReceipt('{{ patient.patient_id }}')" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium">📄 Print Receipt</button>
                 <button type="button" onclick="printBarcode('{{ patient.patient_id }}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">🏷️ Print Barcode</button>
             </div>
@@ -478,6 +481,46 @@
         </div>
     </div>
 </div>
+
+<!-- DELETE VISIT MODAL -->
+{% if latest_visit %}
+<div id="deleteVisitModal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transform transition-all duration-300 scale-95 opacity-0" id="deleteVisitModalContent">
+        <div class="bg-red-50 px-6 py-4 border-b border-red-100">
+            <h3 class="text-lg font-semibold text-red-800 flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+                Delete Entire Visit
+            </h3>
+            <p class="text-sm text-red-600 mt-1">Visit: <strong>{{ latest_visit.visit_id }}</strong> — {{ latest_visit.visit_date.strftime('%d-%m-%Y %H:%M') }}</p>
+        </div>
+        <div class="px-6 py-4">
+            <div class="p-3 rounded-lg text-sm font-medium bg-yellow-50 text-yellow-800 border border-yellow-200 mb-4">
+                ⚠️ This will permanently delete this visit and <strong>all</strong> its tests, results, payments, and attachments. This action cannot be undone.
+            </div>
+            <form id="deleteVisitForm" method="POST" action="/patients/{{ patient.patient_id }}/delete-visit/{{ latest_visit.visit_id }}">
+                <label class="block text-sm font-medium text-slate-700 mb-2">Deletion Reason <span class="text-red-500">*</span></label>
+                <textarea id="deleteVisitReasonInput" name="deleted_reason" rows="3" required
+                    oninput="document.getElementById('deleteVisitConfirmBtn').disabled = !this.value.trim();"
+                    class="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-red-500 focus:border-red-500 focus:outline-none resize-none"
+                    placeholder="Please enter the reason for deleting this visit..."></textarea>
+                <p class="text-xs text-slate-500 mt-2">This reason will be recorded for audit purposes.</p>
+            </form>
+        </div>
+        <div class="px-6 py-4 bg-slate-50 flex justify-end gap-3 border-t border-slate-200">
+            <button type="button" onclick="closeDeleteVisitModal()"
+                class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition">
+                Cancel
+            </button>
+            <button type="submit" form="deleteVisitForm" id="deleteVisitConfirmBtn"
+                class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                🗑️ Delete Visit
+            </button>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Hidden element to store orders JSON data -->
 <div id="orders_json_data" style="display: none;">{{ orders_json | safe }}</div>
@@ -1057,6 +1100,47 @@ function loadRegions() {
             });
             regionSelect.disabled = false;
         });
+}
+
+// Show/Close Add Payment Modal
+function showAddPaymentModal() {
+    document.getElementById('addPaymentModal').classList.remove('hidden');
+}
+function closeAddPaymentModal() {
+    document.getElementById('addPaymentModal').classList.add('hidden');
+}
+
+// Delete Visit Modal
+function showDeleteVisitModal() {
+    const modal = document.getElementById('deleteVisitModal');
+    const content = document.getElementById('deleteVisitModalContent');
+    if (!modal) return;
+    
+    document.getElementById('deleteVisitReasonInput').value = '';
+    document.getElementById('deleteVisitConfirmBtn').disabled = true;
+    
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    setTimeout(() => {
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+        document.getElementById('deleteVisitReasonInput').focus();
+    }, 10);
+}
+
+function closeDeleteVisitModal() {
+    const modal = document.getElementById('deleteVisitModal');
+    const content = document.getElementById('deleteVisitModalContent');
+    if (!modal) return;
+    
+    content.classList.remove('scale-100', 'opacity-100');
+    content.classList.add('scale-95', 'opacity-0');
+    
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }, 300);
 }
 
 // Print Receipt Function - Opens proper receipt page

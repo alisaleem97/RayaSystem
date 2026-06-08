@@ -1090,6 +1090,127 @@ def update_patient(
         )
 
 # ===========================
+# DELETE VISIT (and all child records)
+# ===========================
+@router.post("/patients/{patient_id}/delete-visit/{visit_id}")
+def delete_patient_visit(
+    patient_id: str,
+    visit_id: str,
+    request: Request,
+    deleted_reason: str = Form(...),
+    session: Session = Depends(get_session)
+):
+    """Delete a specific visit and all its child records: orders, results, result details, payments, attachments."""
+    if not require_permission(request, session, "patients", "delete"):
+        return RedirectResponse(url=f"/patients/edit/{patient_id}?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
+    try:
+        current_user = get_current_user(request, session)
+        patient = session.exec(select(Patient).where(Patient.patient_id == patient_id)).first()
+        if not patient:
+            return RedirectResponse(url="/patients?error=Patient not found", status_code=status.HTTP_303_SEE_OTHER)
+
+        visit = session.exec(
+            select(PatientVisit).where(
+                PatientVisit.patient_id == patient.id,
+                PatientVisit.visit_id == visit_id
+            )
+        ).first()
+        if not visit:
+            return RedirectResponse(url=f"/patients/edit/{patient_id}?error=Visit not found", status_code=status.HTTP_303_SEE_OTHER)
+
+        # Archive the visit before deletion
+        archive_deleted_record(session, "patientvisit", visit.id, model_to_dict(visit), current_user, deleted_reason)
+
+        # 1. Delete all orders (and their results + result details)
+        orders = session.exec(
+            select(Order)
+            .options(selectinload(Order.result).selectinload(Result.details))
+            .where(Order.visit_id == visit.id)
+        ).all()
+
+        deleted_test_names = []
+        for order in orders:
+            test_def = session.get(TestDefinition, order.test_id)
+            test_name = test_def.test_name if test_def else f"Test #{order.test_id}"
+            deleted_test_names.append(test_name)
+
+            archive_deleted_record(session, "order", order.id, model_to_dict(order), current_user, deleted_reason)
+
+            # Delete result details → result
+            if order.result:
+                for det in order.result.details:
+                    session.delete(det)
+                session.delete(order.result)
+            session.delete(order)
+
+        # 2. Delete all payment records for this visit
+        payments = session.exec(select(Payment).where(Payment.visit_id == visit.id)).all()
+        for payment in payments:
+            archive_deleted_record(session, "payment", payment.id, model_to_dict(payment), current_user, deleted_reason)
+            session.delete(payment)
+
+        # 3. Delete all attachments for this visit
+        attachments = session.exec(select(Attachment).where(Attachment.visit_id == visit.id)).all()
+        for att in attachments:
+            archive_deleted_record(session, "attachment", att.id, model_to_dict(att), current_user, deleted_reason)
+            # Delete physical file
+            import os
+            if att.file_path and os.path.exists(att.file_path):
+                try:
+                    os.remove(att.file_path)
+                except Exception:
+                    pass
+            session.delete(att)
+
+        # 4. Delete the visit itself
+        session.delete(visit)
+
+        # Audit log & activity
+        create_audit_log(
+            session,
+            "patient",
+            patient.id,
+            "delete",
+            current_user,
+            old_values=model_to_dict(visit),
+            new_values={
+                "action": f"Visit Deleted (ID: {visit_id}). Tests: {', '.join(deleted_test_names)}. Reason: {deleted_reason}",
+                "deleted_tests": deleted_test_names,
+                "deleted_payments_count": len(payments),
+                "deleted_attachments_count": len(attachments)
+            }
+        )
+        log_activity_action(
+            session,
+            "DELETE_VISIT",
+            f"Deleted visit {visit_id} from patient {patient.full_name} (ID: {patient_id}). "
+            f"Tests: {', '.join(deleted_test_names)}. Payments: {len(payments)}. Reason: {deleted_reason}",
+            current_user,
+            "patientvisit",
+            visit.id
+        )
+
+        session.commit()
+
+        print(f"✅ Deleted visit {visit_id} from patient {patient_id}: "
+              f"{len(orders)} orders, {len(payments)} payments, {len(attachments)} attachments")
+
+        return RedirectResponse(
+            url=f"/patients/edit/{patient_id}?success=Visit deleted successfully!",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+
+    except Exception as e:
+        session.rollback()
+        print(f"❌ Error deleting visit: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return RedirectResponse(
+            url=f"/patients/edit/{patient_id}?error={str(e).replace(' ', '%20')}",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+
+# ===========================
 # PATIENT SOFT DELETE
 # ===========================
 @router.post("/patients/delete/{patient_id}")

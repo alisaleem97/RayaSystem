@@ -15,9 +15,10 @@ def package():
     # 1. Copy application directories
     include_dirs = ['app', 'routes', 'templates', 'static', 'uploads', 'tmp', 'device_interfacing', 'migrations', 'tools']
     # Removed lab_database.db from include_files to prevent overwriting production data
+    # NOTE: .env is NOT included — server has its own config with different secrets
     include_files = [
         'main.py', 'models.py', 'database.py', 'requirements.txt',
-        'update_system.bat', 'System_Update_Guide.md', '.env'
+        'update_system.bat', 'safe_update.bat', 'System_Update_Guide.md'
     ]
 
     for d in include_dirs:

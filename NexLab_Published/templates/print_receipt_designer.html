@@ -732,7 +732,7 @@ alert('❌ Error saving design: ' + error.message);
 }
 }
 
-async function loadDesign() {
+async function loadDesign(quiet = false) {
 try {
 const response = await fetch('/api/print-template/load/receipt');
 const result = await response.json();
@@ -752,12 +752,13 @@ designElements.push(el);
 renderElement(el);
 });
 updatePaperSize();
-alert('✅ Receipt design loaded successfully!');
+if (!quiet) alert('✅ Receipt design loaded successfully!');
 } else {
-alert('❌ No saved receipt design found');
+if (!quiet) alert('❌ No saved receipt design found');
+else loadDesignLocal();
 }
 } catch (error) {
-alert('❌ Error loading design: ' + error.message);
+if (!quiet) alert('❌ Error loading design: ' + error.message);
 }
 }
 
@@ -828,7 +829,7 @@ input.addEventListener('change', saveDesignLocal);
 
 window.addEventListener('load', function() {
 loadLabInfoForPreview();
-loadDesignLocal();
+loadDesign(true);
 });
 </script>
 </body>
