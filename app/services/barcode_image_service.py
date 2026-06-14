@@ -56,7 +56,7 @@ def generate_barcode_label_image(patient, tests_by_sample_type, template, visit_
     elements = json.loads(template.elements) if template.elements else []
 
     # Load font
-    font_path = os.path.join(STATIC_DIR, 'vendor', 'fonts', 'Cairo-600.ttf')
+    font_path = os.path.join(STATIC_DIR, 'vendor', 'fonts', 'Amiri-Bold.ttf')
     if not os.path.exists(font_path):
         font_path = None
 
@@ -107,10 +107,10 @@ def generate_barcode_label_image(patient, tests_by_sample_type, template, visit_
                     if crop_box:
                         bc_img = bc_img.crop(crop_box)
 
-                    # Scale to fill element box
-                    bc_ratio = min(w / bc_img.width, h / bc_img.height)
-                    new_w = int(bc_img.width * bc_ratio)
-                    new_h = int(bc_img.height * bc_ratio)
+                    # Scale to fit element box correctly (preserving actual bar height, scale width by barcodeScale)
+                    new_h = int(h * 0.85) if show_text else h
+                    barcode_scale = el.get('barcodeScale', 3) / 3.0
+                    new_w = min(w, int(bc_img.width * barcode_scale))
                     bc_img = bc_img.resize((new_w, new_h), Image.NEAREST)
 
                     # Paste bars centered in element box
@@ -186,7 +186,7 @@ def generate_barcode_label_image(patient, tests_by_sample_type, template, visit_
             bbox = draw.textbbox((0, 0), display_txt, font=pil_font)
             text_w = bbox[2] - bbox[0]
             text_h = bbox[3] - bbox[1]
-            text_y = y + (h - text_h) // 2
+            text_y = y + (h - text_h) // 2 - bbox[1]
 
             if align == 'center':
                 text_x = x + (w - text_w) // 2

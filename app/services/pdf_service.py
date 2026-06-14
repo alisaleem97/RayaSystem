@@ -51,7 +51,7 @@ def generate_native_barcode_pdf(patient, tests_by_sample_type, template, visit_i
     c = canvas.Canvas(buffer, pagesize=(width_pt, height_pt))
 
     # Font registry
-    font_path = os.path.join(STATIC_DIR, 'vendor', 'fonts', 'Cairo-600.ttf')
+    font_path = os.path.join(STATIC_DIR, 'vendor', 'fonts', 'Amiri-Bold.ttf')
     if os.path.exists(font_path):
         try:
             pdfmetrics.registerFont(TTFont('ArabicFont', font_path))

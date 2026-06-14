@@ -424,8 +424,20 @@
                                 val = row.type === 'child' ? `<span style="padding-left: 15px;">${row.parameter_name}</span>` : row.test_name;
                             } else if (c === 'result') {
                                 val = row.result_value || '-';
-                                if (row.flag && row.flag !== 'N') {
-                                    styleAdd = 'font-weight: bold; color: #dc2626;';
+                                if (row.flag && row.flag.trim().toUpperCase() !== 'N' && row.flag.trim().toUpperCase() !== 'NORMAL') {
+                                    styleAdd += 'font-weight: bold; color: #dc2626; ';
+                                    const f = row.flag.trim().toUpperCase();
+                                    if (f.includes('PANIC') || f === 'P' || f === 'PP') {
+                                        styleAdd += 'background-color: #fee2e2 !important; ';
+                                    } else if (f.includes('HIGH') || f === 'H' || f === 'HH') {
+                                        styleAdd += 'background-color: #fef3c7 !important; ';
+                                    } else if (f.includes('LOW') || f === 'L' || f === 'LL') {
+                                        styleAdd += 'background-color: #dbeafe !important; ';
+                                    } else {
+                                        styleAdd += 'background-color: #ffffff !important; ';
+                                    }
+                                } else {
+                                    styleAdd += 'background-color: #ffffff !important; ';
                                 }
                             } else if (c === 'flag') { val = row.flag || ''; }
                             else if (c === 'range') { val = row.range || ''; }
