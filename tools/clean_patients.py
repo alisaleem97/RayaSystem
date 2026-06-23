@@ -11,12 +11,14 @@ Affected tables (deleted in order):
   5. Order         (child of Patient / PatientVisit)
   6. PatientVisit  (child of Patient)
   7. Patient
+  8. ActivityLog
+  9. AuditLog
+  10. DeletedRecord
 
 NOT affected:
   - Users, Departments, Tests, Devices, Parameters, Packages, Partners
   - Provinces, Regions, LabInfo, PrintTemplates
   - Formulas, Supplies, Inventory, CalControl
-  - AuditLog, ActivityLog, DeletedRecord (historical records preserved)
   - Chat, Messages, Expenses
 
 Usage:
@@ -26,14 +28,16 @@ Usage:
 import sys
 import os
 
-# Ensure project root is in the path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Ensure project root is in the path and set as working directory
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+os.chdir(project_root)
 
 from sqlmodel import Session, select, func
 from app.database import engine
 from app.models import (
     Patient, PatientVisit, Order, Result, ResultDetail,
-    Payment, Attachment,
+    Payment, Attachment, ActivityLog, AuditLog, DeletedRecord
 )
 
 
@@ -47,6 +51,9 @@ def count_records(session):
         "ResultDetail": session.exec(select(func.count(ResultDetail.id))).one(),
         "Payment": session.exec(select(func.count(Payment.id))).one(),
         "Attachment": session.exec(select(func.count(Attachment.id))).one(),
+        "ActivityLog": session.exec(select(func.count(ActivityLog.id))).one(),
+        "AuditLog": session.exec(select(func.count(AuditLog.id))).one(),
+        "DeletedRecord": session.exec(select(func.count(DeletedRecord.id))).one(),
     }
     return counts
 
@@ -70,7 +77,7 @@ def clean_patients():
         print("  The following records will be PERMANENTLY deleted:\n")
         for table, count in counts.items():
             print(f"    {table:<20} {count:>6} records")
-        print(f"    {'':-<20} {'':->6}---------")
+        print(f"    {'':─<20} {'':─>6}─────────")
         print(f"    {'TOTAL':<20} {total:>6} records")
         print()
 
@@ -127,6 +134,24 @@ def clean_patients():
         for r in deleted:
             session.delete(r)
         print(f"    Patient:       {len(deleted)} deleted")
+
+        # 8. ActivityLog
+        deleted = session.exec(select(ActivityLog)).all()
+        for r in deleted:
+            session.delete(r)
+        print(f"    ActivityLog:   {len(deleted)} deleted")
+
+        # 9. AuditLog
+        deleted = session.exec(select(AuditLog)).all()
+        for r in deleted:
+            session.delete(r)
+        print(f"    AuditLog:      {len(deleted)} deleted")
+
+        # 10. DeletedRecord
+        deleted = session.exec(select(DeletedRecord)).all()
+        for r in deleted:
+            session.delete(r)
+        print(f"    DeletedRecord: {len(deleted)} deleted")
 
         # --- Commit ---
         session.commit()

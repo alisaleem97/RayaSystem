@@ -115,39 +115,39 @@
     (function() {
         const templateData = {{ template_data | tojson if template_data else 'null' }};
         const patient = {
-            patient_id: "{{ patient.patient_id }}",
-            full_name: "{{ patient.full_name }}",
-            gender: "{{ patient.gender or '' }}",
+            patient_id: {{ patient.patient_id | tojson }},
+            full_name: {{ patient.full_name | tojson }},
+            gender: {{ (patient.gender or '') | tojson }},
             age: {{ patient.age or 0 }},
-            age_unit: "{{ patient.age_unit or 'year' }}",
-            phone_key: "{{ patient.phone_key or '' }}",
-            phone_number: "{{ patient.phone_number or '' }}",
-            sample_type: "{{ patient.sample_type or '' }}"
+            age_unit: {{ (patient.age_unit or 'year') | tojson }},
+            phone_key: {{ (patient.phone_key or '') | tojson }},
+            phone_number: {{ (patient.phone_number or '') | tojson }},
+            sample_type: {{ (patient.sample_type or '') | tojson }}
         };
         const labInfo = {
-            lab_name: "{{ lab_info.lab_name if lab_info else '' }}",
-            lab_title: "{{ lab_info.lab_title if lab_info and lab_info.lab_title else '' }}",
-            lab_address: "{{ lab_info.lab_address if lab_info and lab_info.lab_address else '' }}",
-            lab_phone_1: "{{ lab_info.lab_phone_1 if lab_info and lab_info.lab_phone_1 else '' }}",
-            lab_phone_2: "{{ lab_info.lab_phone_2 if lab_info and lab_info.lab_phone_2 else '' }}",
-            lab_email: "{{ lab_info.lab_email if lab_info and lab_info.lab_email else '' }}",
-            lab_website: "{{ lab_info.lab_website if lab_info and lab_info.lab_website else '' }}",
-            lab_currency: "{{ lab_info.lab_currency if lab_info and lab_info.lab_currency else '$' }}",
-            first_doctor_name: "{{ lab_info.first_doctor_name if lab_info and lab_info.first_doctor_name else '' }}",
-            second_doctor_name: "{{ lab_info.second_doctor_name if lab_info and lab_info.second_doctor_name else '' }}",
-            lab_note_1: "{{ lab_info.lab_note_1 if lab_info and lab_info.lab_note_1 else '' }}",
-            lab_note_2: "{{ lab_info.lab_note_2 if lab_info and lab_info.lab_note_2 else '' }}",
-            lab_logo: "{{ lab_info.lab_logo if lab_info and lab_info.lab_logo else '' }}",
-            lab_qr_1: "{{ lab_info.lab_qr_1 if lab_info and lab_info.lab_qr_1 else '' }}",
-            lab_qr_2: "{{ lab_info.lab_qr_2 if lab_info and lab_info.lab_qr_2 else '' }}",
-            lab_stamp_1: "{{ lab_info.lab_stamp_1 if lab_info and lab_info.lab_stamp_1 else '' }}",
-            lab_stamp_2: "{{ lab_info.lab_stamp_2 if lab_info and lab_info.lab_stamp_2 else '' }}",
-            lab_signature_1: "{{ lab_info.lab_signature_1 if lab_info and lab_info.lab_signature_1 else '' }}",
-            lab_signature_2: "{{ lab_info.lab_signature_2 if lab_info and lab_info.lab_signature_2 else '' }}"
+            lab_name: {{ (lab_info.lab_name if lab_info else '') | tojson }},
+            lab_title: {{ (lab_info.lab_title if lab_info and lab_info.lab_title else '') | tojson }},
+            lab_address: {{ (lab_info.lab_address if lab_info and lab_info.lab_address else '') | tojson }},
+            lab_phone_1: {{ (lab_info.lab_phone_1 if lab_info and lab_info.lab_phone_1 else '') | tojson }},
+            lab_phone_2: {{ (lab_info.lab_phone_2 if lab_info and lab_info.lab_phone_2 else '') | tojson }},
+            lab_email: {{ (lab_info.lab_email if lab_info and lab_info.lab_email else '') | tojson }},
+            lab_website: {{ (lab_info.lab_website if lab_info and lab_info.lab_website else '') | tojson }},
+            lab_currency: {{ (lab_info.lab_currency if lab_info and lab_info.lab_currency else '$') | tojson }},
+            first_doctor_name: {{ (lab_info.first_doctor_name if lab_info and lab_info.first_doctor_name else '') | tojson }},
+            second_doctor_name: {{ (lab_info.second_doctor_name if lab_info and lab_info.second_doctor_name else '') | tojson }},
+            lab_note_1: {{ (lab_info.lab_note_1 if lab_info and lab_info.lab_note_1 else '') | tojson }},
+            lab_note_2: {{ (lab_info.lab_note_2 if lab_info and lab_info.lab_note_2 else '') | tojson }},
+            lab_logo: {{ (lab_info.lab_logo if lab_info and lab_info.lab_logo else '') | tojson }},
+            lab_qr_1: {{ (lab_info.lab_qr_1 if lab_info and lab_info.lab_qr_1 else '') | tojson }},
+            lab_qr_2: {{ (lab_info.lab_qr_2 if lab_info and lab_info.lab_qr_2 else '') | tojson }},
+            lab_stamp_1: {{ (lab_info.lab_stamp_1 if lab_info and lab_info.lab_stamp_1 else '') | tojson }},
+            lab_stamp_2: {{ (lab_info.lab_stamp_2 if lab_info and lab_info.lab_stamp_2 else '') | tojson }},
+            lab_signature_1: {{ (lab_info.lab_signature_1 if lab_info and lab_info.lab_signature_1 else '') | tojson }},
+            lab_signature_2: {{ (lab_info.lab_signature_2 if lab_info and lab_info.lab_signature_2 else '') | tojson }}
         };
         const orders = {{ orders | tojson }};
-        const visitId = "{{ visit_id }}";
-        const visitDate = "{{ visit_date }}";
+        const visitId = {{ visit_id | tojson }};
+        const visitDate = {{ visit_date | tojson }};
         
         // Accounting data (computed on server from orders + visit)
         const accounting = {

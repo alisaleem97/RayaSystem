@@ -170,6 +170,16 @@
         table td {
             max-width: 0;   /* forces fixed-layout to honour table-layout:fixed */
         }
+        
+        /* Force status font colors to black globally */
+        .status-high, .status-low, .status-normal, .status-panic {
+            color: #000000 !important;
+        }
+        
+        /* Force result inputs to have black text globally (especially when readonly/disabled) */
+        .result-input {
+            color: #000000 !important;
+        }
         /* ──────────────────────────────────────────────────────────────── */
 
         /* ─── Range Hover Tooltip ─────────────────────────────────────── */

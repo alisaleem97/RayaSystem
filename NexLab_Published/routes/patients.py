@@ -533,16 +533,44 @@ def patient_edit_page(request: Request, patient_id: str, session: Session = Depe
                 .options(selectinload(Order.test))
                 .where(Order.visit_id == latest_visit.id)
             ).all()
+            
+            packages_map = {p.package_name: p for p in packages}
+            processed_packages = {}
+            
             for order in orders:
                 test = order.test
-                orders_json.append({
-                    "id": order.test_id,
-                    "name": test.test_name if test else 'Unknown Test',
-                    "type": 'test',
-                    "price": float(order.unit_price) if order.unit_price else (float(test.price) if test else 0.0),
-                    "package_name": order.package_name,
-                    "status": order.status
-                })
+                is_in_package = False
+                
+                if order.package_name:
+                    pkg_names = [n.strip() for n in order.package_name.split(",") if n.strip()]
+                    for p_name in pkg_names:
+                        if p_name in packages_map:
+                            is_in_package = True
+                            if p_name not in processed_packages:
+                                p = packages_map[p_name]
+                                processed_packages[p_name] = {
+                                    "id": p.id,
+                                    "name": p.package_name,
+                                    "type": 'package',
+                                    "price": float(p.price),
+                                    "package_name": p.package_name,
+                                    "status": order.status
+                                }
+                            else:
+                                if order.status in ['resulted', 'received', 'authorized', 'double_authorized']:
+                                    processed_packages[p_name]["status"] = order.status
+                
+                if not is_in_package:
+                    orders_json.append({
+                        "id": order.test_id,
+                        "name": test.test_name if test else 'Unknown Test',
+                        "type": 'test',
+                        "price": float(order.unit_price) if order.unit_price else (float(test.price) if test else 0.0),
+                        "package_name": order.package_name,
+                        "status": order.status
+                    })
+            
+            orders_json.extend(processed_packages.values())
         
         orders_json_str = json.dumps(orders_json if orders_json else [])
         
@@ -621,17 +649,31 @@ def api_remove_test(patient_id: str, request: Request, session: Session = Depend
         
         # Parse query params since this is called from JS
         test_id = int(request.query_params.get("test_id", 0))
+        item_type = request.query_params.get("item_type", "test")
         reason = request.query_params.get("reason", "Removed from patient edit")
         
         if not test_id:
             return JSONResponse({"success": False, "error": "test_id is required"}, status_code=400)
         
         # Find matching order(s)
-        orders_to_delete = session.exec(
-            select(Order)
-            .options(selectinload(Order.result).selectinload(Result.details))
-            .where(Order.visit_id == latest_visit.id, Order.test_id == test_id)
-        ).all()
+        if item_type == "package":
+            package_id = test_id
+            package = session.get(Package, package_id)
+            if not package:
+                return JSONResponse({"success": False, "error": "Package not found"}, status_code=404)
+            package_test_ids = [pt.test_id for pt in session.exec(select(PackageTest).where(PackageTest.package_id == package_id)).all()]
+            
+            orders_to_delete = session.exec(
+                select(Order)
+                .options(selectinload(Order.result).selectinload(Result.details))
+                .where(Order.visit_id == latest_visit.id, Order.test_id.in_(package_test_ids))
+            ).all()
+        else:
+            orders_to_delete = session.exec(
+                select(Order)
+                .options(selectinload(Order.result).selectinload(Result.details))
+                .where(Order.visit_id == latest_visit.id, Order.test_id == test_id)
+            ).all()
         
         if not orders_to_delete:
             return JSONResponse({"success": False, "error": "Order not found"}, status_code=404)

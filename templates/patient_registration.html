@@ -463,7 +463,7 @@
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1">Received Amount</label>
-                    <input type="number" id="received_amount" name="received_amount" step="0.01" oninput="calculateRemaining()"
+                    <input type="number" id="received_amount" name="received_amount" step="0.01" oninput="calculateRemaining()" autocomplete="off"
                         class="w-full h-11 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                 </div>
                 <div>
@@ -1178,6 +1178,7 @@ function addItem(item) {
     item.no = itemCounter;
     selectedItems.push(item);
     renderSelectedItems();
+    receivedAmountAutoFilled = true; // Auto-update received amount
     calculateTotal();
     document.getElementById('emptyTableMessage').style.display = 'none';
 }
@@ -1191,6 +1192,7 @@ function removeItem(index) {
     });
     itemCounter = selectedItems.length;
     renderSelectedItems();
+    receivedAmountAutoFilled = true; // Auto-update received amount
     calculateTotal();
     
     if (selectedItems.length === 0) {

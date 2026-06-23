@@ -334,7 +334,7 @@
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1">Received Amount</label>
-                    <input type="number" id="received_amount" name="received_amount" step="0.01" oninput="calculateRemaining()" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
+                    <input type="number" id="received_amount" name="received_amount" step="0.01" oninput="calculateRemaining()" autocomplete="off" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1">Remaining Amount</label>
@@ -747,6 +747,13 @@ function addItem(item) {
     selectedItems.push(item);
     renderSelectedItems();
     calculateTotal();
+    // Auto-update received amount
+    const totalAfterTax = document.getElementById('total_after_tax');
+    const receivedAmount = document.getElementById('received_amount');
+    if (totalAfterTax && receivedAmount) {
+        receivedAmount.value = parseFloat(totalAfterTax.value.replace(/,/g, '')) || 0;
+        calculateRemaining();
+    }
     document.getElementById('emptyTableMessage').style.display = 'none';
 }
 
@@ -817,7 +824,7 @@ function confirmDeleteTest() {
         confirmBtn.textContent = 'Removing...';
         
         const patientId = '{{ patient.patient_id }}';
-        const url = `/api/patients/${patientId}/remove-test?test_id=${item.id}&visit_id=${encodeURIComponent('{{ latest_visit.visit_id }}')}&reason=${encodeURIComponent(reason)}`;
+        const url = `/api/patients/${patientId}/remove-test?test_id=${item.id}&item_type=${item.type}&visit_id=${encodeURIComponent('{{ latest_visit.visit_id }}')}&reason=${encodeURIComponent(reason)}`;
         
         fetch(url, { method: 'POST' })
             .then(response => response.json())
@@ -852,6 +859,15 @@ function executeRemove(index) {
     itemCounter = selectedItems.length;
     renderSelectedItems();
     calculateTotal();
+    
+    // Auto-update received amount
+    const totalAfterTax = document.getElementById('total_after_tax');
+    const receivedAmount = document.getElementById('received_amount');
+    if (totalAfterTax && receivedAmount) {
+        receivedAmount.value = parseFloat(totalAfterTax.value.replace(/,/g, '')) || 0;
+        calculateRemaining();
+    }
+    
     if (selectedItems.length === 0) {
         document.getElementById('emptyTableMessage').style.display = 'block';
     }

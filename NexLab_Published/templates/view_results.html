@@ -296,18 +296,22 @@
 
     function getFlagClass(flag) {
         if (!flag) return '';
-        const f = flag.toUpperCase();
-        if (f.includes('H')) return 'status-high';
-        if (f.includes('L')) return 'status-low';
+        const f = flag.trim().toUpperCase();
+        if (f === 'NORMAL' || f === 'N') return 'status-normal';
+        if (f.includes('PANIC') || f === 'P' || f === 'PP') return 'status-panic';
+        if (f.includes('HIGH') || f === 'H' || f === 'HH') return 'status-high';
+        if (f.includes('LOW') || f === 'L' || f === 'LL') return 'status-low';
         return 'status-normal';
     }
 
     function getFlagBg(flag) {
-        if (!flag) return '';
-        const f = flag.toUpperCase();
-        if (f.includes('H')) return 'bg-high';
-        if (f.includes('L')) return 'bg-low';
-        return '';
+        if (!flag) return 'bg-white';
+        const f = flag.trim().toUpperCase();
+        if (f === 'NORMAL' || f === 'N') return 'bg-white';
+        if (f.includes('PANIC') || f === 'P' || f === 'PP') return 'bg-panic';
+        if (f.includes('HIGH') || f === 'H' || f === 'HH') return 'bg-high';
+        if (f.includes('LOW') || f === 'L' || f === 'LL') return 'bg-low';
+        return 'bg-white';
     }
 
     function onOrderSelectChange(cb) {

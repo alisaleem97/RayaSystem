@@ -637,42 +637,49 @@
             return { statusText: '', statusClass: '', inputClass: '' };
         }
 
-        const num = parseFloat(value);
+        const num = parseFloat(value.replace(',', '.')); // Handle comma decimals safely
         if (isNaN(num)) return { statusText: '', statusClass: '', inputClass: '' };
 
+        const pLess = rng.panic_less_than != null ? parseFloat(String(rng.panic_less_than).replace(',', '.')) : null;
+        const pMore = rng.panic_more_than != null ? parseFloat(String(rng.panic_more_than).replace(',', '.')) : null;
+        const nFrom = rng.normal_from != null ? parseFloat(String(rng.normal_from).replace(',', '.')) : null;
+        const nTo = rng.normal_to != null ? parseFloat(String(rng.normal_to).replace(',', '.')) : null;
+        const hFrom = rng.high_from != null ? parseFloat(String(rng.high_from).replace(',', '.')) : null;
+        const lTo = rng.low_to != null ? parseFloat(String(rng.low_to).replace(',', '.')) : null;
+
         // Check panic first
-        if (rng.panic_less_than != null && num < rng.panic_less_than) {
+        if (pLess !== null && num < pLess) {
             return { statusText: '⚠ PANIC', statusClass: 'status-panic', inputClass: 'bg-panic' };
         }
-        if (rng.panic_more_than != null && num > rng.panic_more_than) {
+        if (pMore !== null && num > pMore) {
             return { statusText: '⚠ PANIC', statusClass: 'status-panic', inputClass: 'bg-panic' };
         }
 
         // Check normal
-        if (rng.normal_from != null && rng.normal_to != null) {
-            if (num >= rng.normal_from && num <= rng.normal_to) {
+        if (nFrom !== null && nTo !== null) {
+            if (num >= nFrom && num <= nTo) {
                 return { statusText: 'Normal', statusClass: 'status-normal', inputClass: '' };
             }
         }
 
         // Check high
-        if (rng.high_from != null && num >= rng.high_from) {
+        if (hFrom !== null && num >= hFrom) {
             return { statusText: 'High', statusClass: 'status-high', inputClass: 'bg-high' };
         }
-        if (rng.normal_to != null && num > rng.normal_to) {
+        if (nTo !== null && num > nTo) {
             return { statusText: 'High', statusClass: 'status-high', inputClass: 'bg-high' };
         }
 
         // Check low
-        if (rng.low_to != null && num <= rng.low_to) {
+        if (lTo !== null && num <= lTo) {
             return { statusText: 'Low', statusClass: 'status-low', inputClass: 'bg-low' };
         }
-        if (rng.normal_from != null && num < rng.normal_from) {
+        if (nFrom !== null && num < nFrom) {
             return { statusText: 'Low', statusClass: 'status-low', inputClass: 'bg-low' };
         }
 
         // Normal if range exists but no specific match
-        if (rng.normal_from != null || rng.normal_to != null) {
+        if (nFrom !== null || nTo !== null) {
             return { statusText: 'Normal', statusClass: 'status-normal', inputClass: '' };
         }
 
