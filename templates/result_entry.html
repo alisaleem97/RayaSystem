@@ -916,7 +916,7 @@
     // ===========================
     // RESULT VALIDATION HELPER
     // ===========================
-    function hasAnyResult(orderId, type) {
+    function hasAllResults(orderId, type) {
         let inputs = [];
         if (type === 'parent') {
             const childRows = document.querySelectorAll(`tr.row-child[data-order-id="${orderId}"]`);
@@ -932,7 +932,7 @@
             }
         }
         if (inputs.length === 0) return true;
-        return inputs.some(inp => inp.value && inp.value.trim() !== '');
+        return inputs.every(inp => inp.value && inp.value.trim() !== '');
     }
 
     function hasSelectedDevice(orderId, type, tr) {
@@ -975,9 +975,9 @@
                         blockedReason = 'Please select a device before AUTH';
                         return; // Skip checking this one
                     }
-                    if (!hasAnyResult(orderId, type)) {
+                    if (!hasAllResults(orderId, type)) {
                         blockedAny = true;
-                        blockedReason = 'Please enter the result to AUTH';
+                        blockedReason = 'All parameters must have results before AUTH';
                         return; // Skip checking this one
                     }
                 }
@@ -1029,9 +1029,9 @@
                         showNotification('Please select a device before AUTH', 'error');
                         return;
                     }
-                    if (!hasAnyResult(orderId, type)) {
+                    if (!hasAllResults(orderId, type)) {
                         cb.checked = false;
-                        showNotification('Please enter the result to AUTH', 'error');
+                        showNotification('All parameters must have results before AUTH', 'error');
                         return;
                     }
                 }

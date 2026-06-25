@@ -1,5 +1,7 @@
 # app/middleware.py
 # Auth middleware — protects all routes, extracted from main.py for clean SoC.
+# SEC-08: Uses print_token for headless PDF bypass (not User-Agent sniffing).
+# SEC-12: Adds security headers to all responses.
 
 import hashlib
 from starlette.responses import RedirectResponse as StarletteRedirect
@@ -15,22 +17,31 @@ PRINT_TOKEN = hashlib.sha256(SECRET_KEY.encode()).hexdigest()[:16]
 # Paths that don't require authentication
 PUBLIC_PATHS = ["/login", "/static/", "/tmp/", "/favicon.ico"]
 
+# Paths that can bypass auth when a valid print_token is provided.
+# This covers both the NexPrint client AND local Headless Chrome PDF generation.
+PRINT_TOKEN_PATHS = [
+    "/print-barcode/", "/print-receipt/",
+    "/api/print-barcode-pdf/", "/api/print-barcode-image/",
+    "/print-results/render/", "/api/lab-info",
+]
+
 
 async def auth_middleware(request, call_next):
     """HTTP middleware that enforces authentication on all non-public routes."""
     path = request.url.path
     is_public = any(path.startswith(p) for p in PUBLIC_PATHS)
 
-    # Allow local Headless Chrome to load assets for PDF generation
-    user_agent = request.headers.get("user-agent", "")
-    if "HeadlessChrome" in user_agent and request.client.host == "127.0.0.1":
-        is_public = True
-
-    # NexPrint token bypass for barcode/receipt printing
-    if path.startswith("/print-barcode/") or path.startswith("/print-receipt/") or path.startswith("/api/print-barcode-pdf/") or path.startswith("/api/print-barcode-image/"):
+    # SEC-08 FIX: Replaced insecure HeadlessChrome User-Agent sniffing with
+    # print_token validation. Any path in PRINT_TOKEN_PATHS can bypass auth
+    # if a valid print_token query param is provided (used by NexPrint client
+    # and Headless Chrome PDF generation).
+    if not is_public:
         token = request.query_params.get("print_token", "")
         if token == PRINT_TOKEN:
-            is_public = True
+            for prefix in PRINT_TOKEN_PATHS:
+                if path.startswith(prefix):
+                    is_public = True
+                    break
 
     if not is_public:
         with Session(engine) as session:
@@ -42,4 +53,11 @@ async def auth_middleware(request, call_next):
             request.state.user_id = user.id
 
     response = await call_next(request)
+
+    # SEC-12: Add security headers to all responses
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+
     return response

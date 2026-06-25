@@ -12,7 +12,7 @@ import uuid
 
 from database import get_session
 from app.models.hr import Employee, EmployeeAttachment
-from routes.helpers import templates, get_current_user
+from routes.helpers import templates, get_current_user, require_permission
 
 router = APIRouter()
 
@@ -27,9 +27,9 @@ os.makedirs(EMPLOYEE_ATTACHMENTS_DIR, exist_ok=True)
 # ===========================
 @router.get("/hr", response_class=HTMLResponse)
 def hr_page(request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "hr"):
+        return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     current_user = get_current_user(request, session)
-    if not current_user:
-        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
     employees = session.exec(select(Employee).where(Employee.is_active == True).order_by(Employee.created_at.desc())).all()
 
@@ -74,9 +74,9 @@ def create_employee(
     request: Request = None,
     session: Session = Depends(get_session)
 ):
+    if not require_permission(request, session, "hr", "create"):
+        return RedirectResponse(url="/hr?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     current_user = get_current_user(request, session)
-    if not current_user:
-        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
     try:
         sd = datetime.strptime(start_date, "%Y-%m-%d")
@@ -131,9 +131,9 @@ def update_employee(
     request: Request = None,
     session: Session = Depends(get_session)
 ):
+    if not require_permission(request, session, "hr", "edit"):
+        return RedirectResponse(url="/hr?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     current_user = get_current_user(request, session)
-    if not current_user:
-        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
     try:
         emp = session.get(Employee, employee_id)
@@ -176,9 +176,9 @@ def delete_employee(
     request: Request,
     session: Session = Depends(get_session)
 ):
+    if not require_permission(request, session, "hr", "delete"):
+        return RedirectResponse(url="/hr?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     current_user = get_current_user(request, session)
-    if not current_user:
-        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
     try:
         emp = session.get(Employee, employee_id)
@@ -198,7 +198,9 @@ def delete_employee(
 # GET ATTACHMENTS API
 # ===========================
 @router.get("/api/hr/employees/{employee_id}/attachments")
-def get_employee_attachments(employee_id: int, session: Session = Depends(get_session)):
+def get_employee_attachments(employee_id: int, request: Request, session: Session = Depends(get_session)):
+    if not require_permission(request, session, "hr"):
+        return JSONResponse(status_code=403, content={"success": False, "error": "Permission Denied"})
     attachments = session.exec(select(EmployeeAttachment).where(EmployeeAttachment.employee_id == employee_id)).all()
     return {"attachments": [{"id": a.id, "file_name": a.file_name, "file_path": a.file_path, "uploaded_at": a.uploaded_at.isoformat()} for a in attachments]}
 
@@ -213,9 +215,9 @@ def upload_employee_attachment(
     request: Request = None,
     session: Session = Depends(get_session)
 ):
+    if not require_permission(request, session, "hr", "edit"):
+        return JSONResponse(status_code=403, content={"success": False, "error": "Permission Denied"})
     current_user = get_current_user(request, session)
-    if not current_user:
-        return JSONResponse(status_code=401, content={"success": False, "error": "Not authenticated"})
 
     try:
         emp = session.get(Employee, employee_id)
@@ -251,9 +253,9 @@ def delete_employee_attachment(
     request: Request,
     session: Session = Depends(get_session)
 ):
+    if not require_permission(request, session, "hr", "edit"):
+        return JSONResponse(status_code=403, content={"success": False, "error": "Permission Denied"})
     current_user = get_current_user(request, session)
-    if not current_user:
-        return JSONResponse(status_code=401, content={"success": False, "error": "Not authenticated"})
 
     try:
         attachment = session.get(EmployeeAttachment, attachment_id)

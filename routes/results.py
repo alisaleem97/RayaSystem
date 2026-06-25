@@ -618,6 +618,7 @@ async def save_results(request: Request, session: Session = Depends(get_session)
                 # Process child parameter details
                 children = row.get("children", [])
                 has_any_value = False
+                all_have_values = True
                 for child in children:
                     param_id = child.get("parameter_id")
                     if not param_id:
@@ -645,10 +646,12 @@ async def save_results(request: Request, session: Session = Depends(get_session)
 
                     if detail.result_value:
                         has_any_value = True
+                    else:
+                        all_have_values = False
 
                 # Enforce status machine: ordered -> resulted -> authorized
-                # Allow authorization when result + auth are submitted together (order still "ordered")
-                can_authorize = authorized and order.status in ("ordered", "resulted", "authorized")
+                # AUTH only allowed when ALL parameters have results (not just some)
+                can_authorize = authorized and all_have_values and order.status in ("ordered", "resulted", "authorized")
                 result.authorized = can_authorize
                 if can_authorize:
                     result.authorized_by = user_id

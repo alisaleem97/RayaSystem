@@ -394,9 +394,7 @@ def print_job(server_url, patient_id, barcode_printer, receipt_printer, print_to
                 crop_pdf(receipt_pdf, receipt_width, receipt_height)
                 
                 orient = receipt_orientation if receipt_orientation in ['portrait', 'landscape'] else None
-                # Print 2 copies of the receipt
-                print_pdf_to_printer(receipt_pdf, receipt_printer, sumatra_path, use_fit=False, orientation=orient)
-                time.sleep(1)  # Small delay between copies to avoid spooler issues
+                # Print 1 copy of the receipt
                 print_pdf_to_printer(receipt_pdf, receipt_printer, sumatra_path, use_fit=False, orientation=orient)
                 results['receipt_success'] = True
             except Exception as e:

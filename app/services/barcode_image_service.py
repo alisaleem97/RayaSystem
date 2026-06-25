@@ -60,12 +60,10 @@ def generate_barcode_label_image(patient, tests_by_sample_type, template, visit_
     if not os.path.exists(font_path):
         font_path = None
 
-    # Arabic reshaper
-    try:
-        reshaper_config = arabic_reshaper.config_for_true_type_font(font_path) if font_path else None
-    except Exception:
-        reshaper_config = None
-    reshaper = arabic_reshaper.ArabicReshaper(configuration=reshaper_config) if reshaper_config else arabic_reshaper.ArabicReshaper()
+    # Arabic reshaper — use default config, NOT config_for_true_type_font().
+    # The font-scanner incorrectly marks isolated forms of letters like Alef and Dal
+    # as missing, causing them to render as thin vertical bars on printed labels.
+    reshaper = arabic_reshaper.ArabicReshaper()
 
     sample_types = list(tests_by_sample_type.keys()) or ['Unknown']
     pages = []

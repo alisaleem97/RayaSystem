@@ -204,6 +204,11 @@ PAGES_REGISTRY = {
         {"key": "edit", "label": "Edit"},
         {"key": "delete", "label": "Delete"},
     ]},
+    "hr": {"label": "Human Resources", "group": "Settings", "buttons": [
+        {"key": "create", "label": "Create"},
+        {"key": "edit", "label": "Edit"},
+        {"key": "delete", "label": "Delete"},
+    ]},
     "activity_logs": {"label": "Activity Logs", "group": "Settings", "buttons": [
         {"key": "view", "label": "View"},
     ]},
