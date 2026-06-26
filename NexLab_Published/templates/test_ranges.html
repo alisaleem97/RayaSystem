@@ -33,11 +33,11 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Test *</label>
-                    <select id="test_id" name="test_id" required onchange="updateParameterDropdown()" 
+                    <select id="test_id" name="test_id" required 
                             class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                         <option value="">Select Test...</option>
                         {% for test in tests %}
-                        <option value="{{ test.id }}" data-has-params="{{ 'yes' if test.test_parameters else 'no' }}">{{ test.test_name }} ({{ test.test_short_name }})</option>
+                        <option value="{{ test.id }}">{{ test.test_name }} ({{ test.test_short_name }})</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -369,7 +369,20 @@
 <script src="/static/vendor/tom-select/tom-select.complete.min.js"></script>
 <script>
 let searchTestSelect, searchParamSelect, searchDeviceSelect, searchDeptSelect;
+let testSelectTomObj, paramSelectTomObj, deviceSelectTomObj;
 let quill;
+
+const testsMetadata = {{ tests_metadata | tojson | safe }};
+const allParameters = [
+    {% for param in parameters %}
+    {value: "{{ param.id }}", text: "{{ param.parameter_name }}"},
+    {% endfor %}
+];
+const allDevices = [
+    {% for device in devices %}
+    {value: "{{ device.id }}", text: "{{ device.device_name }}"},
+    {% endfor %}
+];
 
 document.addEventListener('DOMContentLoaded', function() {
     quill = new Quill('#quillEditor', {
@@ -382,6 +395,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 ['clean']
             ]
         }
+    });
+
+    testSelectTomObj = new TomSelect('#test_id', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Select Test...',
+        create: false,
+        maxItems: 1,
+        onChange: function(value) {
+            updateDropdowns(value);
+        }
+    });
+
+    paramSelectTomObj = new TomSelect('#parameter_id', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Select Parameter...',
+        create: false,
+        maxItems: 1
+    });
+
+    deviceSelectTomObj = new TomSelect('#device_id', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Select Device...',
+        create: false,
+        maxItems: 1
     });
 
     document.getElementById('rangeForm').addEventListener('submit', function() {
@@ -425,28 +462,48 @@ function toggleForm(formId) {
         document.getElementById('rangeForm').reset();
         document.getElementById('range_id').value = '';
         document.getElementById('formTitle').textContent = 'New Range Details';
-        document.getElementById('parameter_id').value = '';
-        document.getElementById('range_type_numeric').checked = true;
+        if (testSelectTomObj) testSelectTomObj.clear();
+        if (paramSelectTomObj) { paramSelectTomObj.clear(); paramSelectTomObj.disable(); }
+        if (deviceSelectTomObj) deviceSelectTomObj.clear();
+        document.getElementById('range_type_number').checked = true;
         if (quill) quill.root.innerHTML = '';
         toggleRangeType();
     }
 }
 
-function updateParameterDropdown() {
-    const testSelect = document.getElementById('test_id');
-    const paramSelect = document.getElementById('parameter_id');
+function updateDropdowns(testId) {
     const message = document.getElementById('no_params_message');
-    const selectedOption = testSelect.options[testSelect.selectedIndex];
-    const hasParams = selectedOption.dataset.hasParams === 'yes';
     
-    paramSelect.disabled = !hasParams;
-    
-    if (!hasParams) {
-        message.classList.remove('hidden');
-        paramSelect.value = '';
-    } else {
-        message.classList.add('hidden');
+    if (paramSelectTomObj) {
+        paramSelectTomObj.clear();
+        paramSelectTomObj.clearOptions();
     }
+    if (deviceSelectTomObj) {
+        deviceSelectTomObj.clear();
+        deviceSelectTomObj.clearOptions();
+    }
+    
+    if (!testId || !testsMetadata[testId]) {
+        if (paramSelectTomObj) paramSelectTomObj.disable();
+        message.classList.add('hidden');
+        allDevices.forEach(d => { if (deviceSelectTomObj) deviceSelectTomObj.addOption(d); });
+        return;
+    }
+    
+    const meta = testsMetadata[testId];
+    
+    if (!meta.has_params) {
+        if (paramSelectTomObj) paramSelectTomObj.disable();
+        message.classList.remove('hidden');
+    } else {
+        if (paramSelectTomObj) paramSelectTomObj.enable();
+        message.classList.add('hidden');
+        const validParams = allParameters.filter(p => meta.parameters.includes(parseInt(p.value)));
+        validParams.forEach(p => { if (paramSelectTomObj) paramSelectTomObj.addOption(p); });
+    }
+    
+    const validDevices = allDevices.filter(d => meta.devices.includes(parseInt(d.value)));
+    validDevices.forEach(d => { if (deviceSelectTomObj) deviceSelectTomObj.addOption(d); });
 }
 
 function toggleRangeType() {
@@ -487,9 +544,17 @@ function filterTable() {
 
 function editRange(range) {
     document.getElementById('range_id').value = range.id;
-    document.getElementById('test_id').value = range.test_id;
-    document.getElementById('parameter_id').value = range.parameter_id || '';
-    document.getElementById('device_id').value = range.device_id || '';
+    if (testSelectTomObj) {
+        testSelectTomObj.setValue(range.test_id, true); // true prevents triggering onChange immediately, or we can trigger it and set values after. Wait, we want to trigger onChange to populate params/devices, so we let it trigger.
+        testSelectTomObj.setValue(range.test_id);
+    }
+    
+    // Set parameter and device after options are populated
+    setTimeout(() => {
+        if (range.parameter_id && paramSelectTomObj) paramSelectTomObj.setValue(range.parameter_id);
+        if (range.device_id && deviceSelectTomObj) deviceSelectTomObj.setValue(range.device_id);
+    }, 100);
+    
     document.getElementById('unit').value = range.unit;
     document.getElementById('gender_type').value = range.gender_type;
     document.getElementById('age_from').value = range.age_from;
@@ -523,11 +588,6 @@ function editRange(range) {
     
     // Toggle sections
     toggleRangeType();
-    
-    // Update parameter dropdown
-    setTimeout(() => {
-        updateParameterDropdown();
-    }, 100);
     
     document.getElementById('formTitle').textContent = 'Edit Range Details';
     document.getElementById('addRangeForm').style.display = 'block';

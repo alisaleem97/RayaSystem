@@ -292,7 +292,15 @@ def test_ranges_page(request: Request, session: Session = Depends(get_session)):
         return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     ranges = session.exec(select(TestRange).order_by(TestRange.id.asc())).all()
     ranges_json = [model_to_dict(r) for r in ranges]
-    tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
+    tests = session.exec(select(TestDefinition).options(selectinload(TestDefinition.test_parameters), selectinload(TestDefinition.test_devices)).where(TestDefinition.is_available == True)).all()
+    tests_metadata = {
+        t.id: {
+            "has_params": bool(t.test_parameters),
+            "parameters": [tp.parameter_id for tp in t.test_parameters],
+            "devices": [td.device_id for td in t.test_devices]
+        }
+        for t in tests
+    }
     parameters = session.exec(select(Parameter)).all()
     devices = session.exec(select(Device).where(Device.is_active == True)).all()
     departments = session.exec(select(Department).where(Department.is_active == True)).all()
@@ -300,7 +308,8 @@ def test_ranges_page(request: Request, session: Session = Depends(get_session)):
     error = request.query_params.get("error")
     return templates.TemplateResponse("test_ranges.html", {
         "request": request, "ranges": ranges, "ranges_json": ranges_json,
-        "tests": tests, "parameters": parameters, "devices": devices, "departments": departments,
+        "tests": tests, "tests_metadata": tests_metadata, "parameters": parameters, 
+        "devices": devices, "departments": departments,
         "message_success": success, "message_error": error
     })
 

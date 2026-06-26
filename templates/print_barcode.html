@@ -83,18 +83,18 @@
         @media print {
             html, body { background: white; padding: 0 !important; margin: 0 !important; width: 100%; height: 100%; }
             .toolbar { display: none !important; }
-            .barcode-pages { margin: 0 !important; padding: 0 !important; gap: 0; display: block; }
+            .barcode-pages { margin: 0 !important; padding: 0 !important; gap: 0; display: block; border: none; }
             .barcode-page {
                 border: none;
                 box-shadow: none;
                 page-break-after: always;
+                page-break-inside: avoid;
                 margin: 0 !important;
                 padding: 0 !important;
-                width: 100% !important;
-                height: 100% !important;
+                width: {{ template_data.paper_width if template_data else '4in' }} !important;
+                height: {{ template_data.paper_height if template_data else '2in' }} !important;
                 position: relative;
-                left: 4mm;
-                top: -2mm;
+                overflow: hidden;
             }
             .barcode-page:last-child {
                 page-break-after: auto;
@@ -103,6 +103,7 @@
                 width: 100% !important;
                 height: 100% !important;
                 object-fit: fill;
+                display: block;
             }
             .page-label { display: none !important; }
         }

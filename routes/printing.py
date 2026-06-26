@@ -186,7 +186,7 @@ async def save_print_template(request: Request, session: Session = Depends(get_s
         
         # Check permissions based on template_name
         req_page = "result_designer"
-        if template_name == "barcode_label":
+        if template_name in ("barcode", "barcode_label"):
             req_page = "barcode_designer"
         elif template_name == "receipt":
             req_page = "receipt_designer"
