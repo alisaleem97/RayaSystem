@@ -285,10 +285,10 @@
         <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden lg:hidden transition-opacity duration-300" onclick="toggleSidebar()"></div>
 
         <!-- Sidebar -->
-        <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-secondary text-white flex flex-col shadow-xl transform -translate-x-full lg:static lg:translate-x-0 transition-transform duration-300 ease-in-out">
-            <div class="h-16 flex items-center justify-between border-b border-slate-700 px-4">
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-secondary text-white flex flex-col shadow-xl transform -translate-x-full lg:static lg:translate-x-0 transition-transform duration-300 ease-in-out rounded-[2rem] lg:my-4 lg:ml-4">
+            <div class="h-16 flex items-center justify-center relative border-b border-slate-700 px-4">
                 <h1 class="text-xl font-bold tracking-wider">🔬 <span class="text-accent">NEX</span>LAB</h1>
-                <button onclick="toggleSidebar()" class="lg:hidden text-slate-400 hover:text-white focus:outline-none">
+                <button onclick="toggleSidebar()" class="lg:hidden absolute right-4 text-slate-400 hover:text-white focus:outline-none">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
@@ -307,7 +307,7 @@
                 </ul>
 
                 <!-- Patient Management -->
-                {% if has_page('patient_registration') or has_page('patients') or has_page('deleted_patients') or has_page('deleted_tests') or has_page('patient_history') or has_page('patient_status') %}
+                {% if has_page('patient_registration') or has_page('patients') or has_page('deleted_patients') or has_page('deleted_tests') or has_page('patient_history') or has_page('patient_status') or has_page('print_results') %}
                 <div class="mt-4">
                     <button onclick="toggleSubMenu('patientMenu')" class="w-full flex items-center justify-between px-6 py-3 text-slate-300 hover:text-white hover:bg-slate-800 transition-all group">
                         <div class="flex items-center">
@@ -347,6 +347,11 @@
                                 Patient Status
                             </a>
                         </li>{% endif %}
+                        {% if has_page('print_results') %}<li>
+                            <a href="/print-results" class="sidebar-link flex items-center px-6 py-3 submenu-item transition-colors {% if request.url.path == '/print-results' %}active{% endif %}">
+                                Print Results
+                            </a>
+                        </li>{% endif %}
                     </ul>
                 </div>
                 {% endif %}
@@ -382,7 +387,7 @@
                 {% endif %}
 
                 <!-- Printing & Design -->
-                {% if has_page('print_barcode') or has_page('barcode_designer') or has_page('print_receipt') or has_page('receipt_designer') or has_page('print_results') or has_page('call_centre') or has_page('result_designer') %}
+                {% if has_page('print_barcode') or has_page('barcode_designer') or has_page('print_receipt') or has_page('receipt_designer') or has_page('call_centre') or has_page('result_designer') %}
                 <div class="mt-2">
                     <button onclick="toggleSubMenu('printMenu')" class="w-full flex items-center justify-between px-6 py-3 text-slate-300 hover:text-white hover:bg-slate-800 transition-all group">
                         <div class="flex items-center">
@@ -412,11 +417,6 @@
                                 Receipt Designer
                             </a>
                         </li>{% endif %}
-                        {% if has_page('print_results') %}<li>
-                            <a href="/print-results" class="sidebar-link flex items-center px-6 py-3 submenu-item transition-colors {% if request.url.path == '/print-results' %}active{% endif %}">
-                                Print Results
-                            </a>
-                        </li>{% endif %}
                         {% if has_page('call_centre') %}<li>
                             <a href="/call-centre" class="sidebar-link flex items-center px-6 py-3 submenu-item transition-colors {% if request.url.path == '/call-centre' %}active{% endif %}">
                                 Call Centre
@@ -432,7 +432,7 @@
                 {% endif %}
 
                 <!-- Lab Setup -->
-                {% if has_page('departments') or has_page('sample_types') or has_page('devices') or has_page('parameters') or has_page('report_notes') %}
+                {% if has_page('departments') or has_page('sample_types') or has_page('devices') or has_page('parameters') or has_page('report_notes') or has_page('supplies') or has_page('inventory') or has_page('cal_control') %}
                 <div class="mt-2">
                     <button onclick="toggleSubMenu('setupMenu')" class="w-full flex items-center justify-between px-6 py-3 text-slate-300 hover:text-white hover:bg-slate-800 transition-all group">
                         <div class="flex items-center">
@@ -477,7 +477,7 @@
                                 Inventory
                             </a>
                         </li>{% endif %}
-                        {% if has_page('inventory') or has_page('tests') %}<li>
+                        {% if has_page('cal_control') %}<li>
                             <a href="/cal-control" class="sidebar-link flex items-center px-6 py-3 submenu-item transition-colors {% if request.url.path == '/cal-control' %}active{% endif %}">
                                 Cal & Control
                             </a>
@@ -642,6 +642,7 @@
                 {% endif %}
 
                 <!-- HR & Staff -->
+                {% if has_page('hr') %}
                 <div class="mt-2">
                     <button onclick="toggleSubMenu('hrMenu')" class="w-full flex items-center justify-between px-6 py-3 text-slate-300 hover:text-white hover:bg-slate-800 transition-all group">
                         <div class="flex items-center">
@@ -658,6 +659,7 @@
                         </li>
                     </ul>
                 </div>
+                {% endif %}
 
                 <!-- Settings -->
                 {% if has_page('lab_info') or has_page('user_management') or has_page('activity_logs') %}

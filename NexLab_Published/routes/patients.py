@@ -534,7 +534,11 @@ def patient_edit_page(request: Request, patient_id: str, session: Session = Depe
                 .where(Order.visit_id == latest_visit.id)
             ).all()
             
-            packages_map = {p.package_name: p for p in packages}
+            # Load ALL packages (including inactive) for matching against order.package_name
+            all_packages = session.exec(select(Package)).all()
+            # Strip keys so trailing/leading whitespace in package_name doesn't cause mismatches
+            all_packages_map = {p.package_name.strip(): p for p in all_packages}
+            
             processed_packages = {}
             
             for order in orders:
@@ -544,10 +548,10 @@ def patient_edit_page(request: Request, patient_id: str, session: Session = Depe
                 if order.package_name:
                     pkg_names = [n.strip() for n in order.package_name.split(",") if n.strip()]
                     for p_name in pkg_names:
-                        if p_name in packages_map:
+                        if p_name in all_packages_map:
                             is_in_package = True
                             if p_name not in processed_packages:
-                                p = packages_map[p_name]
+                                p = all_packages_map[p_name]
                                 processed_packages[p_name] = {
                                     "id": p.id,
                                     "name": p.package_name,
@@ -557,6 +561,7 @@ def patient_edit_page(request: Request, patient_id: str, session: Session = Depe
                                     "status": order.status
                                 }
                             else:
+                                # Preserve the worst-case status (resulted > ordered)
                                 if order.status in ['resulted', 'received', 'authorized', 'double_authorized']:
                                     processed_packages[p_name]["status"] = order.status
                 
@@ -573,6 +578,7 @@ def patient_edit_page(request: Request, patient_id: str, session: Session = Depe
             orders_json.extend(processed_packages.values())
         
         orders_json_str = json.dumps(orders_json if orders_json else [])
+        print(f"📋 Edit page orders_json for {patient_id}: {orders_json_str}")
         
         # [NEW] Fetch payments for the latest visit
         payments = []
@@ -988,11 +994,12 @@ def update_patient(
         # map old active orders
         active_orders_map = {o.test_id: o for o in old_orders if o.test_id in active_old_order_test_ids}
         
-        # Reset their prices to 0 so we can recalculate them from the current items list
+        # Reset their prices and package_name to recalculate them from the current items list
         for o in active_orders_map.values():
             o.unit_price = 0.0
             o.discount_amount = 0.0
             o.final_price = 0.0
+            o.package_name = None
 
         created_orders = {}
 

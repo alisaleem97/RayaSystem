@@ -201,12 +201,20 @@ def formulas_page(request: Request, session: Session = Depends(get_session)):
     formulas = session.exec(select(Formula).order_by(Formula.id.asc())).all()
     formulas_json = [model_to_dict(f) for f in formulas]
     tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
+    tests_metadata = {
+        t.id: {
+            "has_params": len(t.test_parameters) > 0,
+            "parameters": [tp.parameter_id for tp in t.test_parameters],
+            "devices": [td.device_id for td in t.test_devices]
+        }
+        for t in tests
+    }
     parameters = session.exec(select(Parameter)).all()
     success = request.query_params.get("success")
     error = request.query_params.get("error")
     return templates.TemplateResponse("formulas.html", {
         "request": request, "formulas": formulas, "formulas_json": formulas_json,
-        "tests": tests, "parameters": parameters,
+        "tests": tests, "tests_metadata": tests_metadata, "parameters": parameters,
         "message_success": success, "message_error": error
     })
 

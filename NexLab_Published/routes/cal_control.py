@@ -13,8 +13,8 @@ router = APIRouter()
 
 @router.get("/cal-control", response_class=HTMLResponse)
 def cal_control_page(request: Request, session: Session = Depends(get_session)):
-    # Use inventory permission as primary for accessing this page
-    if not (require_permission(request, session, "inventory") or require_permission(request, session, "tests")):
+    # Use cal_control permission for accessing this page
+    if not require_permission(request, session, "cal_control"):
         return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
 
     tests = session.exec(select(TestDefinition).where(TestDefinition.is_available == True)).all()
@@ -83,7 +83,7 @@ def create_cal_control(
     request: Request = None,
     session: Session = Depends(get_session)
 ):
-    if not (require_permission(request, session, "inventory", "edit") or require_permission(request, session, "tests")):
+    if not require_permission(request, session, "cal_control", "create"):
         return RedirectResponse(url="/dashboard?error=Permission Denied", status_code=status.HTTP_303_SEE_OTHER)
     
     if quantity <= 0:

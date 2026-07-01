@@ -5,17 +5,75 @@
 {% block page_title %}Formula Definition{% endblock %}
 
 {% block content %}
+<!-- Tom Select CSS -->
+<link href="/static/vendor/tom-select/tom-select.css" rel="stylesheet">
+<style>
+/* ✅ Tom Select Dropdown with Scrollbar */
+.ts-wrapper {
+    position: relative !important;
+    width: 100%;
+}
+.ts-dropdown {
+    max-height: 250px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    z-index: 9999 !important;
+    position: absolute !important;
+    width: 100% !important;
+    box-sizing: border-box;
+    border: 1px solid #d1d5db !important;
+    border-top: 0 !important;
+    border-radius: 0 0 0.5rem 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    margin-top: -1px;
+}
+.ts-dropdown .option {
+    padding: 8px 12px;
+    cursor: pointer;
+}
+.ts-dropdown .option:hover {
+    background-color: #e0e7ff;
+}
+.ts-dropdown .active {
+    background-color: #e0e7ff;
+}
+/* Custom scrollbar styling */
+.ts-dropdown::-webkit-scrollbar {
+    width: 8px;
+}
+.ts-dropdown::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+.ts-dropdown::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+.ts-dropdown::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+.ts-wrapper.form-control,
+.ts-wrapper.is-invalid,
+.ts-wrapper.is-valid {
+    padding: 0;
+}
+</style>
+
 <div class="bg-white rounded-xl shadow-sm border border-slate-200">
     <div class="p-6 border-b border-slate-200 flex justify-between items-center">
         <div>
             <h3 class="text-lg font-semibold text-slate-800">Formula Definition</h3>
             <p class="text-sm text-slate-500">Define calculation formulas for derived test results</p>
         </div>
+        {% if has_button('formulas', 'create') %}
+
         <button onclick="toggleForm('addFormulaForm')" 
                 class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200">
             <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
             Add Formula
         </button>
+
+        {% endif %}
         <!-- NEW TEST BUTTON -->
         <button onclick="showTestModal()" 
                 class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200 hidden" id="testBtn">
@@ -39,11 +97,11 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Main Test</label>
-                    <select id="main_test_id" name="main_test_id" required onchange="updateParameterDropdown()" 
-                            class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                        <option value="">---</option>
+                    <select id="main_test_id" name="main_test_id" required placeholder="Search tests..."
+                            class="w-full h-11 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="">Select Test...</option>
                         {% for test in tests %}
-                        <option value="{{ test.id }}" data-has-params="{{ 'yes' if test.test_parameters else 'no' }}">{{ test.test_name }} ({{ test.test_short_name }})</option>
+                        <option value="{{ test.id }}">{{ test.test_name }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -63,7 +121,7 @@
             <div class="mb-4">
                 <label class="block text-sm font-medium text-slate-700 mb-1">Main Parameter</label>
                 <select id="main_parameter_id" name="main_parameter_id" required disabled
-                        class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-100">
+                        class="w-full h-11 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-100">
                     <option value="">---</option>
                     {% for param in parameters %}
                     <option value="{{ param.id }}">{{ param.parameter_name }}</option>
@@ -87,23 +145,21 @@
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Tests (Select to add to formula)</label>
-                        <select id="test_source" onchange="addToFormula('test', this)" 
-                                class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <select id="test_source" placeholder="Search tests..."
+                                class="w-full h-11 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                             <option value="">Select Test...</option>
                             {% for test in tests %}
-                                <option value="{{ test.id }}" data-type="test">{{ test.test_name }}</option>
+                                <option value="{{ test.id }}">{{ test.test_name }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Parameters (Select to add to formula)</label>
-                        <select id="param_source" onchange="addToFormula('parameter', this)" 
-                                class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <select id="param_source" placeholder="Search parameters..." disabled
+                                class="w-full h-11 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-100">
                             <option value="">Select Parameter...</option>
-                            {% for param in parameters %}
-                                <option value="{{ param.id }}" data-type="parameter">{{ param.parameter_name }}</option>
-                            {% endfor %}
                         </select>
+                        <p class="text-xs text-slate-500 mt-1">First select a test above to view its parameters.</p>
                     </div>
                 </div>
                 
@@ -228,19 +284,27 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ formula.created_at.strftime('%Y-%m-%d') }}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div class="flex items-center space-x-3">
+                            {% if has_button('formulas', 'edit') %}
+
                             <button onclick='editFormula({{ formulas_json[loop.index0] | tojson }})' 
                                     class="text-blue-600 hover:text-blue-900" title="Edit">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                             </button>
+
+                            {% endif %}
                             <button onclick="showTestModal('{{ formula.id }}', '{{ formula.formula_expression }}')" 
                                     class="text-green-600 hover:text-green-900" title="Test Formula">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 012 2h2a2 2 0 012-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                             </button>
+                            {% if has_button('formulas', 'delete') %}
+
                             <a href="javascript:void(0)" 
                                onclick="confirmDelete('/formulas/delete/{{ formula.id }}')"
                                class="text-red-600 hover:text-red-900" title="Delete">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                             </a>
+
+                            {% endif %}
                         </div>
                     </td>
                 </tr>
@@ -309,25 +373,138 @@
 }
 </style>
 
+<!-- Tom Select JS -->
+<script src="/static/vendor/tom-select/tom-select.complete.min.js"></script>
 <script>
-// Update parameter dropdown based on selected test
-function updateParameterDropdown() {
-    const testSelect = document.getElementById('main_test_id');
-    const paramSelect = document.getElementById('main_parameter_id');
+const testsMetadata = {{ tests_metadata | default('{}') | tojson | safe }};
+const allParameters = [
+    {% for param in parameters %}
+    {value: "{{ param.id }}", text: "{{ param.parameter_name }}"},
+    {% endfor %}
+];
+
+let mainTestTsSelect, mainParamTsSelect;
+let testSourceTsSelect, paramSourceTsSelect;
+
+// Initialize Tom Selects when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    mainTestTsSelect = new TomSelect('#main_test_id', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Select Test...',
+        create: false,
+        maxItems: 1,
+        maxOptions: 50,
+        onChange: function(value) {
+            updateParameterDropdown(value);
+        }
+    });
+
+    mainParamTsSelect = new TomSelect('#main_parameter_id', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Select Parameter...',
+        create: false,
+        maxItems: 1
+    });
+
+    testSourceTsSelect = new TomSelect('#test_source', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Select Test...',
+        create: false,
+        maxItems: 1,
+        maxOptions: 50,
+        onChange: function(value) {
+            updateSourceParameterDropdown(value);
+            // Re-trigger the original select behavior manually via the TomSelect instance if needed,
+            // but we can just use the value directly for addToFormula
+            if (value && value !== "") {
+                const text = testSourceTsSelect.options[value].text;
+                addToFormulaStr(text);
+                setTimeout(() => { testSourceTsSelect.clear(true); }, 50);
+            }
+        }
+    });
+
+    paramSourceTsSelect = new TomSelect('#param_source', {
+        plugins: ['dropdown_input'],
+        placeholder: 'Select Parameter...',
+        create: false,
+        maxItems: 1,
+        onChange: function(value) {
+            if (value && value !== "") {
+                const text = paramSourceTsSelect.options[value].text;
+                addToFormulaStr(text);
+                setTimeout(() => { paramSourceTsSelect.clear(true); }, 50);
+            }
+        }
+    });
+});
+
+// Helper function to append to formula directly
+function addToFormulaStr(itemName) {
+    const formulaInput = document.getElementById('formula_expression');
+    let currentValue = formulaInput.value || '';
+    
+    const needsSpace = !currentValue.endsWith('+') && 
+                      !currentValue.endsWith('-') && 
+                      !currentValue.endsWith('*') && 
+                      !currentValue.endsWith('/') && 
+                      currentValue.length > 0;
+    
+    const newValue = currentValue + (needsSpace ? ' ' : '') + '{' + itemName + '}';
+    formulaInput.value = newValue;
+}
+
+// Update parameter dropdown based on selected main test
+function updateParameterDropdown(testId) {
     const message = document.getElementById('no_params_message');
-    const selectedOption = testSelect.options[testSelect.selectedIndex];
-    const hasParams = selectedOption.dataset.hasParams === 'yes';
     
-    paramSelect.disabled = !hasParams;
-    paramSelect.required = hasParams;
+    if (mainParamTsSelect) {
+        mainParamTsSelect.clear();
+        mainParamTsSelect.clearOptions();
+    }
     
-    if (!hasParams) {
-        message.classList.remove('hidden');
-        paramSelect.value = '';
-    } else {
+    if (!testId || !testsMetadata[testId]) {
+        if (mainParamTsSelect) mainParamTsSelect.disable();
         message.classList.add('hidden');
+        return;
+    }
+    
+    const meta = testsMetadata[testId];
+    
+    if (!meta.has_params) {
+        if (mainParamTsSelect) mainParamTsSelect.disable();
+        message.classList.remove('hidden');
+    } else {
+        if (mainParamTsSelect) mainParamTsSelect.enable();
+        message.classList.add('hidden');
+        const validParams = allParameters.filter(p => meta.parameters.includes(parseInt(p.value)));
+        validParams.forEach(p => { if (mainParamTsSelect) mainParamTsSelect.addOption(p); });
     }
 }
+
+// Update source parameter dropdown based on selected source test
+function updateSourceParameterDropdown(testId) {
+    if (paramSourceTsSelect) {
+        paramSourceTsSelect.clear();
+        paramSourceTsSelect.clearOptions();
+    }
+    
+    if (!testId || !testsMetadata[testId]) {
+        if (paramSourceTsSelect) paramSourceTsSelect.disable();
+        return;
+    }
+    
+    const meta = testsMetadata[testId];
+    
+    if (!meta.has_params) {
+        if (paramSourceTsSelect) paramSourceTsSelect.disable();
+    } else {
+        if (paramSourceTsSelect) paramSourceTsSelect.enable();
+        const validParams = allParameters.filter(p => meta.parameters.includes(parseInt(p.value)));
+        validParams.forEach(p => { if (paramSourceTsSelect) paramSourceTsSelect.addOption(p); });
+    }
+}
+
 
 function toggleForm(formId) {
     const form = document.getElementById(formId);
@@ -339,41 +516,17 @@ function toggleForm(formId) {
         document.getElementById('formula_expression').value = '';
         document.getElementById('formula_description').value = '';
         document.getElementById('formTitle').textContent = 'New Formula Details';
-        document.getElementById('main_parameter_id').value = '';
         
-        // Reset selects
-        document.getElementById('test_source').selectedIndex = 0;
-        document.getElementById('param_source').selectedIndex = 0;
+        if (mainTestTsSelect) mainTestTsSelect.clear();
+        if (mainParamTsSelect) { mainParamTsSelect.clear(); mainParamTsSelect.disable(); }
+        if (testSourceTsSelect) testSourceTsSelect.clear();
+        if (paramSourceTsSelect) { paramSourceTsSelect.clear(); paramSourceTsSelect.disable(); }
         
         updateParameterDropdown();
     }
 }
 
-// Auto-add to formula when dropdown changes
-function addToFormula(type, selectElement) {
-    const formulaInput = document.getElementById('formula_expression');
-    const selectedIndex = selectElement.selectedIndex;
-    const selectedOption = selectElement.options[selectedIndex];
-    
-    if (selectedIndex > 0 && selectedOption.text !== 'Select Test...' && selectedOption.text !== 'Select Parameter...') {
-        const itemName = selectedOption.text.trim();
-        
-        let currentValue = formulaInput.value || '';
-        
-        const needsSpace = !currentValue.endsWith('+') && 
-                          !currentValue.endsWith('-') && 
-                          !currentValue.endsWith('*') && 
-                          !currentValue.endsWith('/') && 
-                          currentValue.length > 0;
-        
-        const newValue = currentValue + (needsSpace ? ' ' : '') + '{' + itemName + '}';
-        formulaInput.value = newValue;
-        
-        setTimeout(() => {
-            selectElement.selectedIndex = 0;
-        }, 50);
-    }
-}
+
 
 // Add operator/button to formula
 function addOperator(symbol) {
@@ -398,17 +551,21 @@ function editFormula(formula) {
     document.getElementById('formula_name').value = formula.formula_name;
     document.getElementById('formula_expression').value = formula.formula_expression || '';
     document.getElementById('formula_description').value = formula.formula_description || '';
-    document.getElementById('main_test_id').value = formula.main_test_id;
-    document.getElementById('main_parameter_id').value = formula.main_parameter_id || '';
     document.getElementById('gender_type').value = formula.gender_type;
+    
+    if (mainTestTsSelect) {
+        mainTestTsSelect.setValue(formula.main_test_id);
+    }
+    
+    setTimeout(() => {
+        if (formula.main_parameter_id && mainParamTsSelect) {
+            mainParamTsSelect.setValue(formula.main_parameter_id);
+        }
+    }, 100);
     
     document.getElementById('formTitle').textContent = 'Edit Formula Details';
     document.getElementById('addFormulaForm').style.display = 'block';
     document.getElementById('formulaForm').action = '/formulas/update/' + formula.id;
-    
-    setTimeout(() => {
-        updateParameterDropdown();
-    }, 100);
 }
 
 // ===========================

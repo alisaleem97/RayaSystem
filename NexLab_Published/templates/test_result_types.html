@@ -74,6 +74,8 @@
             <h3 class="text-lg font-semibold text-slate-800">Test Result Type Definition</h3>
             <p class="text-sm text-slate-500">Define how test results should be entered</p>
         </div>
+        {% if has_button('test_result_types', 'create') %}
+
         <button onclick="toggleForm('addResultTypeForm')"
             class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200">
             <svg class="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -81,6 +83,8 @@
             </svg>
             Add Result Type
         </button>
+
+        {% endif %}
     </div>
 
     <!-- Add/Edit Result Type Form -->
@@ -296,6 +300,8 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div class="flex items-center space-x-3">
+                            {% if has_button('test_result_types', 'edit') %}
+
                             <button onclick='editResultType({{ result_types_json[loop.index0] | tojson }})'
                                 class="text-blue-600 hover:text-blue-900" title="Edit">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -304,6 +310,10 @@
                                     </path>
                                 </svg>
                             </button>
+
+                            {% endif %}
+                            {% if has_button('test_result_types', 'delete') %}
+
                             <a href="javascript:void(0)"
                                 onclick="confirmDelete('/test-result-types/delete/{{ result_type.id }}')"
                                 class="text-red-600 hover:text-red-900" title="Delete">
@@ -313,6 +323,8 @@
                                     </path>
                                 </svg>
                             </a>
+
+                            {% endif %}
                         </div>
                     </td>
                 </tr>

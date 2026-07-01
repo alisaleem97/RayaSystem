@@ -12,7 +12,6 @@
 .ts-wrapper {
     position: relative !important;
     width: 100%;
-    z-index: 100;
 }
 .ts-dropdown {
     max-height: 250px !important;
@@ -98,11 +97,15 @@
             </form>
 
             {% if has_button('inventory', 'create') %}
+            {% if has_button('inventory', 'create') %}
+
             <button onclick="toggleForm('addInventoryForm')" 
                     class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200 flex items-center gap-2 shadow-sm ml-2">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 Add Material
             </button>
+
+            {% endif %}
             {% endif %}
         </div>
     </div>
@@ -247,18 +250,26 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div class="flex items-center space-x-3">
                             {% if has_button('inventory', 'edit') %}
+                            {% if has_button('inventory', 'edit') %}
+
                             <button onclick='editInventory({{ inventory_json[loop.index0] | tojson | safe }})' 
                                     class="text-indigo-600 hover:text-indigo-900" title="Edit">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                             </button>
+
+                            {% endif %}
                             {% endif %}
                             
                             {% if has_button('inventory', 'delete') %}
+                            {% if has_button('inventory', 'delete') %}
+
                             <a href="javascript:void(0)" 
                                onclick="confirmDelete('/inventory/delete/{{ item.id }}')"
                                class="text-red-600 hover:text-red-900" title="Delete">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                             </a>
+
+                            {% endif %}
                             {% endif %}
                         </div>
                     </td>

@@ -84,6 +84,7 @@ PAGES_REGISTRY = {
     "call_centre": {"label": "Call Centre", "group": "Printing & Design", "buttons": [
         {"key": "mark_called", "label": "Mark Called"},
         {"key": "send_whatsapp", "label": "Send WhatsApp"},
+        {"key": "mark_printed", "label": "Mark Printed"},
     ]},
     "result_designer": {"label": "Result Designer", "group": "Printing & Design", "buttons": [
         {"key": "save", "label": "Save Design"},
@@ -95,6 +96,16 @@ PAGES_REGISTRY = {
         {"key": "delete", "label": "Delete"},
     ]},
     "sample_types": {"label": "Sample Types", "group": "Lab Setup", "buttons": [
+        {"key": "create", "label": "Create"},
+        {"key": "edit", "label": "Edit"},
+        {"key": "delete", "label": "Delete"},
+    ]},
+    "inventory": {"label": "Inventory", "group": "Lab Setup", "buttons": [
+        {"key": "create", "label": "Create"},
+        {"key": "edit", "label": "Edit"},
+        {"key": "delete", "label": "Delete"},
+    ]},
+    "supplies": {"label": "Supplies", "group": "Lab Setup", "buttons": [
         {"key": "create", "label": "Create"},
         {"key": "edit", "label": "Edit"},
         {"key": "delete", "label": "Delete"},
@@ -124,6 +135,9 @@ PAGES_REGISTRY = {
         {"key": "create", "label": "Create"},
         {"key": "edit", "label": "Edit"},
         {"key": "delete", "label": "Delete"},
+    ]},
+    "cal_control": {"label": "Cal & Control", "group": "Tests & Packages", "buttons": [
+        {"key": "create", "label": "Create"},
     ]},
     "test_ranges": {"label": "Test Ranges", "group": "Tests & Packages", "buttons": [
         {"key": "create", "label": "Create"},
@@ -194,6 +208,11 @@ PAGES_REGISTRY = {
         {"key": "edit", "label": "Edit"},
         {"key": "delete", "label": "Delete"},
     ]},
+    "patient_region": {"label": "Patient Region", "group": "Geography & Partners", "buttons": [
+        {"key": "create", "label": "Create"},
+        {"key": "edit", "label": "Edit"},
+        {"key": "delete", "label": "Delete"},
+    ]},
     # --- Settings ---
     "lab_info": {"label": "Lab Info", "group": "Settings", "buttons": [
         {"key": "edit", "label": "Edit"},
@@ -212,8 +231,39 @@ PAGES_REGISTRY = {
     "activity_logs": {"label": "Activity Logs", "group": "Settings", "buttons": [
         {"key": "view", "label": "View"},
     ]},
+    "settings": {"label": "General Settings", "group": "Settings", "buttons": []},
 }
 
+
+# ===========================
+# Helper: Filter Registry for Current User
+# ===========================
+def _get_filtered_registry(user: User, session: Session) -> dict:
+    """Returns a filtered PAGES_REGISTRY containing only the pages and buttons the user has."""
+    if user.role == 'admin' or user.username == 'admin':
+        return PAGES_REGISTRY
+
+    perms = session.exec(select(UserPermission).where(UserPermission.user_id == user.id)).all()
+    user_perms = {}
+    for p in perms:
+        buttons = []
+        if p.allowed_buttons:
+            try:
+                buttons = json.loads(p.allowed_buttons)
+            except Exception:
+                pass
+        user_perms[p.page_key] = buttons
+
+    filtered = {}
+    for page_key, page_info in PAGES_REGISTRY.items():
+        if page_key in user_perms:
+            allowed_btns = user_perms[page_key]
+            filtered_page = page_info.copy()
+            # Only keep buttons the user actually has permission for
+            filtered_page["buttons"] = [btn for btn in page_info.get("buttons", []) if btn["key"] in allowed_btns]
+            filtered[page_key] = filtered_page
+
+    return filtered
 
 # ===========================
 # USERS PAGE
@@ -226,10 +276,14 @@ def users_page(request: Request, session: Session = Depends(get_session)):
     users = session.exec(select(User).order_by(User.id.asc())).all()
     success = request.query_params.get("success")
     error = request.query_params.get("error")
+    
+    # Filter the registry so users can only assign permissions they possess
+    filtered_registry = _get_filtered_registry(current_user, session)
+    
     return templates.TemplateResponse("users.html", {
         "request": request,
         "users": users,
-        "pages_registry": PAGES_REGISTRY,
+        "pages_registry": filtered_registry,
         "message_success": success,
         "message_error": error,
         "current_user": current_user
@@ -443,6 +497,10 @@ def get_user_permissions(user_id: int, request: Request, session: Session = Depe
                 buttons = []
         permissions[p.page_key] = buttons
     
+    # Include filtered registry in API response as well, so frontend knows what to display
+    current_user = get_current_user(request, session)
+    filtered_registry = _get_filtered_registry(current_user, session)
+    
     return JSONResponse({
         "success": True,
         "user": {
@@ -456,7 +514,7 @@ def get_user_permissions(user_id: int, request: Request, session: Session = Depe
             "address": user.address or "",
         },
         "permissions": permissions,
-        "pages_registry": PAGES_REGISTRY
+        "pages_registry": filtered_registry
     })
 
 # ===========================
